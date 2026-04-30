@@ -8,8 +8,9 @@ var faction_id: int = GameConfig.Faction.BLUE
 var pending_count: int = 1
 var locked_remaining: int = 0
 
-# Narrower chamber with denser peg filling.
-var chamber_size: Vector2 = Vector2(124, 214)
+# Chamber width is determined by the peg ratio first, then the shell wraps it.
+# Layout target (per user reference): 3-4-3-4, with the outer pegs of the 4-peg rows half embedded into the side walls.
+var chamber_size: Vector2 = Vector2(92, 214)
 
 var balls: Array = []
 var release_ball = null
@@ -45,20 +46,25 @@ func _process(delta: float) -> void:
 func _create_pegs() -> void:
     pegs.clear()
 
-    # 4-5-4-5 staggered rows to fill the width more evenly.
-    var row_counts: Array = [4, 5, 4, 5]
+    # Reference-driven chamber peg layout:
+    # 3-4-3-4 rows. On the 4-peg rows, the first and last pegs are half embedded into the side walls.
+    # We lock the peg / ball ratio first, then let the chamber width follow that ratio.
+    var row_counts: Array = [3, 4, 3, 4]
     var y_values: Array = [40.0, 76.0, 116.0, 154.0]
+    var step: float = 28.0
+    var half_embed_x: float = peg_radius * 0.5
 
     for row_index in range(row_counts.size()):
         var count: int = row_counts[row_index]
         var y: float = y_values[row_index]
-        var start_x: float = 0.0
-        var step: float = 22.0
+        var start_x: float
 
         if count == 4:
-            start_x = 29.0
+            # Side pegs intentionally cut into the walls by half their radius.
+            start_x = half_embed_x
         else:
-            start_x = 18.0
+            # Center the 3-peg rows between the 4-peg rows.
+            start_x = half_embed_x + step * 0.5
 
         for i in range(count):
             pegs.append(Vector2(start_x + i * step, y))
@@ -118,8 +124,8 @@ func _create_labels() -> void:
 func _relaunch_control_ball(ball) -> void:
     if ball == null:
         return
-    var start_x: float = randf_range(26.0, chamber_size.x - 26.0)
-    ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-60.0, 60.0), randf_range(24.0, 82.0)))
+    var start_x: float = randf_range(20.0, chamber_size.x - 20.0)
+    ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-56.0, 56.0), randf_range(24.0, 82.0)))
 
 func _physics_process(delta: float) -> void:
     if is_damaged or is_locked:
@@ -267,8 +273,8 @@ func _draw() -> void:
     draw_line(Vector2(chamber_size.x * 0.5, chamber_size.y - gate_height), Vector2(chamber_size.x * 0.5, chamber_size.y), Color.BLACK, 2)
 
     var font = ThemeDB.fallback_font
-    draw_string(font, Vector2(18, chamber_size.y - 11), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.BLACK)
-    draw_string(font, Vector2(chamber_size.x * 0.5 + 10, chamber_size.y - 11), "发射", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.BLACK)
+    draw_string(font, Vector2(14, chamber_size.y - 11), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color.BLACK)
+    draw_string(font, Vector2(chamber_size.x * 0.5 + 6, chamber_size.y - 11), "发射", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
 
     if is_locked and not is_damaged:
         draw_rect(Rect2(Vector2(0, chamber_size.y - gate_height), Vector2(chamber_size.x, gate_height)), Color(0.1, 0.1, 0.1, 0.28), true)
