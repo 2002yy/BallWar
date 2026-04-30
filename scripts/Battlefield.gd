@@ -10,6 +10,8 @@ var owners: Array = []
 func configure(new_grid_size: int) -> void:
     grid_size = new_grid_size
     match grid_size:
+        10:
+            cell_size = 34
         20:
             cell_size = 22
         30:
@@ -18,6 +20,8 @@ func configure(new_grid_size: int) -> void:
             cell_size = 13
         50:
             cell_size = 11
+        60:
+            cell_size = 9
         _:
             cell_size = GameConfig.CELL_SIZE
 
