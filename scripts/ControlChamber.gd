@@ -28,6 +28,8 @@ const GATE_MIN_RATIO: float = 0.28
 const STUCK_MOVE_EPS: float = 0.35
 const STUCK_SPEED_EPS: float = 18.0
 const STUCK_TIME_LIMIT: float = 0.80
+const WALL_STUCK_MARGIN: float = 5.0
+const WALL_STUCK_Y_EPS: float = 0.55
 
 var faction_id: int = GameConfig.Faction.BLUE
 var pending_count: int = 1
@@ -188,6 +190,7 @@ func _reset_stuck_state(ball) -> void:
         return
     stuck_states[ball.get_instance_id()] = {
         "pos": ball.position,
+        "y": ball.position.y,
         "time": 0.0
     }
 
@@ -202,22 +205,33 @@ func _update_stuck_state(ball, delta: float) -> void:
 
     var state: Dictionary = stuck_states[id]
     var last_pos: Vector2 = state.get("pos", ball.position)
+    var last_y: float = float(state.get("y", ball.position.y))
     var stuck_time: float = float(state.get("time", 0.0))
     var moved: float = ball.position.distance_to(last_pos)
+    var y_progress: float = ball.position.y - last_y
+    var near_wall: bool = ball.position.x <= ball.radius + WALL_STUCK_MARGIN or ball.position.x >= chamber_size.x - ball.radius - WALL_STUCK_MARGIN
 
-    if moved < STUCK_MOVE_EPS and ball.velocity.length() < STUCK_SPEED_EPS:
+    # 普通低速卡住：几乎不动 + 速度很低。
+    # 墙边抖动卡住：靠墙并且 y 几乎没有向下推进，即使 x 方向有细碎抖动也算卡。
+    var low_speed_stuck: bool = moved < STUCK_MOVE_EPS and ball.velocity.length() < STUCK_SPEED_EPS
+    var wall_jitter_stuck: bool = near_wall and y_progress < WALL_STUCK_Y_EPS and ball.velocity.y < STUCK_SPEED_EPS * 1.8
+
+    if low_speed_stuck or wall_jitter_stuck:
         stuck_time += delta
     else:
         stuck_time = 0.0
         last_pos = ball.position
+        last_y = ball.position.y
 
     if stuck_time >= STUCK_TIME_LIMIT:
-        ball.position.x = clampf(ball.position.x + randf_range(-5.0, 5.0), ball.radius, chamber_size.x - ball.radius)
-        ball.velocity = Vector2(randf_range(-95.0, 95.0), randf_range(-72.0, -24.0))
+        ball.position.x = clampf(ball.position.x + randf_range(-7.0, 7.0), ball.radius, chamber_size.x - ball.radius)
+        ball.velocity = Vector2(randf_range(-105.0, 105.0), randf_range(-80.0, -18.0))
         stuck_time = 0.0
         last_pos = ball.position
+        last_y = ball.position.y
 
     state["pos"] = last_pos
+    state["y"] = last_y
     state["time"] = stuck_time
     stuck_states[id] = state
 

@@ -10,27 +10,61 @@ var last_cell = Vector2i(-999, -999)
 var age = 0.0
 var trail_points = []
 var trail_max_points = 8
+var pool
+var is_active: bool = false
 
 func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, new_battlefield, new_target_turrets = {}) -> void:
     faction_id = new_faction_id
     global_position = new_position
     direction = new_direction.normalized()
+    if direction.length() <= 0.001:
+        direction = Vector2.RIGHT
     battlefield = new_battlefield
     target_turrets = new_target_turrets
-
-func _ready() -> void:
-    z_index = 30
+    speed = GameConfig.BULLET_SPEED
+    last_cell = Vector2i(-999, -999)
+    age = 0.0
+    trail_points.clear()
     trail_points.append(global_position)
     queue_redraw()
 
+func _ready() -> void:
+    z_index = 30
+    activate()
+    queue_redraw()
+
+func activate() -> void:
+    is_active = true
+    visible = true
+    set_process(true)
+    set_physics_process(true)
+    z_index = 30
+
+func deactivate() -> void:
+    is_active = false
+    visible = false
+    set_process(false)
+    set_physics_process(false)
+    battlefield = null
+    target_turrets = {}
+    trail_points.clear()
+
+func _despawn() -> void:
+    if pool != null and is_instance_valid(pool):
+        pool.recycle_bullet(self)
+    else:
+        _despawn()
+
 func _physics_process(delta: float) -> void:
+    if not is_active:
+        return
     if battlefield == null:
-        queue_free()
+        _despawn()
         return
 
     age += delta
     if age >= GameConfig.BULLET_MAX_LIFETIME:
-        queue_free()
+        _despawn()
         return
 
     var map_size = battlefield.grid_size * battlefield.cell_size
@@ -66,7 +100,7 @@ func _physics_process(delta: float) -> void:
     queue_redraw()
 
     if _try_hit_enemy_turret():
-        queue_free()
+        _despawn()
         return
 
     var cell = battlefield.world_to_cell(global_position)
@@ -79,7 +113,7 @@ func _physics_process(delta: float) -> void:
     last_cell = cell
     var result = battlefield.apply_bullet(cell, faction_id)
     if result == "HIT_ENEMY_CELL":
-        queue_free()
+        _despawn()
 
 func _try_hit_enemy_turret() -> bool:
     for target_faction_id in target_turrets.keys():

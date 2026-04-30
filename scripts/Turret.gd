@@ -113,14 +113,21 @@ func _set_burst_locked(locked: bool) -> void:
     burst_lock_changed.emit(faction_id, locked)
 
 func _spawn_bullet() -> void:
-    var bullet = Bullet.new()
+    if bullet_container == null:
+        return
+
     var shot_angle: float = _current_burst_shot_angle()
     var shot_direction: Vector2 = Vector2.RIGHT.rotated(shot_angle)
     var lateral_wave: float = sin(float(burst_index) * 0.75) * 2.8
     var lateral: Vector2 = Vector2.RIGHT.rotated(shot_angle + PI * 0.5) * lateral_wave
     var spawn_position: Vector2 = global_position + shot_direction * 21.0 + lateral
-    bullet.setup(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
-    bullet_container.add_child(bullet)
+
+    if bullet_container.has_method("spawn_bullet"):
+        bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
+    else:
+        var bullet = Bullet.new()
+        bullet.setup(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
+        bullet_container.add_child(bullet)
 
 func _current_burst_shot_angle() -> float:
     # v1.9.6 修正：

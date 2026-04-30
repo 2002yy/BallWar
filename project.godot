@@ -20,8 +20,8 @@ config/features=PackedStringArray("4.6")
 
 [display]
 
-window/size/viewport_width=1180
-window/size/viewport_height=700
+window/size/viewport_width=1120
+window/size/viewport_height=720
 
 [rendering]
 

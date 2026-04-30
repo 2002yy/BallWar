@@ -1,8 +1,13 @@
 extends Node2D
 
-const VIEW_W: float = 1180.0
-const VIEW_H: float = 700.0
+const VIEW_W: float = 1120.0
+const VIEW_H: float = 720.0
 const SAVE_PATH: String = "user://ballwar_save.json"
+const SAVE_MAJOR_PREFIX: String = "1.9"
+const MAX_RESTORE_BULLETS: int = 5000
+const MAX_RESTORE_CONTROL_BALLS: int = 8
+const MAX_RESTORE_TRAIL_POINTS: int = 3
+const RESTORE_BULLETS_PER_FRAME: int = 160
 
 var battlefield
 var bullet_container
@@ -23,6 +28,7 @@ var opening_banner
 var pause_overlay
 var pause_button
 var exit_button
+var fps_label
 
 var menu_layer
 var game_layer
@@ -35,8 +41,11 @@ var is_game_over: bool = false
 var menu_title_label
 var menu_start_button
 var menu_continue_button
+var menu_status_label
 var ui_time: float = 0.0
 var chamber_scale: float = 1.0
+var pending_restore_bullets: Array = []
+var pending_restore_index: int = 0
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -47,11 +56,17 @@ func _ready() -> void:
 func _process(delta: float) -> void:
     ui_time += delta
 
+    if pending_restore_bullets.size() > 0:
+        _process_pending_bullet_restore()
+
     if game_layer != null and not get_tree().paused and not is_game_over:
         game_elapsed_time += delta
         for chamber in chambers.values():
             if chamber != null and is_instance_valid(chamber):
                 chamber.set_game_elapsed_time(game_elapsed_time)
+
+    if fps_label != null and is_instance_valid(fps_label):
+        fps_label.text = "FPS %d" % Engine.get_frames_per_second()
     if menu_title_label != null:
         menu_title_label.rotation = sin(ui_time * 1.2) * 0.01
     if menu_start_button != null:
@@ -70,6 +85,10 @@ func _process(delta: float) -> void:
     _animate_add_ball_buttons()
 
 func _animate_add_ball_buttons() -> void:
+    # 暂停时停止游戏内 +球 按钮呼吸，避免暂停后游戏内 UI 仍像在运行。
+    if get_tree().paused:
+        return
+
     for faction_id in add_ball_buttons.keys():
         var button = add_ball_buttons[faction_id]
         if button == null or not is_instance_valid(button):
@@ -231,6 +250,17 @@ func _create_start_menu() -> void:
     config_panel.add_child(start_button)
     menu_start_button = start_button
 
+    menu_status_label = Label.new()
+    menu_status_label.position = Vector2(120, 568)
+    menu_status_label.size = Vector2(520, 22)
+    menu_status_label.text = ""
+    menu_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
+    menu_status_label.add_theme_font_size_override("font_size", 15)
+    menu_status_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.44))
+    menu_status_label.add_theme_color_override("font_outline_color", Color.BLACK)
+    menu_status_label.add_theme_constant_override("outline_size", 2)
+    panel.add_child(menu_status_label)
+
     if _has_save_file():
         var continue_button = Button.new()
         continue_button.position = Vector2(636, 504)
@@ -254,6 +284,12 @@ func _create_start_menu() -> void:
     else:
         menu_continue_button = null
 
+func _sanitize_grid_size(value) -> int:
+    var n: int = int(value)
+    if n in [10, 20, 30, 40, 50, 60]:
+        return n
+    return 40
+
 func _get_layout_profile(grid_size: int) -> Dictionary:
     match grid_size:
         10:
@@ -265,15 +301,15 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_gap": 18.0,
                 "button_gap": 10.0,
                 "button_size": Vector2(58.0, 34.0),
-                "top_panel_w": 690.0,
+                "top_panel_w": 660.0,
                 "top_panel_h": 84.0,
                 "bar_h": 34.0,
                 "title_font": 26,
                 "title_y": 42.0,
                 "palette_font": 15,
-                "winner_y": 654.0,
-                "banner_title_y": 294.0,
-                "banner_sub_y": 346.0,
+                "winner_y": 672.0,
+                "banner_title_y": 304.0,
+                "banner_sub_y": 356.0,
             }
         20:
             return {
@@ -284,15 +320,15 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_gap": 20.0,
                 "button_gap": 10.0,
                 "button_size": Vector2(60.0, 36.0),
-                "top_panel_w": 730.0,
+                "top_panel_w": 700.0,
                 "top_panel_h": 86.0,
                 "bar_h": 35.0,
                 "title_font": 28,
                 "title_y": 44.0,
                 "palette_font": 15,
-                "winner_y": 652.0,
-                "banner_title_y": 292.0,
-                "banner_sub_y": 346.0,
+                "winner_y": 670.0,
+                "banner_title_y": 302.0,
+                "banner_sub_y": 356.0,
             }
         30:
             return {
@@ -303,15 +339,15 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_gap": 20.0,
                 "button_gap": 10.0,
                 "button_size": Vector2(62.0, 38.0),
-                "top_panel_w": 770.0,
+                "top_panel_w": 730.0,
                 "top_panel_h": 88.0,
                 "bar_h": 36.0,
                 "title_font": 30,
                 "title_y": 45.0,
                 "palette_font": 16,
-                "winner_y": 650.0,
-                "banner_title_y": 286.0,
-                "banner_sub_y": 338.0,
+                "winner_y": 668.0,
+                "banner_title_y": 296.0,
+                "banner_sub_y": 348.0,
             }
         40:
             return {
@@ -322,15 +358,15 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_gap": 22.0,
                 "button_gap": 11.0,
                 "button_size": Vector2(64.0, 38.0),
-                "top_panel_w": 740.0,
+                "top_panel_w": 710.0,
                 "top_panel_h": 90.0,
                 "bar_h": 36.0,
                 "title_font": 31,
                 "title_y": 46.0,
                 "palette_font": 16,
-                "winner_y": 648.0,
-                "banner_title_y": 282.0,
-                "banner_sub_y": 334.0,
+                "winner_y": 666.0,
+                "banner_title_y": 292.0,
+                "banner_sub_y": 344.0,
             }
         50:
             return {
@@ -341,15 +377,15 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_gap": 22.0,
                 "button_gap": 11.0,
                 "button_size": Vector2(64.0, 38.0),
-                "top_panel_w": 740.0,
+                "top_panel_w": 710.0,
                 "top_panel_h": 90.0,
                 "bar_h": 36.0,
                 "title_font": 31,
                 "title_y": 46.0,
                 "palette_font": 16,
-                "winner_y": 648.0,
-                "banner_title_y": 282.0,
-                "banner_sub_y": 334.0,
+                "winner_y": 666.0,
+                "banner_title_y": 292.0,
+                "banner_sub_y": 344.0,
             }
         60:
             return {
@@ -360,20 +396,21 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_gap": 20.0,
                 "button_gap": 10.0,
                 "button_size": Vector2(62.0, 36.0),
-                "top_panel_w": 740.0,
+                "top_panel_w": 710.0,
                 "top_panel_h": 90.0,
                 "bar_h": 36.0,
                 "title_font": 30,
                 "title_y": 46.0,
                 "palette_font": 16,
-                "winner_y": 648.0,
-                "banner_title_y": 284.0,
-                "banner_sub_y": 336.0,
+                "winner_y": 666.0,
+                "banner_title_y": 294.0,
+                "banner_sub_y": 346.0,
             }
         _:
             return _get_layout_profile(40)
 
 func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool = true) -> void:
+    grid_size = _sanitize_grid_size(grid_size)
     selected_grid_size = grid_size
     current_layout = _get_layout_profile(grid_size)
     game_elapsed_time = 0.0
@@ -420,8 +457,8 @@ func _create_battlefield(grid_size: int) -> void:
     battlefield.scores_changed.connect(_on_scores_changed)
     game_layer.add_child(battlefield)
 
-    bullet_container = Node2D.new()
-    bullet_container.name = "BulletContainer"
+    bullet_container = BulletPool.new()
+    bullet_container.name = "BulletPool"
     game_layer.add_child(bullet_container)
 
     chamber_scale = current_layout.get("chamber_scale", 0.80)
@@ -581,8 +618,9 @@ func _create_ui() -> void:
     top_panel.add_child(palette_label)
 
     pause_button = Button.new()
-    pause_button.position = Vector2(VIEW_W - 148, 18)
-    pause_button.size = Vector2(64, 32)
+    # v1.9.8：暂停/退出按钮改为右侧纵向排列，向内收，避免 60×60 或编辑器预览时右侧按钮被裁掉。
+    pause_button.position = Vector2(VIEW_W - 138, 86)
+    pause_button.size = Vector2(74, 32)
     pause_button.text = "暂停"
     pause_button.self_modulate = Color(0.24, 0.52, 0.92)
     pause_button.add_theme_color_override("font_color", Color.WHITE)
@@ -591,8 +629,8 @@ func _create_ui() -> void:
     ui_canvas.add_child(pause_button)
 
     exit_button = Button.new()
-    exit_button.position = Vector2(VIEW_W - 78, 18)
-    exit_button.size = Vector2(64, 32)
+    exit_button.position = Vector2(VIEW_W - 138, 124)
+    exit_button.size = Vector2(74, 32)
     exit_button.text = "退出"
     exit_button.self_modulate = Color(0.62, 0.24, 0.22)
     exit_button.add_theme_color_override("font_color", Color.WHITE)
@@ -660,6 +698,18 @@ func _create_ui() -> void:
     winner_label.add_theme_constant_override("outline_size", 5)
     winner_label.text = ""
     ui_canvas.add_child(winner_label)
+
+    fps_label = Label.new()
+    fps_label.position = Vector2(VIEW_W - 96, VIEW_H - 28)
+    fps_label.size = Vector2(86, 22)
+    fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT as HorizontalAlignment
+    fps_label.add_theme_font_size_override("font_size", 16)
+    fps_label.add_theme_color_override("font_color", Color(0.84, 1.0, 0.84))
+    fps_label.add_theme_color_override("font_outline_color", Color.BLACK)
+    fps_label.add_theme_constant_override("outline_size", 2)
+    fps_label.text = "FPS --"
+    fps_label.process_mode = Node.PROCESS_MODE_ALWAYS
+    ui_canvas.add_child(fps_label)
 
     _on_scores_changed(battlefield.count_cells_by_team())
 
@@ -789,6 +839,9 @@ func _stop_all_actions_for_game_over() -> void:
         turret.burst_total = 0
         turret.burst_timer = 0.0
         turret._set_burst_locked(false)
+
+    # 终局后清理已有子弹，避免“胜利后地图还在变化 / 炮台继续掉血”。
+    _clear_bullets()
 
     for faction_id in chambers.keys():
         var chamber = chambers[faction_id]
@@ -931,6 +984,7 @@ func _cleanup_menu() -> void:
     menu_title_label = null
     menu_start_button = null
     menu_continue_button = null
+    menu_status_label = null
 
 func _cleanup_game_layer() -> void:
     if game_layer != null:
@@ -945,6 +999,9 @@ func _cleanup_game_layer() -> void:
     exit_button = null
     winner_label = null
     game_title_label = null
+    fps_label = null
+    pending_restore_bullets.clear()
+    pending_restore_index = 0
     turrets.clear()
     chambers.clear()
     add_ball_buttons.clear()
@@ -1000,8 +1057,9 @@ func _collect_bullet_states() -> Array:
     if bullet_container == null:
         return result
 
-    for node in bullet_container.get_children():
-        if node is Bullet:
+    var source_bullets: Array = bullet_container.get_active_bullets() if bullet_container.has_method("get_active_bullets") else bullet_container.get_children()
+    for node in source_bullets:
+        if node is Bullet and node.is_active:
             var trail: Array = []
             for point in node.trail_points:
                 trail.append(_vec2_to_arr(point))
@@ -1018,39 +1076,71 @@ func _collect_bullet_states() -> Array:
 func _clear_bullets() -> void:
     if bullet_container == null:
         return
-    for node in bullet_container.get_children():
-        node.queue_free()
+    if bullet_container.has_method("clear_active"):
+        bullet_container.clear_active()
+    else:
+        for node in bullet_container.get_children():
+            node.queue_free()
 
 func _restore_bullet_states(states) -> void:
     if bullet_container == null or battlefield == null:
         return
 
     _clear_bullets()
+    pending_restore_bullets.clear()
+    pending_restore_index = 0
 
     if not (states is Array):
         return
 
-    for state in states:
+    var restore_count: int = mini(states.size(), MAX_RESTORE_BULLETS)
+    for i in range(restore_count):
+        if states[i] is Dictionary:
+            pending_restore_bullets.append(states[i])
+
+func _process_pending_bullet_restore() -> void:
+    if bullet_container == null or battlefield == null:
+        pending_restore_bullets.clear()
+        pending_restore_index = 0
+        return
+
+    var end_index: int = mini(pending_restore_index + RESTORE_BULLETS_PER_FRAME, pending_restore_bullets.size())
+    for i in range(pending_restore_index, end_index):
+        var state = pending_restore_bullets[i]
         if not (state is Dictionary):
             continue
-        var bullet = Bullet.new()
+
         var faction_id: int = clampi(int(state.get("faction_id", 0)), 0, 3)
         var pos: Vector2 = _arr_to_vec2(state.get("position", [0, 0]), battlefield.global_position)
         var direction: Vector2 = _arr_to_vec2(state.get("direction", [1, 0]), Vector2.RIGHT).normalized()
         if direction.length() <= 0.001:
             direction = Vector2.RIGHT
-        bullet.setup(faction_id, pos, direction, battlefield, turrets)
-        bullet_container.add_child(bullet)
+
+        var bullet
+        if bullet_container.has_method("spawn_bullet"):
+            bullet = bullet_container.spawn_bullet(faction_id, pos, direction, battlefield, turrets)
+        else:
+            bullet = Bullet.new()
+            bullet.setup(faction_id, pos, direction, battlefield, turrets)
+            bullet_container.add_child(bullet)
+
         bullet.age = clampf(float(state.get("age", 0.0)), 0.0, GameConfig.BULLET_MAX_LIFETIME)
         bullet.last_cell = _arr_to_vec2i(state.get("last_cell", [-999, -999]))
         bullet.trail_points.clear()
         var trail = state.get("trail_points", [])
         if trail is Array and trail.size() > 0:
-            for p in trail:
-                bullet.trail_points.append(_arr_to_vec2(p, bullet.global_position))
+            var trail_count: int = mini(trail.size(), MAX_RESTORE_TRAIL_POINTS)
+            for j in range(trail_count):
+                bullet.trail_points.append(_arr_to_vec2(trail[j], bullet.global_position))
         else:
             bullet.trail_points.append(bullet.global_position)
         bullet.queue_redraw()
+
+    pending_restore_index = end_index
+    if pending_restore_index >= pending_restore_bullets.size():
+        pending_restore_bullets.clear()
+        pending_restore_index = 0
+
 
 func _save_game_progress() -> void:
     if battlefield == null:
@@ -1109,16 +1199,33 @@ func _load_saved_data() -> Dictionary:
         return parsed
     return {}
 
+func _show_menu_status(message: String) -> void:
+    if menu_status_label != null and is_instance_valid(menu_status_label):
+        menu_status_label.text = message
+    else:
+        push_warning(message)
+
 func _continue_saved_game() -> void:
     var data: Dictionary = _load_saved_data()
     if data.is_empty():
+        _show_menu_status("存档读取失败或存档已损坏")
+        return
+
+    var save_version: String = str(data.get("save_version", ""))
+    if save_version == "" or not save_version.begins_with(SAVE_MAJOR_PREFIX):
+        _show_menu_status("存档版本不兼容：%s" % save_version)
+        push_warning("存档版本不兼容，已拒绝读取：%s" % save_version)
+        return
+
+    if not data.has("grid_size") or not data.has("owners"):
+        _show_menu_status("存档结构不完整，无法继续")
         return
 
     var palette_name: String = str(data.get("palette_name", "经典"))
     selected_palette_name = palette_name
     GameConfig.set_palette_by_name(palette_name)
-    _start_game(int(data.get("grid_size", 40)), true, false)
-    game_elapsed_time = float(data.get("game_elapsed_time", 0.0))
+    _start_game(_sanitize_grid_size(data.get("grid_size", 40)), true, false)
+    game_elapsed_time = maxf(0.0, float(data.get("game_elapsed_time", 0.0)))
     _sync_chamber_game_elapsed_time()
     _apply_saved_state(data)
     _show_center_banner("领土战争", "继续作战", Color(0.84, 0.96, 1.0), true)
@@ -1178,8 +1285,8 @@ func _apply_chamber_state(chamber, state: Dictionary) -> void:
     chamber.release_ball = null
     chamber.is_damaged = false
     chamber.is_locked = false
-    chamber.pending_count = max(1, int(state.get("chamber_pending_count", 1)))
-    chamber.locked_remaining = max(0, int(state.get("chamber_locked_remaining", 0)))
+    chamber.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.MAX_PENDING_COUNT)
+    chamber.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
 
     if bool(state.get("chamber_is_damaged", false)):
         chamber.set_damaged()
@@ -1187,13 +1294,18 @@ func _apply_chamber_state(chamber, state: Dictionary) -> void:
 
     var saved_balls = state.get("control_balls", [])
     if saved_balls is Array and saved_balls.size() > 0:
-        for ball_state in saved_balls:
+        var restore_ball_count: int = mini(saved_balls.size(), MAX_RESTORE_CONTROL_BALLS)
+        for i in range(restore_ball_count):
+            var ball_state = saved_balls[i]
             if not (ball_state is Dictionary):
                 continue
             var ball = ControlBall.new()
-            ball.radius = float(ball_state.get("radius", chamber.CONTROL_BALL_RADIUS))
+            ball.radius = clampf(float(ball_state.get("radius", chamber.CONTROL_BALL_RADIUS)), 3.0, 12.0)
             var pos: Vector2 = _arr_to_vec2(ball_state.get("position", [chamber.chamber_size.x * 0.5, 18.0]), Vector2(chamber.chamber_size.x * 0.5, 18.0))
+            pos.x = clampf(pos.x, ball.radius, chamber.chamber_size.x - ball.radius)
+            pos.y = clampf(pos.y, ball.radius, chamber.chamber_size.y - ball.radius)
             var vel: Vector2 = _arr_to_vec2(ball_state.get("velocity", [0, 0]), Vector2.ZERO)
+            vel = vel.limit_length(520.0)
             ball.setup(chamber.faction_id, pos, vel)
             chamber.add_child(ball)
             chamber.balls.append(ball)
@@ -1203,8 +1315,8 @@ func _apply_chamber_state(chamber, state: Dictionary) -> void:
         for i in range(ball_count):
             chamber.add_control_ball()
 
-    chamber.pending_count = max(1, int(state.get("chamber_pending_count", 1)))
-    chamber.locked_remaining = max(0, int(state.get("chamber_locked_remaining", 0)))
+    chamber.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.MAX_PENDING_COUNT)
+    chamber.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
 
     var release_index: int = int(state.get("chamber_release_ball_index", -1))
     if release_index >= 0 and release_index < chamber.balls.size():
@@ -1226,10 +1338,10 @@ func _apply_turret_state(turret, state: Dictionary) -> void:
     turret.sweep_phase = float(state.get("turret_sweep_phase", turret.sweep_phase))
     turret.rotation = float(state.get("turret_rotation", turret.rotation))
 
-    turret.burst_remaining = max(0, int(state.get("turret_burst_remaining", 0)))
-    turret.burst_total = max(turret.burst_remaining, int(state.get("turret_burst_total", turret.burst_remaining)))
-    turret.burst_index = max(0, int(state.get("turret_burst_index", 0)))
-    turret.burst_timer = maxf(0.0, float(state.get("turret_burst_timer", 0.0)))
+    turret.burst_remaining = clampi(int(state.get("turret_burst_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
+    turret.burst_total = clampi(int(state.get("turret_burst_total", turret.burst_remaining)), turret.burst_remaining, GameConfig.MAX_PENDING_COUNT)
+    turret.burst_index = clampi(int(state.get("turret_burst_index", 0)), 0, GameConfig.MAX_PENDING_COUNT)
+    turret.burst_timer = clampf(float(state.get("turret_burst_timer", 0.0)), 0.0, 1.0)
 
     var should_lock: bool = bool(state.get("turret_burst_locked", false)) and turret.burst_remaining > 0 and not turret.is_destroyed
     turret._set_burst_locked(should_lock)
