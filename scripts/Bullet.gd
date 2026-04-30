@@ -95,9 +95,14 @@ func _try_hit_enemy_turret() -> bool:
             return true
     return false
 
+func _visual_radius() -> float:
+    if battlefield != null:
+        return minf(GameConfig.BULLET_RADIUS, float(battlefield.cell_size) * 0.42)
+    return GameConfig.BULLET_RADIUS
+
 func _draw() -> void:
     var base = GameConfig.faction_color(faction_id)
-    var radius = GameConfig.BULLET_RADIUS
+    var radius: float = _visual_radius()
 
     for i in range(trail_points.size() - 1, -1, -1):
         var world_point = trail_points[i]

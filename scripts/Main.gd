@@ -29,6 +29,7 @@ var game_layer
 var selected_grid_size: int = 40
 var selected_palette_name: String = "默认随机"
 var current_layout: Dictionary = {}
+var game_elapsed_time: float = 0.0
 
 var menu_title_label
 var menu_start_button
@@ -37,12 +38,19 @@ var ui_time: float = 0.0
 var chamber_scale: float = 1.0
 
 func _ready() -> void:
+    process_mode = Node.PROCESS_MODE_ALWAYS
     randomize()
     _create_background()
     _create_start_menu()
 
 func _process(delta: float) -> void:
     ui_time += delta
+
+    if game_layer != null and not get_tree().paused:
+        game_elapsed_time += delta
+        for chamber in chambers.values():
+            if chamber != null and is_instance_valid(chamber):
+                chamber.set_game_elapsed_time(game_elapsed_time)
     if menu_title_label != null:
         menu_title_label.rotation = sin(ui_time * 1.2) * 0.01
     if menu_start_button != null:
@@ -92,6 +100,9 @@ func _create_background() -> void:
     background.z_index = -100
 
 func _create_start_menu() -> void:
+    selected_grid_size = 40
+    selected_palette_name = "默认随机"
+
     if menu_layer != null:
         menu_layer.queue_free()
     menu_layer = CanvasLayer.new()
@@ -303,14 +314,14 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
             }
         40:
             return {
-                "map_y": 96.0,
+                "map_y": 108.0,
                 "chamber_scale": 0.80,
                 "left_chamber_y_top": 104.0,
                 "left_chamber_y_bottom": 362.0,
                 "chamber_gap": 22.0,
                 "button_gap": 11.0,
                 "button_size": Vector2(64.0, 38.0),
-                "top_panel_w": 810.0,
+                "top_panel_w": 740.0,
                 "top_panel_h": 90.0,
                 "bar_h": 36.0,
                 "title_font": 31,
@@ -322,14 +333,14 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
             }
         50:
             return {
-                "map_y": 86.0,
+                "map_y": 106.0,
                 "chamber_scale": 0.78,
                 "left_chamber_y_top": 96.0,
                 "left_chamber_y_bottom": 354.0,
                 "chamber_gap": 22.0,
                 "button_gap": 11.0,
                 "button_size": Vector2(64.0, 38.0),
-                "top_panel_w": 840.0,
+                "top_panel_w": 740.0,
                 "top_panel_h": 90.0,
                 "bar_h": 36.0,
                 "title_font": 31,
@@ -341,14 +352,14 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
             }
         60:
             return {
-                "map_y": 92.0,
+                "map_y": 106.0,
                 "chamber_scale": 0.76,
                 "left_chamber_y_top": 100.0,
                 "left_chamber_y_bottom": 352.0,
                 "chamber_gap": 20.0,
                 "button_gap": 10.0,
                 "button_size": Vector2(62.0, 36.0),
-                "top_panel_w": 840.0,
+                "top_panel_w": 740.0,
                 "top_panel_h": 90.0,
                 "bar_h": 36.0,
                 "title_font": 30,
@@ -361,9 +372,13 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
         _:
             return _get_layout_profile(40)
 
-func _start_game(grid_size: int, suppress_banner: bool = false) -> void:
+func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool = true) -> void:
     selected_grid_size = grid_size
     current_layout = _get_layout_profile(grid_size)
+    game_elapsed_time = 0.0
+
+    if clear_save and _has_save_file():
+        DirAccess.remove_absolute(SAVE_PATH)
 
     if selected_palette_name == "默认随机":
         GameConfig.set_random_palette()
@@ -918,6 +933,7 @@ func _save_game_progress() -> void:
         "grid_size": battlefield.grid_size,
         "palette_name": GameConfig.get_palette_name(),
         "owners": battlefield.owners,
+        "game_elapsed_time": game_elapsed_time,
         "factions": factions,
         "winner_text": winner_label.text if winner_label != null else "",
     }
@@ -946,7 +962,8 @@ func _continue_saved_game() -> void:
     var palette_name: String = str(data.get("palette_name", "经典"))
     selected_palette_name = palette_name
     GameConfig.set_palette_by_name(palette_name)
-    _start_game(int(data.get("grid_size", 40)), true)
+    _start_game(int(data.get("grid_size", 40)), true, false)
+    game_elapsed_time = float(data.get("game_elapsed_time", 0.0))
     _apply_saved_state(data)
     _show_center_banner("领土战争", "继续作战", Color(0.84, 0.96, 1.0), true)
 
@@ -956,7 +973,17 @@ func _apply_saved_state(data: Dictionary) -> void:
 
     var owners = data.get("owners", [])
     if owners is Array and owners.size() == battlefield.grid_size:
-        battlefield.owners = owners
+        var loaded_owners: Array = []
+        for x in range(battlefield.grid_size):
+            var col: Array = []
+            var src_col = owners[x]
+            for y in range(battlefield.grid_size):
+                var raw_owner = 0
+                if src_col is Array and y < src_col.size():
+                    raw_owner = src_col[y]
+                col.append(clampi(int(raw_owner), 0, 3))
+            loaded_owners.append(col)
+        battlefield.owners = loaded_owners
         battlefield.queue_redraw()
         _on_scores_changed(battlefield.count_cells_by_team())
 
@@ -970,6 +997,12 @@ func _apply_saved_state(data: Dictionary) -> void:
                 _apply_chamber_state(chambers[faction_id], faction_state)
             if turrets.has(faction_id):
                 _apply_turret_state(turrets[faction_id], faction_state)
+
+            # 读档兜底：如果控制仓锁住，但炮塔没有待发射子弹，就解锁，避免永远卡住。
+            if chambers.has(faction_id) and turrets.has(faction_id):
+                if chambers[faction_id].is_locked and turrets[faction_id].burst_remaining <= 0:
+                    chambers[faction_id].set_locked(false)
+
             _refresh_add_ball_button(faction_id)
 
     if winner_label != null:

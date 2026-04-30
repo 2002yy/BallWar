@@ -52,7 +52,7 @@ var is_damaged: bool = false
 var is_locked: bool = false
 var damage_anim_t: float = 0.0
 var gate_height: float = GATE_HEIGHT
-var match_start_msec: int = 0
+var game_elapsed_time: float = 0.0
 
 func setup(new_faction_id: int, new_position: Vector2) -> void:
     faction_id = new_faction_id
@@ -60,7 +60,6 @@ func setup(new_faction_id: int, new_position: Vector2) -> void:
 
 func _ready() -> void:
     randomize()
-    match_start_msec = Time.get_ticks_msec()
     _create_pegs()
     add_control_ball()
     _create_labels()
@@ -159,6 +158,27 @@ func _relaunch_control_ball(ball) -> void:
     var start_x: float = randf_range(18.0, chamber_size.x - 18.0)
     ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-54.0, 54.0), randf_range(24.0, 82.0)))
 
+func _is_side_embedded_peg(peg: Vector2) -> bool:
+    return peg.x <= PEG_RADIUS * 0.75 or peg.x >= chamber_size.x - PEG_RADIUS * 0.75
+
+func _effective_peg_radius(peg: Vector2) -> float:
+    # 视觉上两侧 peg 半嵌入墙体，但碰撞半径略小，避免球在墙和侧 peg 之间卡住。
+    if _is_side_embedded_peg(peg):
+        return peg_radius * 0.72
+    return peg_radius
+
+func _clamp_ball_to_walls(ball) -> void:
+    if ball.position.x < ball.radius:
+        ball.position.x = ball.radius
+        ball.velocity.x = abs(ball.velocity.x) * 0.92
+    elif ball.position.x > chamber_size.x - ball.radius:
+        ball.position.x = chamber_size.x - ball.radius
+        ball.velocity.x = -abs(ball.velocity.x) * 0.92
+
+    if ball.position.y < ball.radius:
+        ball.position.y = ball.radius
+        ball.velocity.y = abs(ball.velocity.y) * 0.90
+
 func _physics_process(delta: float) -> void:
     if is_damaged or is_locked:
         return
@@ -172,26 +192,19 @@ func _physics_process(delta: float) -> void:
         ball.velocity.y += gravity * delta
         ball.position += ball.velocity * delta
 
-        if ball.position.x < ball.radius:
-            ball.position.x = ball.radius
-            ball.velocity.x = abs(ball.velocity.x) * 0.92
-        elif ball.position.x > chamber_size.x - ball.radius:
-            ball.position.x = chamber_size.x - ball.radius
-            ball.velocity.x = -abs(ball.velocity.x) * 0.92
-
-        if ball.position.y < ball.radius:
-            ball.position.y = ball.radius
-            ball.velocity.y = abs(ball.velocity.y) * 0.90
+        _clamp_ball_to_walls(ball)
 
         for peg in pegs:
             var offset: Vector2 = ball.position - peg
             var dist: float = offset.length()
-            var min_dist: float = peg_radius + ball.radius
+            var min_dist: float = _effective_peg_radius(peg) + ball.radius
             if dist > 0.01 and dist < min_dist:
                 var normal: Vector2 = offset / dist
                 ball.position = peg + normal * min_dist
                 ball.velocity = ball.velocity.bounce(normal) * 0.86
                 ball.velocity += Vector2(randf_range(-22.0, 22.0), randf_range(-10.0, 10.0))
+
+        _clamp_ball_to_walls(ball)
 
         if ball.position.y >= chamber_size.y - ball.radius:
             if ball.position.x < x2_width:
@@ -275,9 +288,11 @@ func _update_label() -> void:
 
     ball_label.text = "球 %d" % balls.size()
 
+func set_game_elapsed_time(value: float) -> void:
+    game_elapsed_time = maxf(0.0, value)
+
 func _current_progress() -> float:
-    var elapsed: float = float(Time.get_ticks_msec() - match_start_msec) / 1000.0
-    return clampf(elapsed / GATE_RAMP_SECONDS, 0.0, 1.0)
+    return clampf(game_elapsed_time / GATE_RAMP_SECONDS, 0.0, 1.0)
 
 func _current_release_ratio() -> float:
     var progress: float = _current_progress()
