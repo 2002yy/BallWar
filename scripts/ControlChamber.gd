@@ -6,20 +6,23 @@ signal ball_count_changed(faction_id, count)
 
 # 控制仓比例参数组：
 # 先确定“控制球半径 / 弹射点半径 / 弹射点间距 / 侧墙半嵌入比例”，再反推控制仓宽度。
+# v1.9.0：控制仓上下变长，弹射点比例略微放松，减少卡球。
 const CONTROL_BALL_RADIUS: float = 5.4
 const PEG_RADIUS: float = 7.0
-const PEG_SPACING: float = 29.0
-const SIDE_EXTRA_CLEARANCE: float = 2.0
+const PEG_SPACING: float = 31.0
+const SIDE_EXTRA_CLEARANCE: float = 3.0
 const WALL_EMBED_RATIO: float = 0.5
 const ROW_3_OFFSET_RATIO: float = 0.60
 
-const CHAMBER_HEIGHT: float = 214.0
-const GATE_HEIGHT: float = 34.0
+const CHAMBER_HEIGHT: float = 240.0
+const GATE_HEIGHT: float = 36.0
 
 # 底部出口动态比例：
-# 开局“发射”口更长，“x2”更短；半个周期后反过来。
-# 最小比例用于防止任意出口过短，避免长期无法触发。
-const GATE_CYCLE_SECONDS: float = 10.0
+# 不是来回循环，而是随游戏进度单向变化。
+# 开局发射口长、x2 短；约 5 分钟后 x2 达到最大，发射口保留最小可触发宽度。
+const GATE_RAMP_SECONDS: float = 300.0
+const GATE_START_RELEASE_RATIO: float = 0.72
+const GATE_END_RELEASE_RATIO: float = 0.30
 const GATE_MIN_RATIO: float = 0.28
 
 var faction_id: int = GameConfig.Faction.BLUE
@@ -43,6 +46,7 @@ var is_damaged: bool = false
 var is_locked: bool = false
 var damage_anim_t: float = 0.0
 var gate_height: float = GATE_HEIGHT
+var match_start_msec: int = 0
 
 func setup(new_faction_id: int, new_position: Vector2) -> void:
     faction_id = new_faction_id
@@ -50,6 +54,7 @@ func setup(new_faction_id: int, new_position: Vector2) -> void:
 
 func _ready() -> void:
     randomize()
+    match_start_msec = Time.get_ticks_msec()
     _create_pegs()
     add_control_ball()
     _create_labels()
@@ -62,16 +67,17 @@ func _process(delta: float) -> void:
     elif count_label != null:
         count_label.scale = Vector2.ONE * (1.0 + 0.035 * sin(Time.get_ticks_msec() / 250.0))
 
-    # 出口比例随时间变化，需要持续重绘。
+    # 出口比例随游戏进度单向变化，需要持续重绘。
     if not is_damaged:
         queue_redraw()
 
 func _create_pegs() -> void:
     pegs.clear()
 
-    # 3-4-3-4：4 行两侧弹射点半嵌入墙体，3 行向中间收一点，避免小球贴墙卡死。
+    # 3-4-3-4：4 行两侧弹射点半嵌入墙体，3 行向中间收一点。
+    # v1.9.0：纵向距离拉开，整体更宽松。
     var row_counts: Array = [3, 4, 3, 4]
-    var y_values: Array = [40.0, 76.0, 116.0, 154.0]
+    var y_values: Array = [46.0, 92.0, 140.0, 186.0]
     var side_center_x: float = SIDE_EXTRA_CLEARANCE + PEG_RADIUS * WALL_EMBED_RATIO
 
     for row_index in range(row_counts.size()):
@@ -118,8 +124,8 @@ func _create_labels() -> void:
     add_child(name_label)
 
     count_label = Label.new()
-    count_label.position = Vector2(0, 78)
-    count_label.size = Vector2(chamber_size.x, 80)
+    count_label.position = Vector2(0, 92)
+    count_label.size = Vector2(chamber_size.x, 82)
     count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER as VerticalAlignment
     count_label.add_theme_font_size_override("font_size", 76)
@@ -129,7 +135,7 @@ func _create_labels() -> void:
     add_child(count_label)
 
     ball_label = Label.new()
-    ball_label.position = Vector2(0, 169)
+    ball_label.position = Vector2(0, chamber_size.y - gate_height - 24.0)
     ball_label.size = Vector2(chamber_size.x, 22)
     ball_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     ball_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER as VerticalAlignment
@@ -145,8 +151,8 @@ func _relaunch_control_ball(ball) -> void:
     if ball == null:
         return
     ball.radius = CONTROL_BALL_RADIUS
-    var start_x: float = randf_range(22.0, chamber_size.x - 22.0)
-    ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-56.0, 56.0), randf_range(24.0, 82.0)))
+    var start_x: float = randf_range(24.0, chamber_size.x - 24.0)
+    ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-54.0, 54.0), randf_range(24.0, 82.0)))
 
 func _physics_process(delta: float) -> void:
     if is_damaged or is_locked:
@@ -264,15 +270,20 @@ func _update_label() -> void:
 
     ball_label.text = "球 %d" % balls.size()
 
+func _current_progress() -> float:
+    var elapsed: float = float(Time.get_ticks_msec() - match_start_msec) / 1000.0
+    return clampf(elapsed / GATE_RAMP_SECONDS, 0.0, 1.0)
+
 func _current_release_ratio() -> float:
-    var seconds: float = Time.get_ticks_msec() / 1000.0
-    var phase: float = cos(seconds * TAU / GATE_CYCLE_SECONDS) * 0.5 + 0.5
-    return GATE_MIN_RATIO + (1.0 - GATE_MIN_RATIO * 2.0) * phase
+    var progress: float = _current_progress()
+    # 使用 smoothstep，让变化不是机械直线，前后更自然。
+    var eased: float = progress * progress * (3.0 - 2.0 * progress)
+    return lerpf(GATE_START_RELEASE_RATIO, GATE_END_RELEASE_RATIO, eased)
 
 func _current_x2_width() -> float:
     if is_locked or is_damaged:
         return chamber_size.x * 0.5
-    var release_ratio: float = _current_release_ratio()
+    var release_ratio: float = clampf(_current_release_ratio(), GATE_MIN_RATIO, 1.0 - GATE_MIN_RATIO)
     var x2_ratio: float = 1.0 - release_ratio
     return chamber_size.x * x2_ratio
 

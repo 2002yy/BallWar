@@ -280,8 +280,8 @@ func _create_control_chambers() -> void:
     var map_left: float = battlefield.position.x
     var map_top: float = battlefield.position.y
     var map_size: float = battlefield.grid_size * battlefield.cell_size
-    var base_w: float = 124.0
-    var base_h: float = 214.0
+    var base_w: float = 106.0
+    var base_h: float = 240.0
     var scaled_w: float = base_w * chamber_scale
     var scaled_h: float = base_h * chamber_scale
     var gap: float = clampf(26.0 + (520.0 - map_size) * 0.02, 24.0, 38.0)
