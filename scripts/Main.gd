@@ -167,6 +167,15 @@ func _create_start_menu() -> void:
     subtitle.add_theme_color_override("font_color", Color(0.84, 0.92, 1.0))
     panel.add_child(subtitle)
 
+    var mobile_hint = Label.new()
+    mobile_hint.position = Vector2(140, 104)
+    mobile_hint.size = Vector2(480, 22)
+    mobile_hint.text = "电脑/安卓均可游玩 · 手机建议横屏"
+    mobile_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
+    mobile_hint.add_theme_font_size_override("font_size", 15)
+    mobile_hint.add_theme_color_override("font_color", Color(0.74, 0.86, 1.0))
+    panel.add_child(mobile_hint)
+
     var decor = preload("res://scripts/MenuDecor.gd").new()
     decor.position = Vector2(380, 286)
     decor.scale = Vector2(0.86, 0.86)
@@ -193,7 +202,7 @@ func _create_start_menu() -> void:
 
     var size_option = OptionButton.new()
     size_option.position = Vector2(110, 8)
-    size_option.size = Vector2(126, 30)
+    size_option.size = Vector2(134, 38)
     size_option.add_item("10 × 10", 10)
     size_option.add_item("20 × 20", 20)
     size_option.add_item("30 × 30", 30)
@@ -216,7 +225,7 @@ func _create_start_menu() -> void:
 
     var palette_option = OptionButton.new()
     palette_option.position = Vector2(348, 8)
-    palette_option.size = Vector2(148, 30)
+    palette_option.size = Vector2(154, 38)
     palette_option.add_item("默认随机")
     for palette_name in GameConfig.get_palette_names():
         palette_option.add_item(palette_name)
@@ -236,8 +245,8 @@ func _create_start_menu() -> void:
     config_panel.add_child(tip)
 
     var start_button = Button.new()
-    start_button.position = Vector2(396, 48)
-    start_button.size = Vector2(104, 36)
+    start_button.position = Vector2(386, 45)
+    start_button.size = Vector2(118, 42)
     start_button.text = "开始"
     start_button.add_theme_font_size_override("font_size", 22)
     start_button.add_theme_color_override("font_color", Color.WHITE)
@@ -263,8 +272,8 @@ func _create_start_menu() -> void:
 
     if _has_save_file():
         var continue_button = Button.new()
-        continue_button.position = Vector2(636, 504)
-        continue_button.size = Vector2(92, 48)
+        continue_button.position = Vector2(620, 504)
+        continue_button.size = Vector2(108, 50)
         continue_button.text = "继续"
         continue_button.add_theme_font_size_override("font_size", 22)
         continue_button.add_theme_color_override("font_color", Color.WHITE)
@@ -300,7 +309,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "left_chamber_y_bottom": 396.0,
                 "chamber_gap": 14.0,
                 "button_gap": 10.0,
-                "button_size": Vector2(58.0, 34.0),
+                "button_size": Vector2(70.0, 44.0),
                 "top_panel_w": 660.0,
                 "top_panel_h": 84.0,
                 "bar_h": 34.0,
@@ -319,7 +328,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "left_chamber_y_bottom": 382.0,
                 "chamber_gap": 12.0,
                 "button_gap": 10.0,
-                "button_size": Vector2(60.0, 36.0),
+                "button_size": Vector2(72.0, 44.0),
                 "top_panel_w": 700.0,
                 "top_panel_h": 86.0,
                 "bar_h": 35.0,
@@ -338,7 +347,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "left_chamber_y_bottom": 374.0,
                 "chamber_gap": 10.0,
                 "button_gap": 10.0,
-                "button_size": Vector2(62.0, 38.0),
+                "button_size": Vector2(74.0, 46.0),
                 "top_panel_w": 730.0,
                 "top_panel_h": 88.0,
                 "bar_h": 36.0,
@@ -357,7 +366,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "left_chamber_y_bottom": 362.0,
                 "chamber_gap": 8.0,
                 "button_gap": 11.0,
-                "button_size": Vector2(64.0, 38.0),
+                "button_size": Vector2(76.0, 46.0),
                 "top_panel_w": 710.0,
                 "top_panel_h": 90.0,
                 "bar_h": 36.0,
@@ -376,7 +385,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "left_chamber_y_bottom": 354.0,
                 "chamber_gap": 7.0,
                 "button_gap": 11.0,
-                "button_size": Vector2(64.0, 38.0),
+                "button_size": Vector2(76.0, 46.0),
                 "top_panel_w": 710.0,
                 "top_panel_h": 90.0,
                 "bar_h": 36.0,
@@ -651,8 +660,8 @@ func _create_ui() -> void:
 
     pause_button = Button.new()
     # v1.9.8：暂停/退出按钮改为右侧纵向排列，向内收，避免 60×60 或编辑器预览时右侧按钮被裁掉。
-    pause_button.position = Vector2(VIEW_W - 138, 86)
-    pause_button.size = Vector2(74, 32)
+    pause_button.position = Vector2(VIEW_W - 188, 86)
+    pause_button.size = Vector2(96, 42)
     pause_button.text = "暂停"
     pause_button.self_modulate = Color(0.24, 0.52, 0.92)
     pause_button.add_theme_color_override("font_color", Color.WHITE)
@@ -661,8 +670,8 @@ func _create_ui() -> void:
     ui_canvas.add_child(pause_button)
 
     exit_button = Button.new()
-    exit_button.position = Vector2(VIEW_W - 138, 124)
-    exit_button.size = Vector2(74, 32)
+    exit_button.position = Vector2(VIEW_W - 188, 136)
+    exit_button.size = Vector2(96, 42)
     exit_button.text = "退出"
     exit_button.self_modulate = Color(0.62, 0.24, 0.22)
     exit_button.add_theme_color_override("font_color", Color.WHITE)
@@ -705,16 +714,16 @@ func _create_ui() -> void:
     pause_panel.add_child(pause_sub)
 
     var resume_button = Button.new()
-    resume_button.position = Vector2(26, 98)
-    resume_button.size = Vector2(92, 28)
+    resume_button.position = Vector2(22, 94)
+    resume_button.size = Vector2(96, 36)
     resume_button.text = "继续"
     resume_button.process_mode = Node.PROCESS_MODE_ALWAYS
     resume_button.pressed.connect(_toggle_pause)
     pause_panel.add_child(resume_button)
 
     var save_exit_button = Button.new()
-    save_exit_button.position = Vector2(142, 98)
-    save_exit_button.size = Vector2(92, 28)
+    save_exit_button.position = Vector2(134, 94)
+    save_exit_button.size = Vector2(104, 36)
     save_exit_button.text = "保存退出"
     save_exit_button.process_mode = Node.PROCESS_MODE_ALWAYS
     save_exit_button.pressed.connect(_save_and_exit_to_menu)
@@ -764,7 +773,7 @@ func _create_control_buttons() -> void:
         var pos: Vector2 = chamber.global_position
         var scaled_w: float = chamber.chamber_size.x * chamber.scale.x
         var scaled_h: float = chamber.chamber_size.y * chamber.scale.y
-        var button_size: Vector2 = current_layout.get("button_size", Vector2(64.0, 38.0))
+        var button_size: Vector2 = current_layout.get("button_size", Vector2(76.0, 46.0))
         var button_gap: float = current_layout.get("button_gap", 10.0)
         button.size = button_size
         button.pivot_offset = button.size * 0.5
@@ -777,11 +786,11 @@ func _create_control_buttons() -> void:
 
         # v1.9.6：视口略加宽，同时按钮做安全夹取，保证右侧 +球 不出屏。
         button.position.x = clampf(button.position.x, 10.0, VIEW_W - button.size.x - 10.0)
-        button.position.y = clampf(button.position.y, 58.0, VIEW_H - button.size.y - 10.0)
+        button.position.y = clampf(button.position.y, 64.0, VIEW_H - button.size.y - 12.0)
 
         add_ball_button_base_positions[faction_id] = button.position
         button.text = "+球"
-        button.add_theme_font_size_override("font_size", 18)
+        button.add_theme_font_size_override("font_size", 20)
         button.add_theme_color_override("font_color", Color.WHITE)
         button.add_theme_color_override("font_pressed_color", Color.WHITE)
         button.add_theme_color_override("font_hover_color", Color.WHITE)

@@ -17,11 +17,19 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="领土战争"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.6")
+config/tags=PackedStringArray("球球领土战争")
 
 [display]
 
 window/size/viewport_width=1120
 window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation="landscape"
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
 
 [rendering]
 
