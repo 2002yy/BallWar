@@ -62,9 +62,8 @@ func _draw() -> void:
 
     for x in range(grid_size):
         for y in range(grid_size):
-            var c = GameConfig.faction_color(owners[x][y])
-            c = c.darkened(0.08)
-            c.a = 0.92
+            var c = GameConfig.faction_color(owners[x][y]).darkened(0.08)
+            c.a = 0.93
             draw_rect(Rect2(x * cell_size, y * cell_size, cell_size, cell_size), c, true)
 
     _draw_emblems(size)
@@ -87,7 +86,7 @@ func _draw_emblems(size: float) -> void:
     _draw_yellow_emblem(Vector2(size - q, size - q), r)
 
 func _draw_blue_emblem(center: Vector2, radius: float) -> void:
-    var c = Color(1, 1, 1, 0.10)
+    var c = Color(1, 1, 1, 0.11)
     draw_circle(center, radius, c)
     draw_circle(center + Vector2(radius * 0.25, 0), radius * 0.82, Color(0, 0, 0, 0.06))
     draw_arc(center, radius * 1.15, 0.2, TAU - 0.2, 40, Color(1, 1, 1, 0.07), 4.0)
