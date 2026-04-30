@@ -45,17 +45,16 @@ func _draw_chamber(pos: Vector2, left_mode: bool) -> void:
     draw_rect(Rect2(pos, size), Color(0.04, 0.04, 0.05, 0.97), true)
     draw_rect(Rect2(pos, size), Color(0.28, 0.30, 0.33), false, 3.0)
 
-    var row_counts: Array = [3, 4, 5, 4, 3]
-    var margin_x: float = 22.0
-    var usable_width: float = size.x - margin_x * 2.0
-    for row_index in range(row_counts.size()):
-        var count: int = row_counts[row_index]
-        var y: float = pos.y + 28.0 + row_index * 28.0
-        var step: float = 0.0
-        if count > 1:
-            step = usable_width / float(count - 1)
-        for i in range(count):
-            draw_circle(Vector2(pos.x + margin_x + step * i, y), 6.5, Color(0.26, 0.28, 0.32))
+    var peg_points: Array = [
+        Vector2(38, 28), Vector2(78, 28), Vector2(118, 28),
+        Vector2(58, 54), Vector2(98, 54), Vector2(138, 54),
+        Vector2(26, 80), Vector2(66, 80), Vector2(106, 80), Vector2(146, 80),
+        Vector2(46, 106), Vector2(86, 106), Vector2(126, 106),
+        Vector2(26, 132), Vector2(66, 132), Vector2(106, 132), Vector2(146, 132)
+    ]
+
+    for p in peg_points:
+        draw_circle(pos + p, 6.5, Color(0.26, 0.28, 0.32))
 
     var font = ThemeDB.fallback_font
     draw_string(font, pos + Vector2(56, 106), "1", HORIZONTAL_ALIGNMENT_LEFT, -1, 82, Color(1, 1, 1, 0.32))

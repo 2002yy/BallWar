@@ -9,6 +9,7 @@ var pending_count: int = 1
 var locked_remaining: int = 0
 var chamber_size: Vector2 = Vector2(168, 214)
 var balls: Array = []
+var release_ball = null
 var gravity: float = 420.0
 var pegs: Array = []
 var peg_radius: float = 7.2
@@ -40,20 +41,21 @@ func _process(delta: float) -> void:
 
 func _create_pegs() -> void:
     pegs.clear()
-    var row_counts: Array = [3, 4, 5, 4, 3]
-    var top_y: float = 38.0
-    var row_gap: float = 31.0
-    var margin_x: float = 24.0
-    var usable_width: float = chamber_size.x - margin_x * 2.0
-    for row_index in range(row_counts.size()):
-        var count: int = row_counts[row_index]
-        var y: float = top_y + row_index * row_gap
-        if count == 1:
-            pegs.append(Vector2(chamber_size.x * 0.5, y))
-            continue
-        var step: float = usable_width / float(count - 1)
-        for i in range(count):
-            pegs.append(Vector2(margin_x + step * i, y))
+
+    # Staggered peg field, closer to the reference:
+    # every row shifts left/right instead of forming a symmetric narrow diamond.
+    var rows: Array = [
+        [Vector2(42, 36), Vector2(84, 36), Vector2(126, 36)],
+        [Vector2(62, 64), Vector2(104, 64), Vector2(146, 64)],
+        [Vector2(30, 92), Vector2(72, 92), Vector2(114, 92), Vector2(156, 92)],
+        [Vector2(50, 120), Vector2(92, 120), Vector2(134, 120)],
+        [Vector2(30, 148), Vector2(72, 148), Vector2(114, 148), Vector2(156, 148)],
+        [Vector2(62, 176), Vector2(104, 176), Vector2(146, 176)]
+    ]
+
+    for row in rows:
+        for p in row:
+            pegs.append(p)
 
 func add_control_ball() -> bool:
     if is_damaged or is_locked:
@@ -150,6 +152,7 @@ func _physics_process(delta: float) -> void:
                 _on_left_gate(ball)
             else:
                 _on_right_gate(ball)
+                break
 
 func _on_left_gate(ball) -> void:
     pending_count = clampi(pending_count * 2, 1, GameConfig.MAX_PENDING_COUNT)
@@ -157,6 +160,10 @@ func _on_left_gate(ball) -> void:
     _relaunch_control_ball(ball)
 
 func _on_right_gate(ball) -> void:
+    if is_locked:
+        return
+
+    release_ball = ball
     locked_remaining = pending_count
     is_locked = true
     _update_label()
@@ -174,12 +181,20 @@ func update_locked_remaining(remaining: int) -> void:
 func set_locked(locked: bool) -> void:
     if is_damaged:
         return
+
     is_locked = locked
+
     if not is_locked:
         pending_count = 1
         locked_remaining = 0
-        for ball in balls:
-            _relaunch_control_ball(ball)
+
+        # Important change:
+        # Only the ball that actually fell into the release gate is reset.
+        # Other control balls keep their current positions and continue from there.
+        if release_ball != null and is_instance_valid(release_ball):
+            _relaunch_control_ball(release_ball)
+        release_ball = null
+
     _update_label()
 
 func set_damaged() -> void:
@@ -189,6 +204,7 @@ func set_damaged() -> void:
     pending_count = 0
     locked_remaining = 0
     is_locked = false
+    release_ball = null
     for ball in balls:
         if ball != null:
             ball.queue_free()
