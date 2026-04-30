@@ -56,7 +56,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
     ui_time += delta
 
-    if pending_restore_bullets.size() > 0:
+    if pending_restore_bullets.size() > 0 and not get_tree().paused and not is_game_over:
         _process_pending_bullet_restore()
 
     if game_layer != null and not get_tree().paused and not is_game_over:
@@ -438,6 +438,9 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 
     game_layer = Node2D.new()
     game_layer.name = "GameLayer"
+    # Main 为 ALWAYS 以便暂停菜单可点击，但游戏层必须显式设为 PAUSABLE。
+    # 否则子节点继承 Main 的 ALWAYS，暂停后子弹/炮塔/控制仓仍会继续运行。
+    game_layer.process_mode = Node.PROCESS_MODE_PAUSABLE
     add_child(game_layer)
 
     _create_battlefield(grid_size)
@@ -526,6 +529,7 @@ func _create_control_chambers() -> void:
 func _create_ui() -> void:
     ui_canvas = CanvasLayer.new()
     ui_canvas.name = "UICanvas"
+    ui_canvas.process_mode = Node.PROCESS_MODE_ALWAYS
     game_layer.add_child(ui_canvas)
 
     var top_panel_w: float = current_layout.get("top_panel_w", 810.0)
@@ -699,14 +703,22 @@ func _create_ui() -> void:
     winner_label.text = ""
     ui_canvas.add_child(winner_label)
 
+    var fps_bg = ColorRect.new()
+    fps_bg.position = Vector2(VIEW_W - 188, VIEW_H - 58)
+    fps_bg.size = Vector2(178, 30)
+    fps_bg.color = Color(0.0, 0.0, 0.0, 0.42)
+    fps_bg.process_mode = Node.PROCESS_MODE_ALWAYS
+    ui_canvas.add_child(fps_bg)
+
     fps_label = Label.new()
-    fps_label.position = Vector2(VIEW_W - 96, VIEW_H - 28)
-    fps_label.size = Vector2(86, 22)
+    # 放在“右下角偏上偏内”的位置，避免编辑器预览区域裁掉最底部。
+    fps_label.position = Vector2(VIEW_W - 184, VIEW_H - 55)
+    fps_label.size = Vector2(170, 24)
     fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT as HorizontalAlignment
-    fps_label.add_theme_font_size_override("font_size", 16)
-    fps_label.add_theme_color_override("font_color", Color(0.84, 1.0, 0.84))
+    fps_label.add_theme_font_size_override("font_size", 18)
+    fps_label.add_theme_color_override("font_color", Color(0.72, 1.0, 0.72))
     fps_label.add_theme_color_override("font_outline_color", Color.BLACK)
-    fps_label.add_theme_constant_override("outline_size", 2)
+    fps_label.add_theme_constant_override("outline_size", 3)
     fps_label.text = "FPS --"
     fps_label.process_mode = Node.PROCESS_MODE_ALWAYS
     ui_canvas.add_child(fps_label)
@@ -963,8 +975,9 @@ func _toggle_pause() -> void:
         if pause_button != null:
             pause_button.text = "暂停"
     else:
-        _save_game_progress()
+        # 先暂停整棵游戏树，再保存当前状态，保证暂停后子弹/炮塔/控制球都停止。
         get_tree().paused = true
+        _save_game_progress()
         if pause_overlay != null:
             pause_overlay.visible = true
         if pause_button != null:
