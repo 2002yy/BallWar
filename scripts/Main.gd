@@ -1,6 +1,6 @@
 extends Node2D
 
-const VIEW_W: float = 1100.0
+const VIEW_W: float = 1180.0
 const VIEW_H: float = 700.0
 const SAVE_PATH: String = "user://ballwar_save.json"
 
@@ -116,8 +116,8 @@ func _create_start_menu() -> void:
     menu_layer.add_child(shade)
 
     var panel = Panel.new()
-    panel.position = Vector2(170, 46)
     panel.size = Vector2(760, 590)
+    panel.position = Vector2((VIEW_W - panel.size.x) * 0.5, 46)
     panel.self_modulate = Color(0.98, 0.99, 1.0, 0.96)
     menu_layer.add_child(panel)
 
@@ -685,6 +685,10 @@ func _create_control_buttons() -> void:
         else:
             button.position = Vector2(pos.x + scaled_w + button_gap, y_pos)
 
+        # v1.9.6：视口略加宽，同时按钮做安全夹取，保证右侧 +球 不出屏。
+        button.position.x = clampf(button.position.x, 10.0, VIEW_W - button.size.x - 10.0)
+        button.position.y = clampf(button.position.y, 58.0, VIEW_H - button.size.y - 10.0)
+
         add_ball_button_base_positions[faction_id] = button.position
         button.text = "+球"
         button.add_theme_font_size_override("font_size", 18)
@@ -952,6 +956,102 @@ func _cleanup_game_layer() -> void:
 func _has_save_file() -> bool:
     return FileAccess.file_exists(SAVE_PATH)
 
+func _vec2_to_arr(v: Vector2) -> Array:
+    return [v.x, v.y]
+
+func _arr_to_vec2(value, default_value: Vector2 = Vector2.ZERO) -> Vector2:
+    if value is Array and value.size() >= 2:
+        return Vector2(float(value[0]), float(value[1]))
+    return default_value
+
+func _vec2i_to_arr(v: Vector2i) -> Array:
+    return [v.x, v.y]
+
+func _arr_to_vec2i(value, default_value: Vector2i = Vector2i(-999, -999)) -> Vector2i:
+    if value is Array and value.size() >= 2:
+        return Vector2i(int(value[0]), int(value[1]))
+    return default_value
+
+func _get_release_ball_index(chamber) -> int:
+    if chamber == null or chamber.release_ball == null:
+        return -1
+    for i in range(chamber.balls.size()):
+        if chamber.balls[i] == chamber.release_ball:
+            return i
+    return -1
+
+func _collect_control_ball_states(chamber) -> Array:
+    var result: Array = []
+    if chamber == null:
+        return result
+
+    for ball in chamber.balls:
+        if ball == null or not is_instance_valid(ball):
+            continue
+        result.append({
+            "position": _vec2_to_arr(ball.position),
+            "velocity": _vec2_to_arr(ball.velocity),
+            "radius": ball.radius,
+        })
+    return result
+
+func _collect_bullet_states() -> Array:
+    var result: Array = []
+    if bullet_container == null:
+        return result
+
+    for node in bullet_container.get_children():
+        if node is Bullet:
+            var trail: Array = []
+            for point in node.trail_points:
+                trail.append(_vec2_to_arr(point))
+            result.append({
+                "faction_id": node.faction_id,
+                "position": _vec2_to_arr(node.global_position),
+                "direction": _vec2_to_arr(node.direction),
+                "age": node.age,
+                "last_cell": _vec2i_to_arr(node.last_cell),
+                "trail_points": trail,
+            })
+    return result
+
+func _clear_bullets() -> void:
+    if bullet_container == null:
+        return
+    for node in bullet_container.get_children():
+        node.queue_free()
+
+func _restore_bullet_states(states) -> void:
+    if bullet_container == null or battlefield == null:
+        return
+
+    _clear_bullets()
+
+    if not (states is Array):
+        return
+
+    for state in states:
+        if not (state is Dictionary):
+            continue
+        var bullet = Bullet.new()
+        var faction_id: int = clampi(int(state.get("faction_id", 0)), 0, 3)
+        var pos: Vector2 = _arr_to_vec2(state.get("position", [0, 0]), battlefield.global_position)
+        var direction: Vector2 = _arr_to_vec2(state.get("direction", [1, 0]), Vector2.RIGHT).normalized()
+        if direction.length() <= 0.001:
+            direction = Vector2.RIGHT
+        bullet.setup(faction_id, pos, direction, battlefield, turrets)
+        bullet_container.add_child(bullet)
+        bullet.age = clampf(float(state.get("age", 0.0)), 0.0, GameConfig.BULLET_MAX_LIFETIME)
+        bullet.last_cell = _arr_to_vec2i(state.get("last_cell", [-999, -999]))
+        bullet.trail_points.clear()
+        var trail = state.get("trail_points", [])
+        if trail is Array and trail.size() > 0:
+            for p in trail:
+                bullet.trail_points.append(_arr_to_vec2(p, bullet.global_position))
+        else:
+            bullet.trail_points.append(bullet.global_position)
+        bullet.queue_redraw()
+
 func _save_game_progress() -> void:
     if battlefield == null:
         return
@@ -967,25 +1067,35 @@ func _save_game_progress() -> void:
             "chamber_is_locked": chamber.is_locked if chamber != null else false,
             "chamber_is_damaged": chamber.is_damaged if chamber != null else false,
             "chamber_ball_count": chamber.get_ball_count() if chamber != null else 0,
+            "chamber_release_ball_index": _get_release_ball_index(chamber),
+            "control_balls": _collect_control_ball_states(chamber),
             "turret_health": turret.health if turret != null else GameConfig.TURRET_MAX_HEALTH,
             "turret_destroyed": turret.is_destroyed if turret != null else false,
+            "turret_sweep_phase": turret.sweep_phase if turret != null else 0.0,
+            "turret_rotation": turret.rotation if turret != null else 0.0,
             "turret_burst_remaining": turret.burst_remaining if turret != null else 0,
+            "turret_burst_total": turret.burst_total if turret != null else 0,
+            "turret_burst_index": turret.burst_index if turret != null else 0,
+            "turret_burst_timer": turret.burst_timer if turret != null else 0.0,
+            "turret_burst_locked": turret.burst_locked if turret != null else false,
         })
 
     var data: Dictionary = {
-        "save_version": "1.9.5",
+        "save_version": "1.9.6",
         "grid_size": battlefield.grid_size,
         "palette_name": GameConfig.get_palette_name(),
         "owners": battlefield.owners,
         "game_elapsed_time": game_elapsed_time,
         "is_game_over": is_game_over,
         "factions": factions,
+        "bullets": _collect_bullet_states(),
         "winner_text": winner_label.text if winner_label != null else "",
     }
 
     var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if file != null:
         file.store_string(JSON.stringify(data))
+
 
 func _load_saved_data() -> Dictionary:
     if not _has_save_file():
@@ -1044,12 +1154,13 @@ func _apply_saved_state(data: Dictionary) -> void:
             if turrets.has(faction_id):
                 _apply_turret_state(turrets[faction_id], faction_state)
 
-            # 读档兜底：如果控制仓锁住，但炮塔没有待发射子弹，就解锁，避免永远卡住。
             if chambers.has(faction_id) and turrets.has(faction_id):
                 if chambers[faction_id].is_locked and turrets[faction_id].burst_remaining <= 0:
                     chambers[faction_id].set_locked(false)
 
             _refresh_add_ball_button(faction_id)
+
+    _restore_bullet_states(data.get("bullets", []))
 
     is_game_over = bool(data.get("is_game_over", false))
     if winner_label != null:
@@ -1057,49 +1168,77 @@ func _apply_saved_state(data: Dictionary) -> void:
     if is_game_over:
         _stop_all_actions_for_game_over()
 
+
 func _apply_chamber_state(chamber, state: Dictionary) -> void:
     for ball in chamber.balls:
         if ball != null and is_instance_valid(ball):
             ball.queue_free()
     chamber.balls.clear()
+    chamber.stuck_states.clear()
     chamber.release_ball = null
     chamber.is_damaged = false
     chamber.is_locked = false
     chamber.pending_count = max(1, int(state.get("chamber_pending_count", 1)))
     chamber.locked_remaining = max(0, int(state.get("chamber_locked_remaining", 0)))
 
-    var ball_count: int = clampi(int(state.get("chamber_ball_count", 0)), 0, GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER)
-    for i in range(ball_count):
-        chamber.add_control_ball()
-
-    chamber.pending_count = max(1, int(state.get("chamber_pending_count", 1)))
-
     if bool(state.get("chamber_is_damaged", false)):
         chamber.set_damaged()
-    elif bool(state.get("chamber_is_locked", false)):
+        return
+
+    var saved_balls = state.get("control_balls", [])
+    if saved_balls is Array and saved_balls.size() > 0:
+        for ball_state in saved_balls:
+            if not (ball_state is Dictionary):
+                continue
+            var ball = ControlBall.new()
+            ball.radius = float(ball_state.get("radius", chamber.CONTROL_BALL_RADIUS))
+            var pos: Vector2 = _arr_to_vec2(ball_state.get("position", [chamber.chamber_size.x * 0.5, 18.0]), Vector2(chamber.chamber_size.x * 0.5, 18.0))
+            var vel: Vector2 = _arr_to_vec2(ball_state.get("velocity", [0, 0]), Vector2.ZERO)
+            ball.setup(chamber.faction_id, pos, vel)
+            chamber.add_child(ball)
+            chamber.balls.append(ball)
+            chamber._reset_stuck_state(ball)
+    else:
+        var ball_count: int = clampi(int(state.get("chamber_ball_count", 0)), 0, GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER)
+        for i in range(ball_count):
+            chamber.add_control_ball()
+
+    chamber.pending_count = max(1, int(state.get("chamber_pending_count", 1)))
+    chamber.locked_remaining = max(0, int(state.get("chamber_locked_remaining", 0)))
+
+    var release_index: int = int(state.get("chamber_release_ball_index", -1))
+    if release_index >= 0 and release_index < chamber.balls.size():
+        chamber.release_ball = chamber.balls[release_index]
+
+    if bool(state.get("chamber_is_locked", false)):
         chamber.is_locked = true
-        chamber.locked_remaining = max(0, int(state.get("chamber_locked_remaining", 0)))
         chamber._update_label()
     else:
         chamber._update_label()
+
 
 func _apply_turret_state(turret, state: Dictionary) -> void:
     turret.health = clampi(int(state.get("turret_health", GameConfig.TURRET_MAX_HEALTH)), 0, turret.max_health)
     turret.is_destroyed = bool(state.get("turret_destroyed", false))
     turret.damage_flash = 0.0
     turret.destroy_anim_time = 0.0 if turret.is_destroyed else -1.0
-    turret.burst_remaining = 0
-    turret.burst_total = 0
-    turret.burst_index = 0
-    turret.burst_timer = 0.0
-    turret._set_burst_locked(false)
 
-    var remaining: int = max(0, int(state.get("turret_burst_remaining", 0)))
-    if remaining > 0 and not turret.is_destroyed:
-        turret.burst_remaining = remaining
-        turret.burst_total = remaining
-        turret.burst_timer = 0.03
+    turret.sweep_phase = float(state.get("turret_sweep_phase", turret.sweep_phase))
+    turret.rotation = float(state.get("turret_rotation", turret.rotation))
+
+    turret.burst_remaining = max(0, int(state.get("turret_burst_remaining", 0)))
+    turret.burst_total = max(turret.burst_remaining, int(state.get("turret_burst_total", turret.burst_remaining)))
+    turret.burst_index = max(0, int(state.get("turret_burst_index", 0)))
+    turret.burst_timer = maxf(0.0, float(state.get("turret_burst_timer", 0.0)))
+
+    var should_lock: bool = bool(state.get("turret_burst_locked", false)) and turret.burst_remaining > 0 and not turret.is_destroyed
+    turret._set_burst_locked(should_lock)
+
+    if turret.is_destroyed:
+        turret.burst_remaining = 0
+        turret.burst_total = 0
         turret.burst_index = 0
-        turret._set_burst_locked(true)
+        turret.burst_timer = 0.0
+        turret._set_burst_locked(false)
 
     turret.queue_redraw()

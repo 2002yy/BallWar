@@ -123,15 +123,11 @@ func _spawn_bullet() -> void:
     bullet_container.add_child(bullet)
 
 func _current_burst_shot_angle() -> float:
-    if burst_total <= 1:
-        return rotation
-    var t: float = float(burst_index) / float(max(1, burst_total - 1))
-    var eased: float = 0.5 - 0.5 * cos(t * PI)
-    var fan_start: float = center_angle - sweep_amplitude * 0.92
-    var fan_end: float = center_angle + sweep_amplitude * 0.92
-    var baseline: float = lerpf(fan_start, fan_end, eased)
-    var blend: float = 0.22
-    return lerp_angle(baseline, rotation, blend)
+    # v1.9.6 修正：
+    # 子弹方向直接使用当前炮塔可见 rotation。
+    # 之前这里用 fan_start/fan_end 重新计算并混合 rotation，
+    # 会导致视觉炮塔摆了 90 度，但实际子弹角度偏小。
+    return rotation
 
 func take_damage(amount: int) -> void:
     if is_destroyed:
