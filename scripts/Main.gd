@@ -298,7 +298,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_scale": 0.74,
                 "left_chamber_y_top": 136.0,
                 "left_chamber_y_bottom": 396.0,
-                "chamber_gap": 18.0,
+                "chamber_gap": 14.0,
                 "button_gap": 10.0,
                 "button_size": Vector2(58.0, 34.0),
                 "top_panel_w": 660.0,
@@ -317,7 +317,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_scale": 0.76,
                 "left_chamber_y_top": 136.0,
                 "left_chamber_y_bottom": 382.0,
-                "chamber_gap": 20.0,
+                "chamber_gap": 12.0,
                 "button_gap": 10.0,
                 "button_size": Vector2(60.0, 36.0),
                 "top_panel_w": 700.0,
@@ -336,7 +336,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_scale": 0.78,
                 "left_chamber_y_top": 120.0,
                 "left_chamber_y_bottom": 374.0,
-                "chamber_gap": 20.0,
+                "chamber_gap": 10.0,
                 "button_gap": 10.0,
                 "button_size": Vector2(62.0, 38.0),
                 "top_panel_w": 730.0,
@@ -355,7 +355,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_scale": 0.80,
                 "left_chamber_y_top": 104.0,
                 "left_chamber_y_bottom": 362.0,
-                "chamber_gap": 22.0,
+                "chamber_gap": 8.0,
                 "button_gap": 11.0,
                 "button_size": Vector2(64.0, 38.0),
                 "top_panel_w": 710.0,
@@ -374,7 +374,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_scale": 0.78,
                 "left_chamber_y_top": 96.0,
                 "left_chamber_y_bottom": 354.0,
-                "chamber_gap": 22.0,
+                "chamber_gap": 7.0,
                 "button_gap": 11.0,
                 "button_size": Vector2(64.0, 38.0),
                 "top_panel_w": 710.0,
@@ -393,7 +393,7 @@ func _get_layout_profile(grid_size: int) -> Dictionary:
                 "chamber_scale": 0.76,
                 "left_chamber_y_top": 100.0,
                 "left_chamber_y_bottom": 352.0,
-                "chamber_gap": 20.0,
+                "chamber_gap": 6.0,
                 "button_gap": 10.0,
                 "button_size": Vector2(62.0, 36.0),
                 "top_panel_w": 710.0,
@@ -496,15 +496,43 @@ func _create_control_chambers() -> void:
 
     # 尺寸不再在 Main 中手写，直接读取 ControlChamber 的真实尺寸。
     var probe_chamber = ControlChamber.new()
-    var scaled_w: float = probe_chamber.chamber_size.x * chamber_scale
+    var scaled_size: Vector2 = probe_chamber.chamber_size * chamber_scale
     probe_chamber.free()
 
-    var gap: float = current_layout.get("chamber_gap", 20.0)
+    # 控制仓应“贴近炮塔”，因此横向位置优先按炮塔来对齐，而不是只按战场边框死算。
+    var gap_x: float = current_layout.get("chamber_gap", 10.0)
+    var top_gap_y: float = current_layout.get("chamber_top_turret_gap", 18.0)
+    var bottom_gap_y: float = current_layout.get("chamber_bottom_turret_gap", 8.0)
 
-    var left_x: float = map_left - scaled_w - gap
-    var right_x: float = map_left + map_size + gap
+    var blue_turret = turrets.get(GameConfig.Faction.BLUE, null)
+    var red_turret = turrets.get(GameConfig.Faction.RED, null)
+    var green_turret = turrets.get(GameConfig.Faction.GREEN, null)
+    var yellow_turret = turrets.get(GameConfig.Faction.YELLOW, null)
+
+    var left_x: float = map_left - scaled_size.x - gap_x
+    var right_x: float = map_left + map_size + gap_x
     var top_y: float = current_layout.get("left_chamber_y_top", 110.0)
     var bottom_y: float = current_layout.get("left_chamber_y_bottom", 360.0)
+
+    if blue_turret != null:
+        left_x = blue_turret.global_position.x - scaled_size.x - gap_x
+        top_y = blue_turret.global_position.y - top_gap_y
+    elif red_turret != null:
+        top_y = red_turret.global_position.y - top_gap_y
+
+    if red_turret != null:
+        right_x = red_turret.global_position.x + gap_x
+
+    if green_turret != null:
+        bottom_y = green_turret.global_position.y - scaled_size.y - bottom_gap_y
+    elif yellow_turret != null:
+        bottom_y = yellow_turret.global_position.y - scaled_size.y - bottom_gap_y
+
+    # 做轻量兜底，避免越界，同时仍保留“靠近炮塔”的相对位置。
+    left_x = clampf(left_x, 10.0, map_left - scaled_size.x - 2.0)
+    right_x = clampf(right_x, map_left + map_size + 2.0, VIEW_W - scaled_size.x - 10.0)
+    top_y = clampf(top_y, 58.0, VIEW_H - scaled_size.y - 70.0)
+    bottom_y = clampf(bottom_y, top_y + scaled_size.y + 6.0, VIEW_H - scaled_size.y - 10.0)
 
     var chamber_positions: Dictionary = {
         GameConfig.Faction.BLUE: Vector2(left_x, top_y),
@@ -704,16 +732,16 @@ func _create_ui() -> void:
     ui_canvas.add_child(winner_label)
 
     var fps_bg = ColorRect.new()
-    fps_bg.position = Vector2(VIEW_W - 188, VIEW_H - 58)
-    fps_bg.size = Vector2(178, 30)
+    fps_bg.position = current_layout.get("fps_bg_pos", Vector2(846.0, 652.0))
+    fps_bg.size = current_layout.get("fps_bg_size", Vector2(184.0, 30.0))
     fps_bg.color = Color(0.0, 0.0, 0.0, 0.42)
     fps_bg.process_mode = Node.PROCESS_MODE_ALWAYS
     ui_canvas.add_child(fps_bg)
 
     fps_label = Label.new()
-    # 放在“右下角偏上偏内”的位置，避免编辑器预览区域裁掉最底部。
-    fps_label.position = Vector2(VIEW_W - 184, VIEW_H - 55)
-    fps_label.size = Vector2(170, 24)
+    # FPS 位置按地图大小分档：越大的地图越靠右，但整体向中心收，避免裁切。
+    fps_label.position = current_layout.get("fps_label_pos", Vector2(852.0, 649.0))
+    fps_label.size = current_layout.get("fps_label_size", Vector2(172.0, 24.0))
     fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT as HorizontalAlignment
     fps_label.add_theme_font_size_override("font_size", 18)
     fps_label.add_theme_color_override("font_color", Color(0.72, 1.0, 0.72))
