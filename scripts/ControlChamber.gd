@@ -4,22 +4,27 @@ class_name ControlChamber
 signal release_requested(faction_id, bullet_count, chamber)
 signal ball_count_changed(faction_id, count)
 
-# 控制仓比例参数组：
-# 先确定“控制球半径 / 弹射点半径 / 弹射点间距 / 侧墙半嵌入比例”，再反推控制仓宽度。
-# v1.9.0：控制仓上下变长，弹射点比例略微放松，减少卡球。
+# 控制仓固定比例参数组（v1.9.1）
+# 目标：
+# 1) 上下变长，排列改成 3-4-3-4-3-4
+# 2) “4”行两侧弹射点一半嵌入墙体
+# 3) 控制仓略微变宽，但视口 / 中央战场比例维持原逻辑
 const CONTROL_BALL_RADIUS: float = 5.4
 const PEG_RADIUS: float = 7.0
-const PEG_SPACING: float = 31.0
-const SIDE_EXTRA_CLEARANCE: float = 3.0
-const WALL_EMBED_RATIO: float = 0.5
-const ROW_3_OFFSET_RATIO: float = 0.60
+const PEG_SPACING_X: float = 33.0
+const PEG_SPACING_Y: float = 36.0
 
-const CHAMBER_HEIGHT: float = 240.0
+# 4 行：两侧 peg 的圆心 = 半径的一半 -> 恰好半嵌墙
+const FOUR_ROW_EMBED_RATIO: float = 0.5
+# 3 行：向中间适度收拢，但不再过窄
+const THREE_ROW_INSET_RATIO: float = 0.62
+
+const CHAMBER_HEIGHT: float = 286.0
 const GATE_HEIGHT: float = 36.0
+const TOP_Y: float = 40.0
 
 # 底部出口动态比例：
-# 不是来回循环，而是随游戏进度单向变化。
-# 开局发射口长、x2 短；约 5 分钟后 x2 达到最大，发射口保留最小可触发宽度。
+# 开局发射口长，后续约 5 分钟逐步让 x2 变长。
 const GATE_RAMP_SECONDS: float = 300.0
 const GATE_START_RELEASE_RATIO: float = 0.72
 const GATE_END_RELEASE_RATIO: float = 0.30
@@ -29,8 +34,9 @@ var faction_id: int = GameConfig.Faction.BLUE
 var pending_count: int = 1
 var locked_remaining: int = 0
 
+# 宽度由固定比例参数反推：四列一共 3 个间距，两侧 4 行 peg 恰好半嵌墙体。
 var chamber_size: Vector2 = Vector2(
-    PEG_RADIUS + PEG_SPACING * 3.0 + SIDE_EXTRA_CLEARANCE * 2.0,
+    PEG_SPACING_X * 3.0 + PEG_RADIUS,
     CHAMBER_HEIGHT
 )
 
@@ -67,31 +73,30 @@ func _process(delta: float) -> void:
     elif count_label != null:
         count_label.scale = Vector2.ONE * (1.0 + 0.035 * sin(Time.get_ticks_msec() / 250.0))
 
-    # 出口比例随游戏进度单向变化，需要持续重绘。
     if not is_damaged:
         queue_redraw()
 
 func _create_pegs() -> void:
     pegs.clear()
 
-    # 3-4-3-4：4 行两侧弹射点半嵌入墙体，3 行向中间收一点。
-    # v1.9.0：纵向距离拉开，整体更宽松。
-    var row_counts: Array = [3, 4, 3, 4]
-    var y_values: Array = [46.0, 92.0, 140.0, 186.0]
-    var side_center_x: float = SIDE_EXTRA_CLEARANCE + PEG_RADIUS * WALL_EMBED_RATIO
+    # 明确改成 3-4-3-4-3-4
+    var row_counts: Array = [3, 4, 3, 4, 3, 4]
+    var side_center_x: float = PEG_RADIUS * FOUR_ROW_EMBED_RATIO
 
     for row_index in range(row_counts.size()):
         var count: int = row_counts[row_index]
-        var y: float = y_values[row_index]
-        var start_x: float = 0.0
+        var y: float = TOP_Y + float(row_index) * PEG_SPACING_Y
+        var start_x: float
 
         if count == 4:
+            # 两侧点一半嵌入墙体
             start_x = side_center_x
         else:
-            start_x = side_center_x + PEG_SPACING * ROW_3_OFFSET_RATIO
+            # 3 行向内收一点，但比之前宽松
+            start_x = side_center_x + PEG_SPACING_X * THREE_ROW_INSET_RATIO
 
         for i in range(count):
-            pegs.append(Vector2(start_x + i * PEG_SPACING, y))
+            pegs.append(Vector2(start_x + float(i) * PEG_SPACING_X, y))
 
 func add_control_ball() -> bool:
     if is_damaged or is_locked:
@@ -124,8 +129,8 @@ func _create_labels() -> void:
     add_child(name_label)
 
     count_label = Label.new()
-    count_label.position = Vector2(0, 92)
-    count_label.size = Vector2(chamber_size.x, 82)
+    count_label.position = Vector2(0, 116)
+    count_label.size = Vector2(chamber_size.x, 88)
     count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER as VerticalAlignment
     count_label.add_theme_font_size_override("font_size", 76)
@@ -151,7 +156,7 @@ func _relaunch_control_ball(ball) -> void:
     if ball == null:
         return
     ball.radius = CONTROL_BALL_RADIUS
-    var start_x: float = randf_range(24.0, chamber_size.x - 24.0)
+    var start_x: float = randf_range(18.0, chamber_size.x - 18.0)
     ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-54.0, 54.0), randf_range(24.0, 82.0)))
 
 func _physics_process(delta: float) -> void:
@@ -276,7 +281,6 @@ func _current_progress() -> float:
 
 func _current_release_ratio() -> float:
     var progress: float = _current_progress()
-    # 使用 smoothstep，让变化不是机械直线，前后更自然。
     var eased: float = progress * progress * (3.0 - 2.0 * progress)
     return lerpf(GATE_START_RELEASE_RATIO, GATE_END_RELEASE_RATIO, eased)
 
@@ -320,10 +324,8 @@ func _draw() -> void:
     draw_line(Vector2(x2_width, chamber_size.y - gate_height), Vector2(x2_width, chamber_size.y), Color.BLACK, 2)
 
     var font = ThemeDB.fallback_font
-    var x2_size: int = 17
-    var fire_size: int = 16
-    draw_string(font, Vector2(maxf(6.0, x2_width * 0.5 - 13.0), chamber_size.y - 11), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, x2_size, Color.BLACK)
-    draw_string(font, Vector2(x2_width + maxf(4.0, (chamber_size.x - x2_width) * 0.5 - 16.0), chamber_size.y - 11), "发射", HORIZONTAL_ALIGNMENT_LEFT, -1, fire_size, Color.BLACK)
+    draw_string(font, Vector2(maxf(6.0, x2_width * 0.5 - 13.0), chamber_size.y - 11), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color.BLACK)
+    draw_string(font, Vector2(x2_width + maxf(4.0, (chamber_size.x - x2_width) * 0.5 - 16.0), chamber_size.y - 11), "发射", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
 
     if is_locked and not is_damaged:
         draw_rect(Rect2(Vector2(0, chamber_size.y - gate_height), Vector2(chamber_size.x, gate_height)), Color(0.1, 0.1, 0.1, 0.28), true)

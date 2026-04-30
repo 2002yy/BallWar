@@ -281,7 +281,7 @@ func _create_control_chambers() -> void:
     var map_top: float = battlefield.position.y
     var map_size: float = battlefield.grid_size * battlefield.cell_size
     var base_w: float = 106.0
-    var base_h: float = 240.0
+    var base_h: float = 286.0
     var scaled_w: float = base_w * chamber_scale
     var scaled_h: float = base_h * chamber_scale
     var gap: float = clampf(26.0 + (520.0 - map_size) * 0.02, 24.0, 38.0)
@@ -425,9 +425,9 @@ func _create_control_buttons() -> void:
         button.pivot_offset = button.size * 0.5
 
         if faction_id == GameConfig.Faction.BLUE or faction_id == GameConfig.Faction.GREEN:
-            button.position = pos + Vector2(-72, 86.0 * chamber.scale.y)
+            button.position = pos + Vector2(-72, 106.0 * chamber.scale.y)
         else:
-            button.position = pos + Vector2(scaled_w + 10, 86.0 * chamber.scale.y)
+            button.position = pos + Vector2(scaled_w + 10, 106.0 * chamber.scale.y)
 
         add_ball_button_base_positions[faction_id] = button.position
         button.text = "+球"
