@@ -4,39 +4,40 @@ class_name ControlChamber
 signal release_requested(faction_id, bullet_count, chamber)
 signal ball_count_changed(faction_id, count)
 
-# 控制仓固定比例参数组（v1.9.1）
-# 目标：
-# 1) 上下变长，排列改成 3-4-3-4-3-4
-# 2) “4”行两侧弹射点一半嵌入墙体
-# 3) 控制仓略微变宽，但视口 / 中央战场比例维持原逻辑
+# v1.9.5 稳定性收口版：
+# 1) 阵营名移入控制仓内部顶部；
+# 2) 3-4-3-4-3-4 保留；
+# 3) 4 行两侧 peg 视觉半嵌入墙体；
+# 4) 3 行居中，保证 peg 与墙之间的可通行距离大于控制球半径；
+# 5) 增加小球防卡检测。
 const CONTROL_BALL_RADIUS: float = 5.4
 const PEG_RADIUS: float = 7.0
-const PEG_SPACING_X: float = 33.0
-const PEG_SPACING_Y: float = 36.0
+const PEG_SPACING_X: float = 36.0
+const PEG_SPACING_Y: float = 34.0
 
-# 4 行：两侧 peg 的圆心 = 半径的一半 -> 恰好半嵌墙
 const FOUR_ROW_EMBED_RATIO: float = 0.5
-# 3 行：向中间适度收拢，但不再过窄
-const THREE_ROW_INSET_RATIO: float = 0.62
-
 const CHAMBER_HEIGHT: float = 286.0
 const GATE_HEIGHT: float = 36.0
-const TOP_Y: float = 40.0
+const TOP_Y: float = 44.0
 
-# 底部出口动态比例：
-# 开局发射口长，后续约 5 分钟逐步让 x2 变长。
 const GATE_RAMP_SECONDS: float = 300.0
 const GATE_START_RELEASE_RATIO: float = 0.72
 const GATE_END_RELEASE_RATIO: float = 0.30
 const GATE_MIN_RATIO: float = 0.28
 
+const STUCK_MOVE_EPS: float = 0.35
+const STUCK_SPEED_EPS: float = 18.0
+const STUCK_TIME_LIMIT: float = 0.80
+
 var faction_id: int = GameConfig.Faction.BLUE
 var pending_count: int = 1
 var locked_remaining: int = 0
 
-# 宽度由固定比例参数反推：四列一共 3 个间距，两侧 4 行 peg 恰好半嵌墙体。
+# 宽度由 4 行的半嵌入规则反推：
+# 左右侧 peg 圆心距墙 = PEG_RADIUS * 0.5；
+# 四列之间有 3 个 PEG_SPACING_X。
 var chamber_size: Vector2 = Vector2(
-    PEG_SPACING_X * 3.0 + PEG_RADIUS,
+    PEG_RADIUS + PEG_SPACING_X * 3.0,
     CHAMBER_HEIGHT
 )
 
@@ -45,6 +46,8 @@ var release_ball = null
 var gravity: float = 420.0
 var pegs: Array = []
 var peg_radius: float = PEG_RADIUS
+var stuck_states: Dictionary = {}
+
 var name_label
 var count_label
 var ball_label
@@ -78,9 +81,9 @@ func _process(delta: float) -> void:
 func _create_pegs() -> void:
     pegs.clear()
 
-    # 明确改成 3-4-3-4-3-4
     var row_counts: Array = [3, 4, 3, 4, 3, 4]
     var side_center_x: float = PEG_RADIUS * FOUR_ROW_EMBED_RATIO
+    var centered_three_start_x: float = (chamber_size.x - PEG_SPACING_X * 2.0) * 0.5
 
     for row_index in range(row_counts.size()):
         var count: int = row_counts[row_index]
@@ -88,11 +91,11 @@ func _create_pegs() -> void:
         var start_x: float
 
         if count == 4:
-            # 两侧点一半嵌入墙体
+            # 两侧 peg 视觉上一半嵌入墙体。
             start_x = side_center_x
         else:
-            # 3 行向内收一点，但比之前宽松
-            start_x = side_center_x + PEG_SPACING_X * THREE_ROW_INSET_RATIO
+            # 3 行居中，左右墙距离都足够小球通过，避免被墙夹住。
+            start_x = centered_three_start_x
 
         for i in range(count):
             pegs.append(Vector2(start_x + float(i) * PEG_SPACING_X, y))
@@ -117,14 +120,14 @@ func get_ball_count() -> int:
 
 func _create_labels() -> void:
     name_label = Label.new()
-    name_label.position = Vector2(-10, -56)
-    name_label.size = Vector2(chamber_size.x + 20.0, 28.0)
+    name_label.position = Vector2(0, 4)
+    name_label.size = Vector2(chamber_size.x, 24)
     name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER as VerticalAlignment
-    name_label.add_theme_font_size_override("font_size", 22)
+    name_label.add_theme_font_size_override("font_size", 17)
     name_label.add_theme_color_override("font_color", GameConfig.faction_color(faction_id).lightened(0.72))
     name_label.add_theme_color_override("font_outline_color", Color.BLACK)
-    name_label.add_theme_constant_override("outline_size", 4)
+    name_label.add_theme_constant_override("outline_size", 3)
     add_child(name_label)
 
     count_label = Label.new()
@@ -157,14 +160,15 @@ func _relaunch_control_ball(ball) -> void:
     ball.radius = CONTROL_BALL_RADIUS
     var start_x: float = randf_range(18.0, chamber_size.x - 18.0)
     ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-54.0, 54.0), randf_range(24.0, 82.0)))
+    _reset_stuck_state(ball)
 
 func _is_side_embedded_peg(peg: Vector2) -> bool:
     return peg.x <= PEG_RADIUS * 0.75 or peg.x >= chamber_size.x - PEG_RADIUS * 0.75
 
 func _effective_peg_radius(peg: Vector2) -> float:
-    # 视觉上两侧 peg 半嵌入墙体，但碰撞半径略小，避免球在墙和侧 peg 之间卡住。
+    # 侧边半嵌入 peg 保留视觉，但弱化碰撞，避免墙 + peg 夹住小球。
     if _is_side_embedded_peg(peg):
-        return peg_radius * 0.72
+        return peg_radius * 0.50
     return peg_radius
 
 func _clamp_ball_to_walls(ball) -> void:
@@ -178,6 +182,44 @@ func _clamp_ball_to_walls(ball) -> void:
     if ball.position.y < ball.radius:
         ball.position.y = ball.radius
         ball.velocity.y = abs(ball.velocity.y) * 0.90
+
+func _reset_stuck_state(ball) -> void:
+    if ball == null:
+        return
+    stuck_states[ball.get_instance_id()] = {
+        "pos": ball.position,
+        "time": 0.0
+    }
+
+func _update_stuck_state(ball, delta: float) -> void:
+    if ball == null:
+        return
+
+    var id: int = ball.get_instance_id()
+    if not stuck_states.has(id):
+        _reset_stuck_state(ball)
+        return
+
+    var state: Dictionary = stuck_states[id]
+    var last_pos: Vector2 = state.get("pos", ball.position)
+    var stuck_time: float = float(state.get("time", 0.0))
+    var moved: float = ball.position.distance_to(last_pos)
+
+    if moved < STUCK_MOVE_EPS and ball.velocity.length() < STUCK_SPEED_EPS:
+        stuck_time += delta
+    else:
+        stuck_time = 0.0
+        last_pos = ball.position
+
+    if stuck_time >= STUCK_TIME_LIMIT:
+        ball.position.x = clampf(ball.position.x + randf_range(-5.0, 5.0), ball.radius, chamber_size.x - ball.radius)
+        ball.velocity = Vector2(randf_range(-95.0, 95.0), randf_range(-72.0, -24.0))
+        stuck_time = 0.0
+        last_pos = ball.position
+
+    state["pos"] = last_pos
+    state["time"] = stuck_time
+    stuck_states[id] = state
 
 func _physics_process(delta: float) -> void:
     if is_damaged or is_locked:
@@ -205,6 +247,7 @@ func _physics_process(delta: float) -> void:
                 ball.velocity += Vector2(randf_range(-22.0, 22.0), randf_range(-10.0, 10.0))
 
         _clamp_ball_to_walls(ball)
+        _update_stuck_state(ball, delta)
 
         if ball.position.y >= chamber_size.y - ball.radius:
             if ball.position.x < x2_width:
@@ -265,6 +308,7 @@ func set_damaged() -> void:
         if ball != null:
             ball.queue_free()
     balls.clear()
+    stuck_states.clear()
     ball_count_changed.emit(faction_id, 0)
     _update_label()
     queue_redraw()
@@ -314,6 +358,7 @@ func _draw() -> void:
         border_color = Color(0.78, 0.12, 0.12)
 
     draw_rect(Rect2(Vector2.ZERO, chamber_size), base_color, true)
+    draw_rect(Rect2(Vector2.ZERO, Vector2(chamber_size.x, 30.0)), Color(border_color.r, border_color.g, border_color.b, 0.13), true)
     draw_rect(Rect2(Vector2.ZERO, chamber_size), border_color, false, 3)
 
     for peg in pegs:

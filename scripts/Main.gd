@@ -30,6 +30,7 @@ var selected_grid_size: int = 40
 var selected_palette_name: String = "默认随机"
 var current_layout: Dictionary = {}
 var game_elapsed_time: float = 0.0
+var is_game_over: bool = false
 
 var menu_title_label
 var menu_start_button
@@ -46,7 +47,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
     ui_time += delta
 
-    if game_layer != null and not get_tree().paused:
+    if game_layer != null and not get_tree().paused and not is_game_over:
         game_elapsed_time += delta
         for chamber in chambers.values():
             if chamber != null and is_instance_valid(chamber):
@@ -376,9 +377,10 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
     selected_grid_size = grid_size
     current_layout = _get_layout_profile(grid_size)
     game_elapsed_time = 0.0
+    is_game_over = false
 
     if clear_save and _has_save_file():
-        DirAccess.remove_absolute(SAVE_PATH)
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 
     if selected_palette_name == "默认随机":
         GameConfig.set_random_palette()
@@ -451,8 +453,12 @@ func _create_turrets() -> void:
 func _create_control_chambers() -> void:
     var map_left: float = battlefield.position.x
     var map_size: float = battlefield.grid_size * battlefield.cell_size
-    var base_w: float = 106.0
-    var scaled_w: float = base_w * chamber_scale
+
+    # 尺寸不再在 Main 中手写，直接读取 ControlChamber 的真实尺寸。
+    var probe_chamber = ControlChamber.new()
+    var scaled_w: float = probe_chamber.chamber_size.x * chamber_scale
+    probe_chamber.free()
+
     var gap: float = current_layout.get("chamber_gap", 20.0)
 
     var left_x: float = map_left - scaled_w - gap
@@ -476,6 +482,9 @@ func _create_control_chambers() -> void:
         chamber.ball_count_changed.connect(_on_ball_count_changed)
         game_layer.add_child(chamber)
         chambers[faction_id] = chamber
+
+    _sync_chamber_game_elapsed_time()
+
 
 func _create_ui() -> void:
     ui_canvas = CanvasLayer.new()
@@ -721,6 +730,11 @@ func _refresh_add_ball_button(faction_id: int) -> void:
         button.self_modulate = GameConfig.faction_color(faction_id)
 
 func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
+    if is_game_over:
+        chamber.set_locked(false)
+        _refresh_add_ball_button(faction_id)
+        return
+
     if turrets.has(faction_id):
         chamber.start_locked(bullet_count)
         _refresh_add_ball_button(faction_id)
@@ -743,17 +757,40 @@ func _on_turret_destroyed(faction_id: int) -> void:
     _check_winner()
 
 func _check_winner() -> void:
+    if is_game_over:
+        return
+
     var alive: Array = []
     for faction_id in turrets.keys():
         var turret = turrets[faction_id]
         if not turret.is_destroyed:
             alive.append(faction_id)
+
     if alive.size() == 1:
+        is_game_over = true
+        _stop_all_actions_for_game_over()
         winner_label.text = "%s 胜利！" % GameConfig.faction_name(alive[0])
         _show_center_banner(winner_label.text, "终局", GameConfig.faction_color(alive[0]).lightened(0.35), false)
     elif alive.size() == 0:
+        is_game_over = true
+        _stop_all_actions_for_game_over()
         winner_label.text = "平局"
         _show_center_banner("平局", "终局", Color(1.0, 1.0, 1.0), false)
+
+func _stop_all_actions_for_game_over() -> void:
+    for turret in turrets.values():
+        if turret == null:
+            continue
+        turret.burst_remaining = 0
+        turret.burst_total = 0
+        turret.burst_timer = 0.0
+        turret._set_burst_locked(false)
+
+    for faction_id in chambers.keys():
+        var chamber = chambers[faction_id]
+        if chamber != null and chamber.is_locked:
+            chamber.set_locked(false)
+        _refresh_add_ball_button(faction_id)
 
 func _on_scores_changed(counts: Dictionary) -> void:
     if top_bar_segments.size() == 0:
@@ -853,6 +890,12 @@ func _show_center_banner(title_text: String, sub_text: String, accent: Color, au
     else:
         title.add_theme_color_override("font_color", accent)
 
+func _sync_chamber_game_elapsed_time() -> void:
+    for chamber in chambers.values():
+        if chamber != null and is_instance_valid(chamber):
+            chamber.set_game_elapsed_time(game_elapsed_time)
+            chamber.queue_redraw()
+
 func _toggle_pause() -> void:
     if game_layer == null:
         return
@@ -930,10 +973,12 @@ func _save_game_progress() -> void:
         })
 
     var data: Dictionary = {
+        "save_version": "1.9.5",
         "grid_size": battlefield.grid_size,
         "palette_name": GameConfig.get_palette_name(),
         "owners": battlefield.owners,
         "game_elapsed_time": game_elapsed_time,
+        "is_game_over": is_game_over,
         "factions": factions,
         "winner_text": winner_label.text if winner_label != null else "",
     }
@@ -964,6 +1009,7 @@ func _continue_saved_game() -> void:
     GameConfig.set_palette_by_name(palette_name)
     _start_game(int(data.get("grid_size", 40)), true, false)
     game_elapsed_time = float(data.get("game_elapsed_time", 0.0))
+    _sync_chamber_game_elapsed_time()
     _apply_saved_state(data)
     _show_center_banner("领土战争", "继续作战", Color(0.84, 0.96, 1.0), true)
 
@@ -1005,8 +1051,11 @@ func _apply_saved_state(data: Dictionary) -> void:
 
             _refresh_add_ball_button(faction_id)
 
+    is_game_over = bool(data.get("is_game_over", false))
     if winner_label != null:
         winner_label.text = str(data.get("winner_text", ""))
+    if is_game_over:
+        _stop_all_actions_for_game_over()
 
 func _apply_chamber_state(chamber, state: Dictionary) -> void:
     for ball in chamber.balls:
