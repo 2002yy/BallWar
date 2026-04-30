@@ -1,8 +1,8 @@
 extends Node2D
 class_name Bullet
 
-var faction_id = GameConfig.Faction.BLUE
-var direction = Vector2.RIGHT
+var faction_id: int = GameConfig.Faction.BLUE
+var direction: Vector2 = Vector2.RIGHT
 var speed = GameConfig.BULLET_SPEED
 var battlefield
 var target_turrets = {}

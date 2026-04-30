@@ -4,7 +4,7 @@ class_name GameConfig
 const GRID_SIZE = 40
 const CELL_SIZE = 13
 
-const BULLET_SPEED = 122.0
+const BULLET_SPEED = 108.0
 const BULLET_RADIUS = 6.2
 const BULLET_MAX_LIFETIME = 12.0
 
@@ -15,7 +15,7 @@ const BULLET_DAMAGE = 1
 
 const MAX_PENDING_COUNT = 64
 const MAX_CONTROL_BALLS_PER_CHAMBER = 8
-const BURST_FIRE_INTERVAL = 0.08
+const BURST_FIRE_INTERVAL = 0.045
 
 enum Faction { BLUE, RED, GREEN, YELLOW }
 

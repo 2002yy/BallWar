@@ -5,6 +5,7 @@ var bullet_container
 var turrets: Dictionary = {}
 var chambers: Dictionary = {}
 var add_ball_buttons: Dictionary = {}
+var add_ball_button_base_positions: Dictionary = {}
 
 var top_bar_segments: Dictionary = {}
 var top_bar_labels: Dictionary = {}
@@ -43,6 +44,32 @@ func _process(delta: float) -> void:
     if winner_label != null and winner_label.text != "":
         var w: float = 1.0 + 0.04 * sin(ui_time * 3.0)
         winner_label.scale = Vector2(w, w)
+
+    _animate_add_ball_buttons()
+
+func _animate_add_ball_buttons() -> void:
+    for faction_id in add_ball_buttons.keys():
+        var button = add_ball_buttons[faction_id]
+        if button == null or not is_instance_valid(button):
+            continue
+        if not add_ball_button_base_positions.has(faction_id):
+            continue
+
+        var base_pos: Vector2 = add_ball_button_base_positions[faction_id]
+        var phase: float = ui_time * 3.0 + float(faction_id) * 0.85
+        var breath: float = sin(phase)
+        var hover_bonus: float = 0.0
+
+        if button.has_method("is_hovered") and button.is_hovered() and not button.disabled:
+            hover_bonus = 0.055
+
+        if button.disabled:
+            button.position = base_pos
+            button.scale = Vector2.ONE
+        else:
+            button.position = base_pos + Vector2(0.0, -2.0 + breath * 2.2)
+            var s: float = 1.0 + breath * 0.028 + hover_bonus
+            button.scale = Vector2(s, s)
 
 func _create_background() -> void:
     var background = ColorRect.new()
@@ -191,6 +218,7 @@ func _start_game(grid_size: int) -> void:
     turrets.clear()
     chambers.clear()
     add_ball_buttons.clear()
+    add_ball_button_base_positions.clear()
     top_bar_segments.clear()
     top_bar_labels.clear()
     top_bar_name_labels.clear()
@@ -249,7 +277,7 @@ func _create_control_chambers() -> void:
     var map_left: float = battlefield.position.x
     var map_top: float = battlefield.position.y
     var map_size: float = battlefield.grid_size * battlefield.cell_size
-    var base_w: float = 148.0
+    var base_w: float = 124.0
     var base_h: float = 214.0
     var scaled_w: float = base_w * chamber_scale
     var scaled_h: float = base_h * chamber_scale
@@ -325,8 +353,8 @@ func _create_ui() -> void:
 
         var name_label = Label.new()
         name_label.position = Vector2(8, 2)
-        name_label.size = Vector2(74, 16)
-        name_label.add_theme_font_size_override("font_size", 14)
+        name_label.size = Vector2(60, 16)
+        name_label.add_theme_font_size_override("font_size", 13)
         name_label.add_theme_color_override("font_color", GameConfig.faction_color(faction_id).lightened(0.52))
         name_label.add_theme_color_override("font_outline_color", Color.BLACK)
         name_label.add_theme_constant_override("outline_size", 2)
@@ -334,8 +362,8 @@ func _create_ui() -> void:
         top_bar_name_labels[faction_id] = name_label
 
         var value_label = Label.new()
-        value_label.position = Vector2(64, -1)
-        value_label.size = Vector2(130, 32)
+        value_label.position = Vector2(0, -1)
+        value_label.size = Vector2(segment.size.x, 32)
         value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
         value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER as VerticalAlignment
         value_label.add_theme_font_size_override("font_size", 23)
@@ -391,12 +419,14 @@ func _create_control_buttons() -> void:
         var pos: Vector2 = chamber.global_position
         var scaled_w: float = chamber.chamber_size.x * chamber.scale.x
         button.size = Vector2(62, 40)
+        button.pivot_offset = button.size * 0.5
 
         if faction_id == GameConfig.Faction.BLUE or faction_id == GameConfig.Faction.GREEN:
             button.position = pos + Vector2(-72, 86.0 * chamber.scale.y)
         else:
             button.position = pos + Vector2(scaled_w + 10, 86.0 * chamber.scale.y)
 
+        add_ball_button_base_positions[faction_id] = button.position
         button.text = "+球"
         button.add_theme_font_size_override("font_size", 18)
         button.add_theme_color_override("font_color", Color.WHITE)
@@ -498,10 +528,36 @@ func _on_scores_changed(counts: Dictionary) -> void:
         var fill = segment.get_node("Fill")
         fill.size = Vector2(maxf(4.0, segment.size.x - 4.0), segment.size.y - 4.0)
         fill.color = Color(GameConfig.faction_color(faction_id).r, GameConfig.faction_color(faction_id).g, GameConfig.faction_color(faction_id).b, 0.22)
-        top_bar_labels[faction_id].text = "%d%%" % p
-        top_bar_labels[faction_id].position.x = maxf(36.0, segment.size.x * 0.5 - 52.0)
-        top_bar_name_labels[faction_id].text = GameConfig.faction_name(faction_id)
-        top_bar_name_labels[faction_id].add_theme_color_override("font_color", GameConfig.faction_color(faction_id).lightened(0.45))
+        var value_label = top_bar_labels[faction_id]
+        var name_label = top_bar_name_labels[faction_id]
+        value_label.text = "%d%%" % p
+        name_label.text = GameConfig.faction_name(faction_id)
+        name_label.add_theme_color_override("font_color", GameConfig.faction_color(faction_id).lightened(0.45))
+        name_label.visible = true
+
+        if segment.size.x < 118.0:
+            # 窄条状态：阵营名移到上方，百分比放下方，避免横向重叠。
+            name_label.position = Vector2(0, 0)
+            name_label.size = Vector2(segment.size.x, 14)
+            name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
+            name_label.add_theme_font_size_override("font_size", 11)
+
+            value_label.position = Vector2(0, 10)
+            value_label.size = Vector2(segment.size.x, 24)
+            value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
+            value_label.add_theme_font_size_override("font_size", 18)
+        else:
+            # 宽条状态：左侧阵营名 + 中部百分比。
+            name_label.position = Vector2(8, 2)
+            name_label.size = Vector2(60, 16)
+            name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT as HorizontalAlignment
+            name_label.add_theme_font_size_override("font_size", 13)
+
+            value_label.position = Vector2(0, -1)
+            value_label.size = Vector2(segment.size.x, 32)
+            value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
+            value_label.add_theme_font_size_override("font_size", 23)
+
         running_x += segment.size.x
 
 func _show_center_banner(title_text: String, sub_text: String, accent: Color, auto_hide: bool) -> void:

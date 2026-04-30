@@ -8,14 +8,14 @@ var faction_id: int = GameConfig.Faction.BLUE
 var pending_count: int = 1
 var locked_remaining: int = 0
 
-# Narrower chamber: closer to the reference control console.
-var chamber_size: Vector2 = Vector2(148, 214)
+# Narrower chamber with denser peg filling.
+var chamber_size: Vector2 = Vector2(124, 214)
 
 var balls: Array = []
 var release_ball = null
 var gravity: float = 420.0
 var pegs: Array = []
-var peg_radius: float = 7.2
+var peg_radius: float = 7.0
 var name_label
 var count_label
 var ball_label
@@ -45,22 +45,20 @@ func _process(delta: float) -> void:
 func _create_pegs() -> void:
     pegs.clear()
 
-    # 3-4-3-4-3-4 staggered rows.
-    # This follows the reference shape more closely: left/right alternating
-    # instead of a vertical diamond that narrows around the center.
-    var row_counts: Array = [3, 4, 3, 4, 3, 4]
-    var y_values: Array = [34.0, 62.0, 90.0, 118.0, 146.0, 174.0]
+    # 4-5-4-5 staggered rows to fill the width more evenly.
+    var row_counts: Array = [4, 5, 4, 5]
+    var y_values: Array = [40.0, 76.0, 116.0, 154.0]
 
     for row_index in range(row_counts.size()):
         var count: int = row_counts[row_index]
         var y: float = y_values[row_index]
         var start_x: float = 0.0
-        var step: float = 32.0
+        var step: float = 22.0
 
-        if count == 3:
-            start_x = 38.0
+        if count == 4:
+            start_x = 29.0
         else:
-            start_x = 22.0
+            start_x = 18.0
 
         for i in range(count):
             pegs.append(Vector2(start_x + i * step, y))
@@ -94,22 +92,22 @@ func _create_labels() -> void:
     add_child(name_label)
 
     count_label = Label.new()
-    count_label.position = Vector2(0, 74)
-    count_label.size = Vector2(chamber_size.x, 82)
+    count_label.position = Vector2(0, 78)
+    count_label.size = Vector2(chamber_size.x, 80)
     count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER as VerticalAlignment
-    count_label.add_theme_font_size_override("font_size", 78)
+    count_label.add_theme_font_size_override("font_size", 76)
     count_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.28))
     count_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.60))
     count_label.add_theme_constant_override("outline_size", 4)
     add_child(count_label)
 
     ball_label = Label.new()
-    ball_label.position = Vector2(0, 183)
-    ball_label.size = Vector2(chamber_size.x, 24)
+    ball_label.position = Vector2(0, 169)
+    ball_label.size = Vector2(chamber_size.x, 22)
     ball_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     ball_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER as VerticalAlignment
-    ball_label.add_theme_font_size_override("font_size", 20)
+    ball_label.add_theme_font_size_override("font_size", 17)
     ball_label.add_theme_color_override("font_color", Color.WHITE)
     ball_label.add_theme_color_override("font_outline_color", Color.BLACK)
     ball_label.add_theme_constant_override("outline_size", 3)
@@ -120,7 +118,7 @@ func _create_labels() -> void:
 func _relaunch_control_ball(ball) -> void:
     if ball == null:
         return
-    var start_x: float = randf_range(32.0, chamber_size.x - 32.0)
+    var start_x: float = randf_range(26.0, chamber_size.x - 26.0)
     ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-60.0, 60.0), randf_range(24.0, 82.0)))
 
 func _physics_process(delta: float) -> void:
@@ -196,8 +194,6 @@ func set_locked(locked: bool) -> void:
         pending_count = 1
         locked_remaining = 0
 
-        # Only reset the control ball that entered the release gate.
-        # Other balls keep their positions.
         if release_ball != null and is_instance_valid(release_ball):
             _relaunch_control_ball(release_ball)
         release_ball = null
@@ -271,8 +267,8 @@ func _draw() -> void:
     draw_line(Vector2(chamber_size.x * 0.5, chamber_size.y - gate_height), Vector2(chamber_size.x * 0.5, chamber_size.y), Color.BLACK, 2)
 
     var font = ThemeDB.fallback_font
-    draw_string(font, Vector2(23, chamber_size.y - 11), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color.BLACK)
-    draw_string(font, Vector2(chamber_size.x * 0.5 + 16, chamber_size.y - 11), "发射", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color.BLACK)
+    draw_string(font, Vector2(18, chamber_size.y - 11), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.BLACK)
+    draw_string(font, Vector2(chamber_size.x * 0.5 + 10, chamber_size.y - 11), "发射", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.BLACK)
 
     if is_locked and not is_damaged:
         draw_rect(Rect2(Vector2(0, chamber_size.y - gate_height), Vector2(chamber_size.x, gate_height)), Color(0.1, 0.1, 0.1, 0.28), true)
