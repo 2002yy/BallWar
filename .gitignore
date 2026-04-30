@@ -1,0 +1,17 @@
+.godot/
+.import/
+.godot_backup_*/
+
+*.log
+*.tmp
+*.bak
+*.orig
+
+.DS_Store
+Thumbs.db
+
+art_reference/free_ui_assets/*.zip
+art_reference/free_ui_assets/*.html
+art_reference/free_ui_assets/*.json
+art_reference/free_ui_assets/*.js
+art_reference/free_ui_assets/*.txt
