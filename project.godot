@@ -14,14 +14,14 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="球球游戏战争"
+config/name="领土战争"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.6")
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=860
+window/size/viewport_width=1360
+window/size/viewport_height=920
 
 [rendering]
 

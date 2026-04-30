@@ -1,5 +1,8 @@
 extends Node2D
 
+const VIEW_W: float = 1360.0
+const VIEW_H: float = 920.0
+
 var battlefield
 var bullet_container
 var turrets: Dictionary = {}
@@ -74,7 +77,7 @@ func _animate_add_ball_buttons() -> void:
 func _create_background() -> void:
     var background = ColorRect.new()
     background.color = Color(0.03, 0.07, 0.14)
-    background.size = Vector2(1280, 860)
+    background.size = Vector2(VIEW_W, VIEW_H)
     add_child(background)
     background.z_index = -100
 
@@ -84,7 +87,7 @@ func _create_start_menu() -> void:
 
     var shade = ColorRect.new()
     shade.color = Color(0.02, 0.03, 0.05, 0.70)
-    shade.size = Vector2(1280, 860)
+    shade.size = Vector2(VIEW_W, VIEW_H)
     menu_layer.add_child(shade)
 
     var panel = Panel.new()
@@ -238,7 +241,7 @@ func _create_battlefield(grid_size: int) -> void:
     battlefield = Battlefield.new()
     battlefield.configure(grid_size)
     var map_pixel_size: float = battlefield.grid_size * battlefield.cell_size
-    var origin: Vector2 = Vector2((1280.0 - map_pixel_size) * 0.5, (860.0 - map_pixel_size) * 0.5 + 56.0)
+    var origin: Vector2 = Vector2((VIEW_W - map_pixel_size) * 0.5, (VIEW_H - map_pixel_size) * 0.5 + 58.0)
     battlefield.position = origin
     battlefield.scores_changed.connect(_on_scores_changed)
     game_layer.add_child(battlefield)
@@ -311,7 +314,7 @@ func _create_ui() -> void:
     game_layer.add_child(ui_canvas)
 
     var top_panel = Panel.new()
-    top_panel.position = Vector2(170, 8)
+    top_panel.position = Vector2((VIEW_W - 940.0) * 0.5, 10)
     top_panel.size = Vector2(940, 100)
     top_panel.self_modulate = Color(0.96, 0.98, 1.0, 0.96)
     ui_canvas.add_child(top_panel)
@@ -396,7 +399,7 @@ func _create_ui() -> void:
     top_panel.add_child(palette_label)
 
     winner_label = Label.new()
-    winner_label.position = Vector2(340, 116)
+    winner_label.position = Vector2((VIEW_W - 600.0) * 0.5, 120)
     winner_label.size = Vector2(600, 46)
     winner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     winner_label.add_theme_font_size_override("font_size", 34)
@@ -567,12 +570,12 @@ func _show_center_banner(title_text: String, sub_text: String, accent: Color, au
         opening_banner.queue_free()
     var holder = Control.new()
     holder.position = Vector2.ZERO
-    holder.size = Vector2(1280, 860)
+    holder.size = Vector2(VIEW_W, VIEW_H)
     ui_canvas.add_child(holder)
     opening_banner = holder
 
     var title = Label.new()
-    title.position = Vector2(390, 344)
+    title.position = Vector2((VIEW_W - 500.0) * 0.5, 368)
     title.size = Vector2(500, 64)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     title.text = title_text
@@ -583,7 +586,7 @@ func _show_center_banner(title_text: String, sub_text: String, accent: Color, au
     holder.add_child(title)
 
     var sub = Label.new()
-    sub.position = Vector2(470, 404)
+    sub.position = Vector2((VIEW_W - 340.0) * 0.5, 432)
     sub.size = Vector2(340, 26)
     sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     sub.text = sub_text

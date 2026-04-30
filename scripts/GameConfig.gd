@@ -5,7 +5,7 @@ const GRID_SIZE = 40
 const CELL_SIZE = 13
 
 const BULLET_SPEED = 108.0
-const BULLET_RADIUS = 6.2
+const BULLET_RADIUS = 5.0
 const BULLET_MAX_LIFETIME = 12.0
 
 const TURRET_RADIUS = 18.0
