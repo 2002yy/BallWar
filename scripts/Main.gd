@@ -76,7 +76,7 @@ func _create_start_menu() -> void:
     title.position = Vector2(160, 24)
     title.size = Vector2(600, 60)
     title.text = "领土战争"
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     title.add_theme_font_size_override("font_size", 46)
     title.add_theme_color_override("font_color", Color(1.0, 0.95, 0.72))
     title.add_theme_color_override("font_outline_color", Color(0.02, 0.03, 0.06))
@@ -88,7 +88,7 @@ func _create_start_menu() -> void:
     subtitle.position = Vector2(180, 84)
     subtitle.size = Vector2(560, 28)
     subtitle.text = "四控制仓 · 四角炮台 · 领土争夺"
-    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     subtitle.add_theme_font_size_override("font_size", 18)
     subtitle.add_theme_color_override("font_color", Color(0.84, 0.92, 1.0))
     panel.add_child(subtitle)
@@ -153,7 +153,7 @@ func _create_start_menu() -> void:
     tip.position = Vector2(18, 50)
     tip.size = Vector2(470, 42)
     tip.text = "提示：发射期间控制仓会锁定并显示剩余子弹数；血量归零则该阵营出局。"
-    tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART as TextServer.AutowrapMode
     tip.add_theme_font_size_override("font_size", 15)
     tip.add_theme_color_override("font_color", Color(0.82, 0.90, 1.0))
     config_panel.add_child(tip)
@@ -249,7 +249,7 @@ func _create_control_chambers() -> void:
     var map_left: float = battlefield.position.x
     var map_top: float = battlefield.position.y
     var map_size: float = battlefield.grid_size * battlefield.cell_size
-    var base_w: float = 168.0
+    var base_w: float = 148.0
     var base_h: float = 214.0
     var scaled_w: float = base_w * chamber_scale
     var scaled_h: float = base_h * chamber_scale
@@ -336,8 +336,8 @@ func _create_ui() -> void:
         var value_label = Label.new()
         value_label.position = Vector2(64, -1)
         value_label.size = Vector2(130, 32)
-        value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
+        value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER as VerticalAlignment
         value_label.add_theme_font_size_override("font_size", 23)
         value_label.add_theme_color_override("font_color", Color.WHITE)
         value_label.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -351,7 +351,7 @@ func _create_ui() -> void:
     game_title_label.position = Vector2(352, 52)
     game_title_label.size = Vector2(220, 36)
     game_title_label.text = "领土战争"
-    game_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    game_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     game_title_label.add_theme_font_size_override("font_size", 30)
     game_title_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.72))
     game_title_label.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -361,7 +361,7 @@ func _create_ui() -> void:
     var palette_label = Label.new()
     palette_label.position = Vector2(626, 57)
     palette_label.size = Vector2(180, 24)
-    palette_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    palette_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     palette_label.text = "配色：%s" % GameConfig.get_palette_name()
     palette_label.add_theme_font_size_override("font_size", 16)
     palette_label.add_theme_color_override("font_color", Color(0.84, 0.90, 1.0))
@@ -370,7 +370,7 @@ func _create_ui() -> void:
     winner_label = Label.new()
     winner_label.position = Vector2(340, 116)
     winner_label.size = Vector2(600, 46)
-    winner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    winner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     winner_label.add_theme_font_size_override("font_size", 34)
     winner_label.add_theme_color_override("font_color", Color(1.0, 0.94, 0.22))
     winner_label.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -414,7 +414,7 @@ func _add_ball_to_chamber(faction_id: int) -> void:
     chambers[faction_id].add_control_ball()
     _refresh_add_ball_button(faction_id)
 
-func _on_ball_count_changed(faction_id: int, count: int) -> void:
+func _on_ball_count_changed(faction_id: int, _count: int) -> void:
     _refresh_add_ball_button(faction_id)
 
 func _refresh_add_ball_button(faction_id: int) -> void:
@@ -518,7 +518,7 @@ func _show_center_banner(title_text: String, sub_text: String, accent: Color, au
     var title = Label.new()
     title.position = Vector2(390, 344)
     title.size = Vector2(500, 64)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     title.text = title_text
     title.add_theme_font_size_override("font_size", 54)
     title.add_theme_color_override("font_color", accent)
@@ -529,7 +529,7 @@ func _show_center_banner(title_text: String, sub_text: String, accent: Color, au
     var sub = Label.new()
     sub.position = Vector2(470, 404)
     sub.size = Vector2(340, 26)
-    sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
     sub.text = sub_text
     sub.add_theme_font_size_override("font_size", 20)
     sub.add_theme_color_override("font_color", Color.WHITE)

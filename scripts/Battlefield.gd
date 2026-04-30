@@ -28,7 +28,7 @@ func _ready() -> void:
 
 func reset_quadrants() -> void:
     owners.clear()
-    var half_grid: int = grid_size / 2
+    var half_grid: int = grid_size >> 1
     for x in range(grid_size):
         var col: Array = []
         for y in range(grid_size):

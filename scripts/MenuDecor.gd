@@ -30,10 +30,10 @@ func _draw() -> void:
         draw_line(board_pos + Vector2(p, 0), board_pos + Vector2(p, board_size), Color(0, 0, 0, 0.08), 1.0)
         draw_line(board_pos + Vector2(0, p), board_pos + Vector2(board_size, p), Color(0, 0, 0, 0.08), 1.0)
 
-    _draw_chamber(Vector2(-378, -170), true)
-    _draw_chamber(Vector2(208, -170), false)
-    _draw_chamber(Vector2(-378, 88), true)
-    _draw_chamber(Vector2(208, 88), false)
+    _draw_chamber(Vector2(-364, -170), true)
+    _draw_chamber(Vector2(216, -170), false)
+    _draw_chamber(Vector2(-364, 88), true)
+    _draw_chamber(Vector2(216, 88), false)
 
     _draw_turret(board_pos + Vector2(18, 18), Color(0.85, 0.18, 0.18), PI * 0.25 + 0.28 * sin(t * 1.1))
     _draw_turret(board_pos + Vector2(board_size - 18, 18), Color(0.95, 0.85, 0.16), PI * 0.75 + 0.28 * sin(t * 1.2 + 1.2))
@@ -41,34 +41,36 @@ func _draw() -> void:
     _draw_turret(board_pos + Vector2(board_size - 18, board_size - 18), Color(0.22, 0.54, 0.96), PI * 1.25 + 0.28 * sin(t * 1.05 + 3.1))
 
 func _draw_chamber(pos: Vector2, left_mode: bool) -> void:
-    var size: Vector2 = Vector2(156, 176)
+    var size: Vector2 = Vector2(140, 176)
     draw_rect(Rect2(pos, size), Color(0.04, 0.04, 0.05, 0.97), true)
     draw_rect(Rect2(pos, size), Color(0.28, 0.30, 0.33), false, 3.0)
 
+    # 3-4-3-4-3-4 preview peg layout.
     var peg_points: Array = [
-        Vector2(38, 28), Vector2(78, 28), Vector2(118, 28),
-        Vector2(58, 54), Vector2(98, 54), Vector2(138, 54),
-        Vector2(26, 80), Vector2(66, 80), Vector2(106, 80), Vector2(146, 80),
-        Vector2(46, 106), Vector2(86, 106), Vector2(126, 106),
-        Vector2(26, 132), Vector2(66, 132), Vector2(106, 132), Vector2(146, 132)
+        Vector2(33, 28), Vector2(67, 28), Vector2(101, 28),
+        Vector2(18, 54), Vector2(52, 54), Vector2(86, 54), Vector2(120, 54),
+        Vector2(33, 80), Vector2(67, 80), Vector2(101, 80),
+        Vector2(18, 106), Vector2(52, 106), Vector2(86, 106), Vector2(120, 106),
+        Vector2(33, 132), Vector2(67, 132), Vector2(101, 132),
+        Vector2(18, 158), Vector2(52, 158), Vector2(86, 158), Vector2(120, 158)
     ]
 
     for p in peg_points:
-        draw_circle(pos + p, 6.5, Color(0.26, 0.28, 0.32))
+        draw_circle(pos + p, 6.4, Color(0.26, 0.28, 0.32))
 
     var font = ThemeDB.fallback_font
-    draw_string(font, pos + Vector2(56, 106), "1", HORIZONTAL_ALIGNMENT_LEFT, -1, 82, Color(1, 1, 1, 0.32))
+    draw_string(font, pos + Vector2(50, 106), "1", HORIZONTAL_ALIGNMENT_LEFT, -1, 82, Color(1, 1, 1, 0.32))
 
     if left_mode:
         draw_rect(Rect2(pos + Vector2(0, 150), Vector2(size.x * 0.5, 26)), Color(0.76, 1.0, 0.18), true)
         draw_rect(Rect2(pos + Vector2(size.x * 0.5, 150), Vector2(size.x * 0.5, 26)), Color(1.0, 0.57, 0.02), true)
-        draw_string(font, pos + Vector2(22, 169), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
-        draw_string(font, pos + Vector2(94, 169), "R", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
+        draw_string(font, pos + Vector2(20, 169), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
+        draw_string(font, pos + Vector2(84, 169), "R", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
     else:
         draw_rect(Rect2(pos + Vector2(0, 150), Vector2(size.x * 0.5, 26)), Color(1.0, 0.57, 0.02), true)
         draw_rect(Rect2(pos + Vector2(size.x * 0.5, 150), Vector2(size.x * 0.5, 26)), Color(0.76, 1.0, 0.18), true)
-        draw_string(font, pos + Vector2(24, 169), "R", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
-        draw_string(font, pos + Vector2(98, 169), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
+        draw_string(font, pos + Vector2(22, 169), "R", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
+        draw_string(font, pos + Vector2(86, 169), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
 
 func _draw_turret(p: Vector2, color: Color, angle: float) -> void:
     draw_circle(p, 14.0, color)
