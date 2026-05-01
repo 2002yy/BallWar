@@ -63,6 +63,11 @@ var damage_anim_t: float = 0.0
 var gate_height: float = GATE_HEIGHT
 var game_elapsed_time: float = 0.0
 var status_anim_t: float = 0.0
+var visual_redraw_timer: float = 0.0
+
+const NORMAL_REDRAW_INTERVAL: float = 0.25
+const LOCKED_REDRAW_INTERVAL: float = 0.050
+const DAMAGED_REDRAW_INTERVAL: float = 0.080
 
 func setup(new_faction_id: int, new_position: Vector2) -> void:
     faction_id = new_faction_id
@@ -73,7 +78,7 @@ func _ready() -> void:
     _create_pegs()
     add_control_ball()
     _create_labels()
-    queue_redraw()
+    _force_visual_redraw()
 
 func _process(delta: float) -> void:
     status_anim_t += delta
@@ -98,6 +103,23 @@ func _process(delta: float) -> void:
         else:
             ball_label.modulate = Color(0.92, 0.96, 1.0, 0.98)
 
+    _update_visual_redraw(delta)
+
+func _force_visual_redraw() -> void:
+    visual_redraw_timer = 0.0
+    queue_redraw()
+
+func _update_visual_redraw(delta: float) -> void:
+    visual_redraw_timer -= delta
+    if visual_redraw_timer > 0.0:
+        return
+
+    if is_damaged:
+        visual_redraw_timer = DAMAGED_REDRAW_INTERVAL
+    elif is_locked:
+        visual_redraw_timer = LOCKED_REDRAW_INTERVAL
+    else:
+        visual_redraw_timer = NORMAL_REDRAW_INTERVAL
     queue_redraw()
 
 func _create_pegs() -> void:
@@ -355,15 +377,17 @@ func _on_right_gate(ball) -> void:
     locked_remaining = pending_count
     is_locked = true
     _update_label()
+    _force_visual_redraw()
     release_requested.emit(faction_id, pending_count, self)
 
 func start_locked(count: int) -> void:
-    locked_remaining = max(0, count)
+    locked_remaining = maxi(0, count)
     is_locked = true
     _update_label()
+    _force_visual_redraw()
 
 func update_locked_remaining(remaining: int) -> void:
-    locked_remaining = max(0, remaining)
+    locked_remaining = maxi(0, remaining)
     _update_label()
 
 func set_locked(locked: bool) -> void:
@@ -381,7 +405,7 @@ func set_locked(locked: bool) -> void:
         release_ball = null
 
     _update_label()
-    queue_redraw()
+    _force_visual_redraw()
 
 func set_damaged() -> void:
     if is_damaged:
@@ -399,7 +423,7 @@ func set_damaged() -> void:
     ball_stay_times.clear()
     ball_count_changed.emit(faction_id, 0)
     _update_label()
-    queue_redraw()
+    _force_visual_redraw()
 
 func _update_label() -> void:
     if name_label == null:

@@ -15,6 +15,8 @@ var is_active: bool = false
 var simple_draw: bool = false
 var reduce_visual_effects: bool = false
 var turret_hit_check_timer: float = 0.0
+var trail_sample_timer: float = 0.0
+var last_trail_position: Vector2 = Vector2.INF
 
 func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, new_battlefield, new_target_turrets = {}) -> void:
     faction_id = new_faction_id
@@ -27,9 +29,12 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
     speed = GameConfig.BULLET_SPEED
     last_cell = Vector2i(-999, -999)
     age = 0.0
-    turret_hit_check_timer = 0.0
+    turret_hit_check_timer = randf_range(0.0, GameConfig.TURRET_HIT_CHECK_INTERVAL)
+    trail_sample_timer = 0.0
+    last_trail_position = global_position
     trail_points.clear()
-    trail_points.append(global_position)
+    if not simple_draw and trail_max_points > 0:
+        trail_points.append(global_position)
     queue_redraw()
 
 func _ready() -> void:
@@ -98,10 +103,7 @@ func _physics_process(delta: float) -> void:
         direction = direction.normalized()
 
     global_position = battlefield.to_global(local_position)
-    trail_points.push_front(global_position)
-    while trail_points.size() > trail_max_points:
-        trail_points.pop_back()
-    queue_redraw()
+    _update_visual_trace(delta)
 
     turret_hit_check_timer -= delta
     if turret_hit_check_timer <= 0.0:
@@ -121,6 +123,64 @@ func _physics_process(delta: float) -> void:
     var result = battlefield.apply_bullet(cell, faction_id)
     if result == "HIT_ENEMY_CELL":
         _despawn()
+
+func configure_visuals(new_simple_draw: bool, new_reduce_visual_effects: bool, new_trail_max_points: int) -> void:
+    var changed: bool = simple_draw != new_simple_draw or reduce_visual_effects != new_reduce_visual_effects or trail_max_points != new_trail_max_points
+    simple_draw = new_simple_draw
+    reduce_visual_effects = new_reduce_visual_effects
+    trail_max_points = maxi(0, new_trail_max_points)
+
+    if simple_draw or trail_max_points <= 0:
+        if trail_points.size() > 0:
+            trail_points.clear()
+            changed = true
+    else:
+        while trail_points.size() > trail_max_points:
+            trail_points.pop_back()
+            changed = true
+        if trail_points.size() == 0:
+            trail_points.append(global_position)
+            last_trail_position = global_position
+            changed = true
+
+    if changed:
+        queue_redraw()
+
+func _trail_sample_interval() -> float:
+    if simple_draw:
+        return 9999.0
+    if reduce_visual_effects:
+        return 0.070
+    if trail_max_points <= 2:
+        return 0.050
+    return 0.033
+
+func _trail_min_distance_sq() -> float:
+    var radius: float = _visual_radius()
+    if reduce_visual_effects:
+        return radius * radius * 0.64
+    return radius * radius * 0.25
+
+func _update_visual_trace(delta: float) -> void:
+    if simple_draw or trail_max_points <= 0:
+        if trail_points.size() > 0:
+            trail_points.clear()
+            queue_redraw()
+        return
+
+    trail_sample_timer -= delta
+    if trail_sample_timer > 0.0:
+        return
+
+    if last_trail_position != Vector2.INF and global_position.distance_squared_to(last_trail_position) < _trail_min_distance_sq():
+        return
+
+    trail_sample_timer = _trail_sample_interval()
+    trail_points.push_front(global_position)
+    last_trail_position = global_position
+    while trail_points.size() > trail_max_points:
+        trail_points.pop_back()
+    queue_redraw()
 
 func _try_hit_enemy_turret() -> bool:
     for target_faction_id in target_turrets.keys():

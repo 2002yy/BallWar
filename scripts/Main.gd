@@ -4,10 +4,8 @@ const VIEW_W: float = 1120.0
 const VIEW_H: float = 720.0
 const SAVE_PATH: String = "user://ballwar_save.json"
 const SAVE_MAJOR_PREFIX: String = "1.9"
-const MAX_RESTORE_BULLETS: int = 6000
 const MAX_RESTORE_CONTROL_BALLS: int = 8
 const MAX_RESTORE_TRAIL_POINTS: int = 3
-const RESTORE_BULLETS_PER_FRAME: int = 160
 
 var battlefield
 var bullet_container
@@ -54,6 +52,10 @@ var ui_time: float = 0.0
 var chamber_scale: float = 1.0
 var pending_restore_bullets: Array = []
 var pending_restore_index: int = 0
+var perf_debug_update_timer: float = 0.0
+var hud_meta_update_timer: float = 0.0
+const PERF_DEBUG_UPDATE_INTERVAL: float = 0.25
+const HUD_META_UPDATE_INTERVAL: float = 0.25
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
@@ -74,55 +76,26 @@ func _process(delta: float) -> void:
             if chamber != null and is_instance_valid(chamber):
                 chamber.set_game_elapsed_time(game_elapsed_time)
 
-    if fps_label != null and is_instance_valid(fps_label):
-        fps_label.text = _get_perf_debug_text()
+    perf_debug_update_timer -= delta
+    if perf_debug_update_timer <= 0.0:
+        perf_debug_update_timer = PERF_DEBUG_UPDATE_INTERVAL
+        if fps_label != null and is_instance_valid(fps_label):
+            fps_label.text = RuntimeHudController.get_perf_debug_text(bullet_container, battlefield, selected_grid_size)
 
-    _update_hud_meta()
+    hud_meta_update_timer -= delta
+    if hud_meta_update_timer <= 0.0:
+        hud_meta_update_timer = HUD_META_UPDATE_INTERVAL
+        RuntimeHudController.update_meta(timer_label, stage_label, leader_label, current_score_counts, game_elapsed_time)
 
-    if menu_title_label != null:
-        menu_title_label.rotation = sin(ui_time * 1.2) * 0.01
-    if menu_start_button != null:
-        var pulse: float = 1.0 + 0.03 * sin(ui_time * 2.8)
-        menu_start_button.scale = Vector2(pulse, pulse)
-    if menu_continue_button != null:
-        var cpulse: float = 1.0 + 0.02 * sin(ui_time * 2.2 + 0.8)
-        menu_continue_button.scale = Vector2(cpulse, cpulse)
-    if game_title_label != null:
-        var t: float = 1.0 + 0.018 * sin(ui_time * 2.0)
-        game_title_label.scale = Vector2(t, t)
-    if winner_label != null and winner_label.text != "":
-        var w: float = 1.0 + 0.04 * sin(ui_time * 3.0)
-        winner_label.scale = Vector2(w, w)
-
-    _animate_add_ball_buttons()
-
-func _animate_add_ball_buttons() -> void:
-    # 暂停时停止游戏内 +球 按钮呼吸，避免暂停后游戏内 UI 仍像在运行。
-    if get_tree().paused:
-        return
-
-    for faction_id in add_ball_buttons.keys():
-        var button = add_ball_buttons[faction_id]
-        if button == null or not is_instance_valid(button):
-            continue
-        if not add_ball_button_base_positions.has(faction_id):
-            continue
-
-        var base_pos: Vector2 = add_ball_button_base_positions[faction_id]
-        var phase: float = ui_time * 3.0 + float(faction_id) * 0.85
-        var breath: float = sin(phase)
-        var hover_bonus: float = 0.0
-
-        if button.has_method("is_hovered") and button.is_hovered() and not button.disabled:
-            hover_bonus = 0.055
-
-        if button.disabled:
-            button.position = base_pos
-            button.scale = Vector2.ONE
-        else:
-            button.position = base_pos + Vector2(0.0, -2.0 + breath * 2.2)
-            var s: float = 1.0 + breath * 0.028 + hover_bonus
-            button.scale = Vector2(s, s)
+    UIAnimationController.animate_menu_and_title(
+        ui_time,
+        menu_title_label,
+        menu_start_button,
+        menu_continue_button,
+        game_title_label,
+        winner_label
+    )
+    UIAnimationController.animate_add_ball_buttons(get_tree().paused, add_ball_buttons, add_ball_button_base_positions, ui_time)
 
 func _detect_mobile_layout() -> bool:
     if OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios"):
@@ -131,65 +104,6 @@ func _detect_mobile_layout() -> bool:
     if screen_size.x <= 1400 or screen_size.y <= 900:
         return true
     return false
-
-func _format_time_text(seconds: float) -> String:
-    var total_seconds: int = maxi(0, int(floor(seconds)))
-    var mm: int = floori(float(total_seconds) / 60.0)
-    var ss: int = total_seconds % 60
-    return "%02d:%02d" % [mm, ss]
-
-func _get_active_bullet_count() -> int:
-    if bullet_container == null or not is_instance_valid(bullet_container):
-        return 0
-    if bullet_container.has_method("get_active_count"):
-        return int(bullet_container.get_active_count())
-    return bullet_container.get_child_count()
-
-func _get_bullet_pressure_level() -> String:
-    if bullet_container != null and is_instance_valid(bullet_container) and bullet_container.has_method("get_pressure_level"):
-        return str(bullet_container.get_pressure_level())
-    return "--"
-
-func _get_perf_debug_text() -> String:
-    var active_count: int = _get_active_bullet_count()
-    var max_active: int = GameConfig.get_max_active_bullets()
-    var grid_value: int = battlefield.grid_size if battlefield != null and is_instance_valid(battlefield) else selected_grid_size
-    return "FPS %d | active %d/%d | quality %s | grid %d | pressure %s" % [
-        Engine.get_frames_per_second(),
-        active_count,
-        max_active,
-        GameConfig.get_quality_name(),
-        grid_value,
-        _get_bullet_pressure_level(),
-    ]
-
-func _current_stage_name() -> String:
-    if game_elapsed_time < 120.0:
-        return "前期扩张"
-    elif game_elapsed_time < 300.0:
-        return "中期翻倍加速"
-    return "终局狂暴"
-
-func _update_hud_meta() -> void:
-    if timer_label != null and is_instance_valid(timer_label):
-        timer_label.text = _format_time_text(game_elapsed_time)
-    if stage_label != null and is_instance_valid(stage_label):
-        stage_label.text = _current_stage_name()
-    if leader_label != null and is_instance_valid(leader_label):
-        var total: int = 0
-        var best_id: int = 0
-        var best_count: int = -1
-        for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
-            var c: int = int(current_score_counts.get(faction_id, 0))
-            total += c
-            if c > best_count:
-                best_count = c
-                best_id = faction_id
-        var percent: int = 0
-        if total > 0:
-            percent = int(round(float(best_count) * 100.0 / float(total)))
-        leader_label.text = "领先：%s %d%%" % [GameConfig.faction_name(best_id), percent]
-        leader_label.add_theme_color_override("font_color", GameConfig.faction_color(best_id).lightened(0.42))
 
 func _toggle_settings_panel() -> void:
     if settings_panel == null or not is_instance_valid(settings_panel):
@@ -204,328 +118,20 @@ func _create_background() -> void:
     background.z_index = -100
 
 func _create_start_menu() -> void:
-    selected_grid_size = 40
-    selected_palette_name = "默认随机"
-    selected_quality_name = "中"
-
     if menu_layer != null:
         menu_layer.queue_free()
-    menu_layer = CanvasLayer.new()
-    menu_layer.name = "MenuLayer"
-    add_child(menu_layer)
 
-    var shade = ColorRect.new()
-    shade.color = Color(0.02, 0.03, 0.05, 0.72)
-    shade.size = Vector2(VIEW_W, VIEW_H)
-    menu_layer.add_child(shade)
-
-    var panel = Panel.new()
-    panel.size = Vector2(760, 590)
-    panel.position = Vector2((VIEW_W - panel.size.x) * 0.5, 46)
-    panel.self_modulate = Color(0.98, 0.99, 1.0, 0.96)
-    menu_layer.add_child(panel)
-
-    var panel_bg = ColorRect.new()
-    panel_bg.position = Vector2(8, 8)
-    panel_bg.size = panel.size - Vector2(16, 16)
-    panel_bg.color = Color(0.08, 0.12, 0.18, 0.97)
-    panel.add_child(panel_bg)
-
-    var title = Label.new()
-    title.position = Vector2(110, 20)
-    title.size = Vector2(540, 58)
-    title.text = "领土战争"
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-    title.add_theme_font_size_override("font_size", 44)
-    title.add_theme_color_override("font_color", Color(1.0, 0.95, 0.72))
-    title.add_theme_color_override("font_outline_color", Color(0.02, 0.03, 0.06))
-    title.add_theme_constant_override("outline_size", 7)
-    panel.add_child(title)
-    menu_title_label = title
-
-    var subtitle = Label.new()
-    subtitle.position = Vector2(140, 76)
-    subtitle.size = Vector2(480, 26)
-    subtitle.text = "四控制仓 · 四角炮台 · 领土争夺"
-    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-    subtitle.add_theme_font_size_override("font_size", 18)
-    subtitle.add_theme_color_override("font_color", Color(0.84, 0.92, 1.0))
-    panel.add_child(subtitle)
-
-    var mobile_hint = Label.new()
-    mobile_hint.position = Vector2(140, 104)
-    mobile_hint.size = Vector2(480, 22)
-    mobile_hint.text = "电脑/安卓均可游玩 · 手机建议横屏"
-    mobile_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-    mobile_hint.add_theme_font_size_override("font_size", 15)
-    mobile_hint.add_theme_color_override("font_color", Color(0.74, 0.86, 1.0))
-    panel.add_child(mobile_hint)
-
-    var decor = preload("res://scripts/MenuDecor.gd").new()
-    decor.position = Vector2(380, 286)
-    decor.scale = Vector2(0.86, 0.86)
-    panel.add_child(decor)
-
-    var config_panel = Panel.new()
-    config_panel.position = Vector2(120, 468)
-    config_panel.size = Vector2(520, 96)
-    panel.add_child(config_panel)
-
-    var cfg_bg = ColorRect.new()
-    cfg_bg.position = Vector2(4, 4)
-    cfg_bg.size = config_panel.size - Vector2(8, 8)
-    cfg_bg.color = Color(0.12, 0.16, 0.23)
-    config_panel.add_child(cfg_bg)
-
-    var size_label = Label.new()
-    size_label.position = Vector2(18, 12)
-    size_label.size = Vector2(110, 24)
-    size_label.text = "地图大小"
-    size_label.add_theme_font_size_override("font_size", 18)
-    size_label.add_theme_color_override("font_color", Color.WHITE)
-    config_panel.add_child(size_label)
-
-    var size_option = OptionButton.new()
-    size_option.position = Vector2(110, 8)
-    size_option.size = Vector2(134, 38)
-    size_option.add_item("10 × 10", 10)
-    size_option.add_item("20 × 20", 20)
-    size_option.add_item("30 × 30", 30)
-    size_option.add_item("40 × 40", 40)
-    size_option.add_item("50 × 50", 50)
-    size_option.add_item("60 × 60", 60)
-    size_option.select(3)
-    size_option.item_selected.connect(func(index: int) -> void:
-        selected_grid_size = size_option.get_item_id(index)
-    )
-    config_panel.add_child(size_option)
-
-    var palette_label = Label.new()
-    palette_label.position = Vector2(256, 12)
-    palette_label.size = Vector2(96, 24)
-    palette_label.text = "配色方案"
-    palette_label.add_theme_font_size_override("font_size", 18)
-    palette_label.add_theme_color_override("font_color", Color.WHITE)
-    config_panel.add_child(palette_label)
-
-    var palette_option = OptionButton.new()
-    palette_option.position = Vector2(348, 8)
-    palette_option.size = Vector2(154, 38)
-    palette_option.add_item("默认随机")
-    for palette_name in GameConfig.get_palette_names():
-        palette_option.add_item(palette_name)
-    palette_option.select(0)
-    palette_option.item_selected.connect(func(index: int) -> void:
-        selected_palette_name = palette_option.get_item_text(index)
-    )
-    config_panel.add_child(palette_option)
-
-    var quality_label = Label.new()
-    quality_label.position = Vector2(18, 50)
-    quality_label.size = Vector2(52, 24)
-    quality_label.text = "画质"
-    quality_label.add_theme_font_size_override("font_size", 17)
-    quality_label.add_theme_color_override("font_color", Color.WHITE)
-    config_panel.add_child(quality_label)
-
-    var quality_option = OptionButton.new()
-    quality_option.position = Vector2(70, 44)
-    quality_option.size = Vector2(94, 38)
-    for quality_name in GameConfig.get_quality_names():
-        quality_option.add_item(quality_name)
-    quality_option.select(1)
-    quality_option.item_selected.connect(func(index: int) -> void:
-        selected_quality_name = quality_option.get_item_text(index)
-    )
-    config_panel.add_child(quality_option)
-
-    var tip = Label.new()
-    tip.position = Vector2(176, 46)
-    tip.size = Vector2(204, 40)
-    tip.text = "提示：低画质适合手机，高画质特效更多。"
-    tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART as TextServer.AutowrapMode
-    tip.add_theme_font_size_override("font_size", 15)
-    tip.add_theme_color_override("font_color", Color(0.82, 0.90, 1.0))
-    config_panel.add_child(tip)
-
-    var start_button = Button.new()
-    start_button.position = Vector2(386, 45)
-    start_button.size = Vector2(118, 42)
-    start_button.text = "开始"
-    start_button.add_theme_font_size_override("font_size", 22)
-    start_button.add_theme_color_override("font_color", Color.WHITE)
-    start_button.add_theme_color_override("font_hover_color", Color.WHITE)
-    start_button.add_theme_color_override("font_pressed_color", Color.WHITE)
-    start_button.self_modulate = Color(0.22, 0.60, 1.0)
-    start_button.pressed.connect(func() -> void:
-        _start_game(selected_grid_size)
-    )
-    config_panel.add_child(start_button)
-    menu_start_button = start_button
-
-    menu_status_label = Label.new()
-    menu_status_label.position = Vector2(120, 568)
-    menu_status_label.size = Vector2(520, 22)
-    menu_status_label.text = ""
-    menu_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-    menu_status_label.add_theme_font_size_override("font_size", 15)
-    menu_status_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.44))
-    menu_status_label.add_theme_color_override("font_outline_color", Color.BLACK)
-    menu_status_label.add_theme_constant_override("outline_size", 2)
-    panel.add_child(menu_status_label)
-
-    if _has_save_file():
-        var continue_button = Button.new()
-        continue_button.position = Vector2(620, 504)
-        continue_button.size = Vector2(108, 50)
-        continue_button.text = "继续"
-        continue_button.add_theme_font_size_override("font_size", 22)
-        continue_button.add_theme_color_override("font_color", Color.WHITE)
-        continue_button.self_modulate = Color(0.20, 0.66, 0.42)
-        continue_button.pressed.connect(_continue_saved_game)
-        panel.add_child(continue_button)
-        menu_continue_button = continue_button
-
-        var save_tip = Label.new()
-        save_tip.position = Vector2(598, 560)
-        save_tip.size = Vector2(140, 20)
-        save_tip.text = "检测到存档"
-        save_tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-        save_tip.add_theme_font_size_override("font_size", 13)
-        save_tip.add_theme_color_override("font_color", Color(0.75, 0.95, 0.80))
-        panel.add_child(save_tip)
-    else:
-        menu_continue_button = null
-
-func _sanitize_grid_size(value) -> int:
-    var n: int = int(value)
-    if n in [10, 20, 30, 40, 50, 60]:
-        return n
-    return 40
-
-func _get_layout_profile(grid_size: int) -> Dictionary:
-    match grid_size:
-        10:
-            return {
-                "map_y": 178.0,
-                "chamber_scale": 0.74,
-                "left_chamber_y_top": 136.0,
-                "left_chamber_y_bottom": 396.0,
-                "chamber_gap": 14.0,
-                "button_gap": 10.0,
-                "button_size": Vector2(70.0, 44.0),
-                "top_panel_w": 660.0,
-                "top_panel_h": 84.0,
-                "bar_h": 34.0,
-                "title_font": 26,
-                "title_y": 42.0,
-                "palette_font": 15,
-                "winner_y": 672.0,
-                "banner_title_y": 304.0,
-                "banner_sub_y": 356.0,
-            }
-        20:
-            return {
-                "map_y": 128.0,
-                "chamber_scale": 0.76,
-                "left_chamber_y_top": 136.0,
-                "left_chamber_y_bottom": 382.0,
-                "chamber_gap": 12.0,
-                "button_gap": 10.0,
-                "button_size": Vector2(72.0, 44.0),
-                "top_panel_w": 700.0,
-                "top_panel_h": 86.0,
-                "bar_h": 35.0,
-                "title_font": 28,
-                "title_y": 44.0,
-                "palette_font": 15,
-                "winner_y": 670.0,
-                "banner_title_y": 302.0,
-                "banner_sub_y": 356.0,
-            }
-        30:
-            return {
-                "map_y": 108.0,
-                "chamber_scale": 0.78,
-                "left_chamber_y_top": 120.0,
-                "left_chamber_y_bottom": 374.0,
-                "chamber_gap": 10.0,
-                "button_gap": 10.0,
-                "button_size": Vector2(74.0, 46.0),
-                "top_panel_w": 730.0,
-                "top_panel_h": 88.0,
-                "bar_h": 36.0,
-                "title_font": 30,
-                "title_y": 45.0,
-                "palette_font": 16,
-                "winner_y": 668.0,
-                "banner_title_y": 296.0,
-                "banner_sub_y": 348.0,
-            }
-        40:
-            return {
-                "map_y": 108.0,
-                "chamber_scale": 0.80,
-                "left_chamber_y_top": 104.0,
-                "left_chamber_y_bottom": 362.0,
-                "chamber_gap": 8.0,
-                "button_gap": 11.0,
-                "button_size": Vector2(76.0, 46.0),
-                "top_panel_w": 710.0,
-                "top_panel_h": 90.0,
-                "bar_h": 36.0,
-                "title_font": 31,
-                "title_y": 46.0,
-                "palette_font": 16,
-                "winner_y": 666.0,
-                "banner_title_y": 292.0,
-                "banner_sub_y": 344.0,
-            }
-        50:
-            return {
-                "map_y": 106.0,
-                "chamber_scale": 0.78,
-                "left_chamber_y_top": 96.0,
-                "left_chamber_y_bottom": 354.0,
-                "chamber_gap": 7.0,
-                "button_gap": 11.0,
-                "button_size": Vector2(76.0, 46.0),
-                "top_panel_w": 710.0,
-                "top_panel_h": 90.0,
-                "bar_h": 36.0,
-                "title_font": 31,
-                "title_y": 46.0,
-                "palette_font": 16,
-                "winner_y": 666.0,
-                "banner_title_y": 292.0,
-                "banner_sub_y": 344.0,
-            }
-        60:
-            return {
-                "map_y": 106.0,
-                "chamber_scale": 0.76,
-                "left_chamber_y_top": 100.0,
-                "left_chamber_y_bottom": 352.0,
-                "chamber_gap": 6.0,
-                "button_gap": 10.0,
-                "button_size": Vector2(62.0, 36.0),
-                "top_panel_w": 710.0,
-                "top_panel_h": 90.0,
-                "bar_h": 36.0,
-                "title_font": 30,
-                "title_y": 46.0,
-                "palette_font": 16,
-                "winner_y": 666.0,
-                "banner_title_y": 294.0,
-                "banner_sub_y": 346.0,
-            }
-        _:
-            return _get_layout_profile(40)
+    var menu_nodes: Dictionary = StartMenuView.create(self, Vector2(VIEW_W, VIEW_H), _has_save_file())
+    menu_layer = menu_nodes.get("menu_layer", null)
+    menu_title_label = menu_nodes.get("menu_title_label", null)
+    menu_start_button = menu_nodes.get("menu_start_button", null)
+    menu_continue_button = menu_nodes.get("menu_continue_button", null)
+    menu_status_label = menu_nodes.get("menu_status_label", null)
 
 func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool = true) -> void:
-    grid_size = _sanitize_grid_size(grid_size)
+    grid_size = LayoutProfiles.sanitize_grid_size(grid_size)
     selected_grid_size = grid_size
-    current_layout = _get_layout_profile(grid_size)
+    current_layout = LayoutProfiles.get_profile(grid_size)
     game_elapsed_time = 0.0
     is_game_over = false
 
@@ -567,298 +173,44 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
         _show_center_banner("领土战争", "开战！", Color(1.0, 0.94, 0.48), true)
 
 func _create_battlefield(grid_size: int) -> void:
-    battlefield = Battlefield.new()
-    battlefield.configure(grid_size)
-    var map_pixel_size: float = battlefield.grid_size * battlefield.cell_size
-    var origin: Vector2 = Vector2((VIEW_W - map_pixel_size) * 0.5, current_layout.get("map_y", 96.0))
-    battlefield.position = origin
-    battlefield.scores_changed.connect(_on_scores_changed)
-    game_layer.add_child(battlefield)
-
-    bullet_container = BulletPool.new()
-    bullet_container.name = "BulletPool"
-    game_layer.add_child(bullet_container)
-
-    chamber_scale = current_layout.get("chamber_scale", 0.80)
+    var scene_nodes: Dictionary = GameSceneBuilder.create_battlefield(self, game_layer, grid_size, current_layout, Vector2(VIEW_W, VIEW_H))
+    battlefield = scene_nodes.get("battlefield", null)
+    bullet_container = scene_nodes.get("bullet_container", null)
+    chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
 
 func _create_turrets() -> void:
-    var size: float = battlefield.grid_size * battlefield.cell_size
-    var margin: float = 16.0
-    var origin: Vector2 = battlefield.position
-    var positions: Dictionary = {
-        GameConfig.Faction.BLUE: origin + Vector2(margin, margin),
-        GameConfig.Faction.RED: origin + Vector2(size - margin, margin),
-        GameConfig.Faction.GREEN: origin + Vector2(margin, size - margin),
-        GameConfig.Faction.YELLOW: origin + Vector2(size - margin, size - margin),
-    }
-
-    for faction_id in positions.keys():
-        var turret = Turret.new()
-        turret.setup(faction_id, positions[faction_id], battlefield, bullet_container)
-        turret.name = "Turret_%s" % GameConfig.faction_name(faction_id)
-        turret.destroyed.connect(_on_turret_destroyed)
-        turret.burst_lock_changed.connect(_on_turret_burst_lock_changed)
-        turret.burst_progress.connect(_on_turret_burst_progress)
-        game_layer.add_child(turret)
-        turrets[faction_id] = turret
-
-    for turret in turrets.values():
-        turret.set_all_turrets(turrets)
+    turrets = GameSceneBuilder.create_turrets(self, game_layer, battlefield, bullet_container)
 
 func _create_control_chambers() -> void:
-    var map_left: float = battlefield.position.x
-    var map_size: float = battlefield.grid_size * battlefield.cell_size
-
-    # 尺寸不再在 Main 中手写，直接读取 ControlChamber 的真实尺寸。
-    var probe_chamber = ControlChamber.new()
-    var scaled_size: Vector2 = probe_chamber.chamber_size * chamber_scale
-    probe_chamber.free()
-
-    # 控制仓应“贴近炮塔”，因此横向位置优先按炮塔来对齐，而不是只按战场边框死算。
-    var gap_x: float = current_layout.get("chamber_gap", 10.0)
-    var top_gap_y: float = current_layout.get("chamber_top_turret_gap", 18.0)
-    var bottom_gap_y: float = current_layout.get("chamber_bottom_turret_gap", 8.0)
-
-    var blue_turret = turrets.get(GameConfig.Faction.BLUE, null)
-    var red_turret = turrets.get(GameConfig.Faction.RED, null)
-    var green_turret = turrets.get(GameConfig.Faction.GREEN, null)
-    var yellow_turret = turrets.get(GameConfig.Faction.YELLOW, null)
-
-    var left_x: float = map_left - scaled_size.x - gap_x
-    var right_x: float = map_left + map_size + gap_x
-    var top_y: float = current_layout.get("left_chamber_y_top", 110.0)
-    var bottom_y: float = current_layout.get("left_chamber_y_bottom", 360.0)
-
-    if blue_turret != null:
-        left_x = blue_turret.global_position.x - scaled_size.x - gap_x
-        top_y = blue_turret.global_position.y - top_gap_y
-    elif red_turret != null:
-        top_y = red_turret.global_position.y - top_gap_y
-
-    if red_turret != null:
-        right_x = red_turret.global_position.x + gap_x
-
-    if green_turret != null:
-        bottom_y = green_turret.global_position.y - scaled_size.y - bottom_gap_y
-    elif yellow_turret != null:
-        bottom_y = yellow_turret.global_position.y - scaled_size.y - bottom_gap_y
-
-    # 做轻量兜底，避免越界，同时仍保留“靠近炮塔”的相对位置。
-    left_x = clampf(left_x, 10.0, map_left - scaled_size.x - 2.0)
-    right_x = clampf(right_x, map_left + map_size + 2.0, VIEW_W - scaled_size.x - 10.0)
-    top_y = clampf(top_y, 58.0, VIEW_H - scaled_size.y - 70.0)
-    bottom_y = clampf(bottom_y, top_y + scaled_size.y + 6.0, VIEW_H - scaled_size.y - 10.0)
-
-    var chamber_positions: Dictionary = {
-        GameConfig.Faction.BLUE: Vector2(left_x, top_y),
-        GameConfig.Faction.RED: Vector2(right_x, top_y),
-        GameConfig.Faction.GREEN: Vector2(left_x, bottom_y),
-        GameConfig.Faction.YELLOW: Vector2(right_x, bottom_y),
-    }
-
-    for faction_id in chamber_positions.keys():
-        var chamber = ControlChamber.new()
-        chamber.setup(faction_id, chamber_positions[faction_id])
-        chamber.scale = Vector2.ONE * chamber_scale
-        chamber.name = "Chamber_%s" % GameConfig.faction_name(faction_id)
-        chamber.release_requested.connect(_on_chamber_release_requested)
-        chamber.ball_count_changed.connect(_on_ball_count_changed)
-        game_layer.add_child(chamber)
-        chambers[faction_id] = chamber
-
+    chambers = GameSceneBuilder.create_control_chambers(self, game_layer, battlefield, turrets, current_layout, chamber_scale, Vector2(VIEW_W, VIEW_H))
     _sync_chamber_game_elapsed_time()
 
-
 func _create_ui() -> void:
-    ui_canvas = CanvasLayer.new()
-    ui_canvas.name = "UICanvas"
-    ui_canvas.process_mode = Node.PROCESS_MODE_ALWAYS
-    game_layer.add_child(ui_canvas)
-
-    var mobile_mode: bool = is_mobile_layout
-    var top_panel_w: float = current_layout.get("top_panel_w", 810.0)
-    var top_panel_h: float = current_layout.get("top_panel_h", 90.0)
-    if mobile_mode:
-        top_panel_w = minf(top_panel_w, 660.0)
-        top_panel_h = 98.0
-
-    var top_panel = UIFactory.make_panel_shell(Vector2((VIEW_W - top_panel_w) * 0.5, 8), Vector2(top_panel_w, top_panel_h), Color(0.93, 0.96, 1.0, 0.98))
-    ui_canvas.add_child(top_panel)
-
-    top_panel.add_child(UIFactory.make_fill_rect(Vector2(4, 4), top_panel.size - Vector2(8, 8), Color(0.06, 0.09, 0.15, 0.98)))
-    top_panel.add_child(UIFactory.make_fill_rect(Vector2(12, 4), Vector2(top_panel.size.x - 24, 2), Color(0.98, 0.76, 0.18, 0.55)))
-    top_panel.add_child(UIFactory.make_fill_rect(Vector2(10, 6), Vector2(top_panel.size.x - 20.0, 22.0), Color(0.03, 0.05, 0.09, 0.96)))
-
-    leader_label = UIFactory.make_outline_label(Vector2(16, 4), Vector2(176, 24), "", 14 if mobile_mode else 15, Color.WHITE, HORIZONTAL_ALIGNMENT_LEFT, 2)
-    top_panel.add_child(leader_label)
-
-    timer_label = UIFactory.make_outline_label(Vector2((top_panel.size.x - 110.0) * 0.5, 1), Vector2(110, 26), "00:00", 18 if mobile_mode else 20, Color(1.0, 0.96, 0.72), HORIZONTAL_ALIGNMENT_CENTER, 3)
-    top_panel.add_child(timer_label)
-
-    stage_label = UIFactory.make_outline_label(Vector2(top_panel.size.x - 182.0, 4), Vector2(168, 24), "", 13 if mobile_mode else 15, Color(0.82, 0.92, 1.0), HORIZONTAL_ALIGNMENT_RIGHT, 2)
-    top_panel.add_child(stage_label)
-
-    var bar_h: float = current_layout.get("bar_h", 36.0)
-    var bar_bg = UIFactory.make_panel_shell(Vector2(18, 31), Vector2(top_panel.size.x - 36.0, bar_h), Color(0.90, 0.94, 1.0, 0.95))
-    top_panel.add_child(bar_bg)
-
-    var bar_inner = UIFactory.make_fill_rect(Vector2(3, 3), Vector2(bar_bg.size.x - 6, bar_bg.size.y - 6), Color(0.03, 0.05, 0.09, 0.84))
-    bar_bg.add_child(bar_inner)
-    top_bar_total_width = bar_inner.size.x
-
-    var x_offset: float = 3.0
-    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
-        var segment = UIFactory.make_panel_shell(Vector2(x_offset, 3), Vector2(top_bar_total_width * 0.25, bar_inner.size.y), Color(0.90, 0.94, 1.0, 0.90))
-        bar_bg.add_child(segment)
-        top_bar_segments[faction_id] = segment
-
-        var fill = UIFactory.make_fill_rect(Vector2(2, 2), Vector2(segment.size.x - 4, segment.size.y - 4), GameConfig.faction_color(faction_id))
-        fill.name = "Fill"
-        segment.add_child(fill)
-
-        var gloss = UIFactory.make_fill_rect(Vector2(2, 2), Vector2(segment.size.x - 4, maxf(5.0, (segment.size.y - 4) * 0.42)), Color(1.0, 1.0, 1.0, 0.14))
-        gloss.name = "Gloss"
-        segment.add_child(gloss)
-
-        var bottom_shadow = UIFactory.make_fill_rect(Vector2(2, maxf(4.0, segment.size.y - 8.0)), Vector2(segment.size.x - 4, 4), Color(0.0, 0.0, 0.0, 0.16))
-        bottom_shadow.name = "BottomShadow"
-        segment.add_child(bottom_shadow)
-
-        var name_label = UIFactory.make_outline_label(Vector2(6, 2), Vector2(74, 14), "", 10 if mobile_mode else 12, GameConfig.faction_color(faction_id).lightened(0.56), HORIZONTAL_ALIGNMENT_LEFT, 2)
-        segment.add_child(name_label)
-        top_bar_name_labels[faction_id] = name_label
-
-        var value_label = UIFactory.make_outline_label(Vector2(0, -1), Vector2(segment.size.x, segment.size.y), "0%", 18 if mobile_mode else 22, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, 3)
-        value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER as VerticalAlignment
-        segment.add_child(value_label)
-        top_bar_labels[faction_id] = value_label
-
-        if faction_id != GameConfig.Faction.YELLOW:
-            var separator = UIFactory.make_fill_rect(Vector2(segment.size.x - 2.0, 0.0), Vector2(2.0, segment.size.y), Color(1.0, 1.0, 1.0, 0.16))
-            separator.name = "Separator"
-            segment.add_child(separator)
-
-        x_offset += segment.size.x
-
-    var badge = load("res://scripts/HudBadge.gd").new()
-    badge.position = Vector2(top_panel.size.x * 0.5 - 118.0, 60.0)
-    badge.size = Vector2(28, 28)
-    top_panel.add_child(badge)
-
-    game_title_label = UIFactory.make_outline_label(Vector2(0, 64), Vector2(top_panel.size.x, 28), "领土战争", 24 if mobile_mode else current_layout.get("title_font", 31), Color(1.0, 0.95, 0.72), HORIZONTAL_ALIGNMENT_CENTER, 5)
-    top_panel.add_child(game_title_label)
-
-    if not mobile_mode:
-        var palette_label = UIFactory.make_outline_label(Vector2(top_panel.size.x - 166.0, 66.0), Vector2(152, 22), "配色：%s" % GameConfig.get_palette_name(), current_layout.get("palette_font", 16), Color(0.88, 0.92, 1.0), HORIZONTAL_ALIGNMENT_RIGHT, 1)
-        top_panel.add_child(palette_label)
-
-    var side_x: float = VIEW_W - (150.0 if mobile_mode else 188.0)
-    var side_button_size: Vector2 = Vector2(114.0, 46.0) if mobile_mode else Vector2(96.0, 42.0)
-    var side_gap: float = 8.0
-
-    settings_button = UIFactory.make_action_button(Vector2(side_x, 84), side_button_size, "设置", Color(0.34, 0.34, 0.54))
-    settings_button.pressed.connect(_toggle_settings_panel)
-    ui_canvas.add_child(settings_button)
-
-    pause_button = UIFactory.make_action_button(Vector2(side_x, settings_button.position.y + side_button_size.y + side_gap), side_button_size, "暂停", Color(0.24, 0.52, 0.92))
-    pause_button.pressed.connect(_toggle_pause)
-    ui_canvas.add_child(pause_button)
-
-    exit_button = UIFactory.make_action_button(Vector2(side_x, pause_button.position.y + side_button_size.y + side_gap), side_button_size, "退出", Color(0.62, 0.24, 0.22))
-    exit_button.pressed.connect(_save_and_exit_to_menu)
-    ui_canvas.add_child(exit_button)
-
-    settings_panel = UIFactory.make_panel_shell(Vector2(maxf(10.0, side_x - 170.0), exit_button.position.y + side_button_size.y + 10.0), Vector2(286, 96) if not mobile_mode else Vector2(278, 92), Color(0.94, 0.97, 1.0, 0.96))
-    settings_panel.visible = false
-    settings_panel.process_mode = Node.PROCESS_MODE_ALWAYS
-    ui_canvas.add_child(settings_panel)
-    settings_panel.add_child(UIFactory.make_fill_rect(Vector2(4, 4), settings_panel.size - Vector2(8, 8), Color(0.06, 0.09, 0.15, 0.96)))
-
-    var settings_label = Label.new()
-    settings_label.position = Vector2(12, 10)
-    settings_label.size = settings_panel.size - Vector2(24, 20)
-    settings_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART as TextServer.AutowrapMode
-    settings_label.text = "画质：%s
-布局：%s
-说明：手机是大按钮模式，电脑保留更多 HUD 信息。" % [GameConfig.get_quality_name(), "手机横屏" if mobile_mode else "电脑"]
-    settings_label.add_theme_font_size_override("font_size", 14 if mobile_mode else 15)
-    settings_label.add_theme_color_override("font_color", Color(0.88, 0.92, 1.0))
-    settings_panel.add_child(settings_label)
-
-    pause_overlay = Control.new()
-    pause_overlay.position = Vector2.ZERO
-    pause_overlay.size = Vector2(VIEW_W, VIEW_H)
-    pause_overlay.visible = false
-    pause_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-    pause_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-    ui_canvas.add_child(pause_overlay)
-    pause_overlay.add_child(UIFactory.make_fill_rect(Vector2.ZERO, pause_overlay.size, Color(0.0, 0.0, 0.0, 0.35)))
-
-    var pause_panel = UIFactory.make_panel_shell(Vector2((VIEW_W - 260.0) * 0.5, (VIEW_H - 140.0) * 0.5), Vector2(260, 140), Color(0.94, 0.97, 1.0, 0.96))
-    pause_overlay.add_child(pause_panel)
-    pause_panel.add_child(UIFactory.make_outline_label(Vector2(0, 22), Vector2(260, 34), "已暂停", 28, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, 2))
-    pause_panel.add_child(UIFactory.make_outline_label(Vector2(18, 66), Vector2(224, 20), "当前进度已保存，可继续或退出", 15, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, 1))
-
-    var resume_button = UIFactory.make_action_button(Vector2(22, 94), Vector2(96, 36), "继续", Color(0.24, 0.52, 0.92))
-    resume_button.pressed.connect(_toggle_pause)
-    pause_panel.add_child(resume_button)
-
-    var save_exit_button = UIFactory.make_action_button(Vector2(134, 94), Vector2(104, 36), "保存退出", Color(0.62, 0.24, 0.22))
-    save_exit_button.pressed.connect(_save_and_exit_to_menu)
-    pause_panel.add_child(save_exit_button)
-
-    winner_label = UIFactory.make_outline_label(Vector2(0, current_layout.get("winner_y", 648.0)), Vector2(VIEW_W, 34), "", 28, Color(1.0, 0.94, 0.22), HORIZONTAL_ALIGNMENT_CENTER, 5)
-    ui_canvas.add_child(winner_label)
-
-    var fps_bg = UIFactory.make_fill_rect(current_layout.get("fps_bg_pos", Vector2(640.0, 652.0)), current_layout.get("fps_bg_size", Vector2(478.0, 30.0)), Color(0.0, 0.0, 0.0, 0.42 if not mobile_mode else 0.20))
-    fps_bg.process_mode = Node.PROCESS_MODE_ALWAYS
-    fps_bg.visible = not mobile_mode
-    ui_canvas.add_child(fps_bg)
-
-    fps_label = UIFactory.make_outline_label(current_layout.get("fps_label_pos", Vector2(646.0, 649.0)), current_layout.get("fps_label_size", Vector2(466.0, 24.0)), "FPS -- | active -- | quality -- | grid --", 15 if not mobile_mode else 14, Color(0.72, 1.0, 0.72), HORIZONTAL_ALIGNMENT_RIGHT, 3)
-    fps_label.process_mode = Node.PROCESS_MODE_ALWAYS
-    fps_label.visible = not mobile_mode
-    ui_canvas.add_child(fps_label)
+    var hud_nodes: Dictionary = GameHudView.create_runtime_ui(self, game_layer, battlefield, current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
+    ui_canvas = hud_nodes.get("ui_canvas", null)
+    top_bar_segments = hud_nodes.get("top_bar_segments", {})
+    top_bar_labels = hud_nodes.get("top_bar_labels", {})
+    top_bar_name_labels = hud_nodes.get("top_bar_name_labels", {})
+    top_bar_total_width = float(hud_nodes.get("top_bar_total_width", 0.0))
+    winner_label = hud_nodes.get("winner_label", null)
+    game_title_label = hud_nodes.get("game_title_label", null)
+    pause_overlay = hud_nodes.get("pause_overlay", null)
+    pause_button = hud_nodes.get("pause_button", null)
+    exit_button = hud_nodes.get("exit_button", null)
+    fps_label = hud_nodes.get("fps_label", null)
+    settings_button = hud_nodes.get("settings_button", null)
+    settings_panel = hud_nodes.get("settings_panel", null)
+    leader_label = hud_nodes.get("leader_label", null)
+    timer_label = hud_nodes.get("timer_label", null)
+    stage_label = hud_nodes.get("stage_label", null)
 
     _on_scores_changed(battlefield.count_cells_by_team())
 
 func _create_control_buttons() -> void:
-    var canvas = CanvasLayer.new()
-    canvas.name = "ControlButtons"
-    game_layer.add_child(canvas)
-
-    var mobile_mode: bool = is_mobile_layout
-    var energy_button_script = load("res://scripts/EnergyButton.gd")
-
-    for faction_id in chambers.keys():
-        var chamber = chambers[faction_id]
-        var button = energy_button_script.new()
-        var pos: Vector2 = chamber.global_position
-        var scaled_w: float = chamber.chamber_size.x * chamber.scale.x
-        var scaled_h: float = chamber.chamber_size.y * chamber.scale.y
-        var button_size: Vector2 = current_layout.get("button_size", Vector2(76.0, 46.0))
-        if mobile_mode:
-            button_size += Vector2(16.0, 10.0)
-        var button_gap: float = current_layout.get("button_gap", 10.0) + (4.0 if mobile_mode else 0.0)
-        button.size = button_size
-        button.pivot_offset = button.size * 0.5
-        button.faction_id = faction_id
-        button.process_mode = Node.PROCESS_MODE_PAUSABLE
-
-        var y_pos: float = pos.y + scaled_h * 0.5 - button.size.y * 0.5
-        if faction_id == GameConfig.Faction.BLUE or faction_id == GameConfig.Faction.GREEN:
-            button.position = Vector2(pos.x - button.size.x - button_gap, y_pos)
-        else:
-            button.position = Vector2(pos.x + scaled_w + button_gap, y_pos)
-
-        button.position.x = clampf(button.position.x, 10.0, VIEW_W - button.size.x - 10.0)
-        button.position.y = clampf(button.position.y, 64.0, VIEW_H - button.size.y - 12.0)
-
-        add_ball_button_base_positions[faction_id] = button.position
-        button.text = "+球"
-        button.pressed.connect(_add_ball_to_chamber.bind(faction_id))
-        canvas.add_child(button)
-        add_ball_buttons[faction_id] = button
+    var button_nodes: Dictionary = GameHudView.create_control_buttons(self, game_layer, chambers, current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
+    add_ball_buttons = button_nodes.get("add_ball_buttons", {})
+    add_ball_button_base_positions = button_nodes.get("add_ball_button_base_positions", {})
+    for faction_id in add_ball_buttons.keys():
         _refresh_add_ball_button(faction_id)
 
 func _add_ball_to_chamber(faction_id: int) -> void:
@@ -871,27 +223,7 @@ func _on_ball_count_changed(faction_id: int, _count: int) -> void:
     _refresh_add_ball_button(faction_id)
 
 func _refresh_add_ball_button(faction_id: int) -> void:
-    if not add_ball_buttons.has(faction_id):
-        return
-    var button = add_ball_buttons[faction_id]
-    var count: int = 0
-    var damaged: bool = false
-    var locked: bool = false
-    if chambers.has(faction_id):
-        count = chambers[faction_id].get_ball_count()
-        damaged = chambers[faction_id].is_damaged
-        locked = chambers[faction_id].is_locked
-
-    if damaged:
-        button.set_button_status("damaged", "损坏")
-    elif locked:
-        button.set_button_status("locked", "锁定")
-    elif count >= GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER:
-        button.set_button_status("full", "已满")
-    else:
-        button.set_button_status("normal", "+球")
-
-    button.self_modulate = GameConfig.faction_color(faction_id)
+    GameHudView.refresh_add_ball_button(faction_id, add_ball_buttons, chambers)
 
 func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
     if is_game_over:
@@ -961,115 +293,18 @@ func _stop_all_actions_for_game_over() -> void:
 
 func _on_scores_changed(counts: Dictionary) -> void:
     current_score_counts = counts.duplicate()
-    if top_bar_segments.size() == 0:
-        return
-    var total: int = 0
-    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
-        total += int(counts.get(faction_id, 0))
-    if total <= 0:
-        total = 1
-
-    var mobile_mode: bool = is_mobile_layout
-    var running_x: float = 3.0
-    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
-        var ratio: float = float(counts.get(faction_id, 0)) / float(total)
-        var p: int = int(round(ratio * 100.0))
-        var segment = top_bar_segments[faction_id]
-        var seg_w: float = top_bar_total_width * ratio
-        if faction_id == GameConfig.Faction.YELLOW:
-            seg_w = maxf(50.0, top_bar_total_width + 3.0 - running_x)
-        segment.position.x = running_x
-        segment.size.x = maxf(50.0, seg_w)
-
-        var fill = segment.get_node('Fill')
-        fill.size = Vector2(maxf(4.0, segment.size.x - 4.0), segment.size.y - 4.0)
-        fill.color = GameConfig.faction_color(faction_id)
-        var gloss = segment.get_node('Gloss')
-        gloss.size = Vector2(maxf(4.0, segment.size.x - 4.0), maxf(5.0, (segment.size.y - 4.0) * 0.42))
-        var bottom_shadow = segment.get_node('BottomShadow')
-        bottom_shadow.position = Vector2(2.0, maxf(4.0, segment.size.y - 8.0))
-        bottom_shadow.size = Vector2(maxf(4.0, segment.size.x - 4.0), 4.0)
-        if segment.has_node('Separator'):
-            var sep = segment.get_node('Separator')
-            sep.position = Vector2(segment.size.x - 2.0, 0.0)
-            sep.size = Vector2(2.0, segment.size.y)
-
-        var value_label = top_bar_labels[faction_id]
-        var name_label = top_bar_name_labels[faction_id]
-        value_label.text = '%d%%' % p
-        name_label.text = GameConfig.faction_name(faction_id)
-        name_label.add_theme_color_override('font_color', GameConfig.faction_color(faction_id).lightened(0.45))
-        name_label.visible = true
-
-        if segment.size.x < 110.0:
-            name_label.position = Vector2(0, 1)
-            name_label.size = Vector2(segment.size.x, 12)
-            name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-            name_label.add_theme_font_size_override('font_size', 9 if mobile_mode else 11)
-
-            value_label.position = Vector2(0, 10)
-            value_label.size = Vector2(segment.size.x, 20)
-            value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-            value_label.add_theme_font_size_override('font_size', 15 if mobile_mode else 18)
-        else:
-            name_label.position = Vector2(6, 2)
-            name_label.size = Vector2(segment.size.x - 12.0, 14)
-            name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT as HorizontalAlignment
-            name_label.add_theme_font_size_override('font_size', 10 if mobile_mode else 12)
-
-            value_label.position = Vector2(0, -1)
-            value_label.size = Vector2(segment.size.x, segment.size.y)
-            value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-            value_label.add_theme_font_size_override('font_size', 18 if mobile_mode else 22)
-        running_x += segment.size.x
-
-    _update_hud_meta()
+    RuntimeHudController.update_top_bar(
+        counts,
+        top_bar_segments,
+        top_bar_labels,
+        top_bar_name_labels,
+        top_bar_total_width,
+        is_mobile_layout
+    )
+    RuntimeHudController.update_meta(timer_label, stage_label, leader_label, current_score_counts, game_elapsed_time)
 
 func _show_center_banner(title_text: String, sub_text: String, accent: Color, auto_hide: bool) -> void:
-    if ui_canvas == null:
-        return
-    if opening_banner != null:
-        opening_banner.queue_free()
-    var holder = Control.new()
-    holder.position = Vector2.ZERO
-    holder.size = Vector2(VIEW_W, VIEW_H)
-    holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    ui_canvas.add_child(holder)
-    opening_banner = holder
-
-    var title = Label.new()
-    title.position = Vector2((VIEW_W - 460.0) * 0.5, current_layout.get("banner_title_y", 284.0))
-    title.size = Vector2(460, 58)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-    title.text = title_text
-    title.add_theme_font_size_override("font_size", 50)
-    title.add_theme_color_override("font_color", accent)
-    title.add_theme_color_override("font_outline_color", Color.BLACK)
-    title.add_theme_constant_override("outline_size", 8)
-    holder.add_child(title)
-
-    var sub = Label.new()
-    sub.position = Vector2((VIEW_W - 340.0) * 0.5, current_layout.get("banner_sub_y", 338.0))
-    sub.size = Vector2(340, 24)
-    sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
-    sub.text = sub_text
-    sub.add_theme_font_size_override("font_size", 20)
-    sub.add_theme_color_override("font_color", Color.WHITE)
-    sub.add_theme_color_override("font_outline_color", Color.BLACK)
-    sub.add_theme_constant_override("outline_size", 4)
-    holder.add_child(sub)
-
-    holder.scale = Vector2(0.7, 0.7)
-    holder.modulate = Color(1, 1, 1, 0)
-    var tween = create_tween()
-    tween.tween_property(holder, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    tween.parallel().tween_property(holder, "modulate", Color(1, 1, 1, 1), 0.24)
-    if auto_hide:
-        tween.tween_interval(1.2)
-        tween.tween_property(holder, "modulate", Color(1, 1, 1, 0), 0.42)
-        tween.tween_callback(holder.queue_free)
-    else:
-        title.add_theme_color_override("font_color", accent)
+    opening_banner = BannerController.show(self, ui_canvas, opening_banner, Vector2(VIEW_W, VIEW_H), current_layout, title_text, sub_text, accent, auto_hide)
 
 func _sync_chamber_game_elapsed_time() -> void:
     for chamber in chambers.values():
@@ -1143,67 +378,6 @@ func _cleanup_game_layer() -> void:
 func _has_save_file() -> bool:
     return FileAccess.file_exists(SAVE_PATH)
 
-func _vec2_to_arr(v: Vector2) -> Array:
-    return [v.x, v.y]
-
-func _arr_to_vec2(value, default_value: Vector2 = Vector2.ZERO) -> Vector2:
-    if value is Array and value.size() >= 2:
-        return Vector2(float(value[0]), float(value[1]))
-    return default_value
-
-func _vec2i_to_arr(v: Vector2i) -> Array:
-    return [v.x, v.y]
-
-func _arr_to_vec2i(value, default_value: Vector2i = Vector2i(-999, -999)) -> Vector2i:
-    if value is Array and value.size() >= 2:
-        return Vector2i(int(value[0]), int(value[1]))
-    return default_value
-
-func _get_release_ball_index(chamber) -> int:
-    if chamber == null or chamber.release_ball == null:
-        return -1
-    for i in range(chamber.balls.size()):
-        if chamber.balls[i] == chamber.release_ball:
-            return i
-    return -1
-
-func _collect_control_ball_states(chamber) -> Array:
-    var result: Array = []
-    if chamber == null:
-        return result
-
-    for ball in chamber.balls:
-        if ball == null or not is_instance_valid(ball):
-            continue
-        result.append({
-            "position": _vec2_to_arr(ball.position),
-            "velocity": _vec2_to_arr(ball.velocity),
-            "radius": ball.radius,
-            "stay_time": chamber.get_ball_stay_time(ball),
-        })
-    return result
-
-func _collect_bullet_states() -> Array:
-    var result: Array = []
-    if bullet_container == null:
-        return result
-
-    var source_bullets: Array = bullet_container.get_active_bullets() if bullet_container.has_method("get_active_bullets") else bullet_container.get_children()
-    for node in source_bullets:
-        if node is Bullet and node.is_active:
-            var trail: Array = []
-            for point in node.trail_points:
-                trail.append(_vec2_to_arr(point))
-            result.append({
-                "faction_id": node.faction_id,
-                "position": _vec2_to_arr(node.global_position),
-                "direction": _vec2_to_arr(node.direction),
-                "age": node.age,
-                "last_cell": _vec2i_to_arr(node.last_cell),
-                "trail_points": trail,
-            })
-    return result
-
 func _clear_bullets() -> void:
     if bullet_container == null:
         return
@@ -1242,8 +416,8 @@ func _process_pending_bullet_restore() -> void:
             continue
 
         var faction_id: int = clampi(int(state.get("faction_id", 0)), 0, 3)
-        var pos: Vector2 = _arr_to_vec2(state.get("position", [0, 0]), battlefield.global_position)
-        var direction: Vector2 = _arr_to_vec2(state.get("direction", [1, 0]), Vector2.RIGHT).normalized()
+        var pos: Vector2 = SaveGameCodec.arr_to_vec2(state.get("position", [0, 0]), battlefield.global_position)
+        var direction: Vector2 = SaveGameCodec.arr_to_vec2(state.get("direction", [1, 0]), Vector2.RIGHT).normalized()
         if direction.length() <= 0.001:
             direction = Vector2.RIGHT
 
@@ -1256,13 +430,13 @@ func _process_pending_bullet_restore() -> void:
             bullet_container.add_child(bullet)
 
         bullet.age = clampf(float(state.get("age", 0.0)), 0.0, GameConfig.BULLET_MAX_LIFETIME)
-        bullet.last_cell = _arr_to_vec2i(state.get("last_cell", [-999, -999]))
+        bullet.last_cell = SaveGameCodec.arr_to_vec2i(state.get("last_cell", [-999, -999]))
         bullet.trail_points.clear()
         var trail = state.get("trail_points", [])
         if trail is Array and trail.size() > 0:
             var trail_count: int = mini(trail.size(), MAX_RESTORE_TRAIL_POINTS)
             for j in range(trail_count):
-                bullet.trail_points.append(_arr_to_vec2(trail[j], bullet.global_position))
+                bullet.trail_points.append(SaveGameCodec.arr_to_vec2(trail[j], bullet.global_position))
         else:
             bullet.trail_points.append(bullet.global_position)
         bullet.queue_redraw()
@@ -1288,8 +462,8 @@ func _save_game_progress() -> void:
             "chamber_is_locked": chamber.is_locked if chamber != null else false,
             "chamber_is_damaged": chamber.is_damaged if chamber != null else false,
             "chamber_ball_count": chamber.get_ball_count() if chamber != null else 0,
-            "chamber_release_ball_index": _get_release_ball_index(chamber),
-            "control_balls": _collect_control_ball_states(chamber),
+            "chamber_release_ball_index": SaveGameCodec.get_release_ball_index(chamber),
+            "control_balls": SaveGameCodec.collect_control_ball_states(chamber),
             "turret_health": turret.health if turret != null else GameConfig.TURRET_MAX_HEALTH,
             "turret_destroyed": turret.is_destroyed if turret != null else false,
             "turret_sweep_phase": turret.sweep_phase if turret != null else 0.0,
@@ -1302,7 +476,7 @@ func _save_game_progress() -> void:
         })
 
     var data: Dictionary = {
-        "save_version": "1.9.20",
+        "save_version": "1.9.24",
         "grid_size": battlefield.grid_size,
         "palette_name": GameConfig.get_palette_name(),
         "quality_name": GameConfig.get_quality_name(),
@@ -1310,7 +484,7 @@ func _save_game_progress() -> void:
         "game_elapsed_time": game_elapsed_time,
         "is_game_over": is_game_over,
         "factions": factions,
-        "bullets": _collect_bullet_states(),
+        "bullets": SaveGameCodec.collect_bullet_states(bullet_container),
         "winner_text": winner_label.text if winner_label != null else "",
     }
 
@@ -1337,60 +511,6 @@ func _show_menu_status(message: String) -> void:
     else:
         push_warning(message)
 
-func _validate_save_data(data: Dictionary) -> Dictionary:
-    var clean: Dictionary = data.duplicate(true)
-
-    clean["grid_size"] = _sanitize_grid_size(clean.get("grid_size", 40))
-
-    var version: String = str(clean.get("save_version", ""))
-    if version == "" or not version.begins_with(SAVE_MAJOR_PREFIX):
-        clean["_invalid_reason"] = "存档版本不兼容：%s" % version
-        return clean
-
-    if not str(clean.get("quality_name", "中")) in GameConfig.get_quality_names():
-        clean["quality_name"] = "中"
-
-    var owners = clean.get("owners", [])
-    var grid_size: int = int(clean["grid_size"])
-    var owners_ok: bool = owners is Array and owners.size() == grid_size
-    if owners_ok:
-        for x in range(grid_size):
-            if not (owners[x] is Array) or owners[x].size() < grid_size:
-                owners_ok = false
-                break
-    if not owners_ok:
-        clean.erase("owners")
-
-    var bullets = clean.get("bullets", [])
-    if bullets is Array:
-        clean["bullets"] = bullets.slice(0, mini(bullets.size(), GameConfig.get_restore_bullet_limit()))
-    else:
-        clean["bullets"] = []
-
-    var factions = clean.get("factions", [])
-    var fixed_factions: Array = []
-    if factions is Array:
-        for state in factions:
-            if not (state is Dictionary):
-                continue
-            var fixed = state.duplicate(true)
-            fixed["faction_id"] = clampi(int(fixed.get("faction_id", 0)), 0, 3)
-            fixed["chamber_pending_count"] = clampi(int(fixed.get("chamber_pending_count", 1)), 1, GameConfig.MAX_PENDING_COUNT)
-            fixed["chamber_locked_remaining"] = clampi(int(fixed.get("chamber_locked_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
-            fixed["turret_burst_remaining"] = clampi(int(fixed.get("turret_burst_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
-            fixed["turret_burst_total"] = clampi(int(fixed.get("turret_burst_total", 0)), 0, GameConfig.MAX_PENDING_COUNT)
-            fixed["turret_burst_index"] = clampi(int(fixed.get("turret_burst_index", 0)), 0, GameConfig.MAX_PENDING_COUNT)
-
-            var control_balls = fixed.get("control_balls", [])
-            if control_balls is Array:
-                fixed["control_balls"] = control_balls.slice(0, mini(control_balls.size(), MAX_RESTORE_CONTROL_BALLS))
-            else:
-                fixed["control_balls"] = []
-
-            fixed_factions.append(fixed)
-    clean["factions"] = fixed_factions
-    return clean
-
 func _continue_saved_game() -> void:
     var data: Dictionary = _load_saved_data()
     if data.is_empty():
@@ -1403,7 +523,7 @@ func _continue_saved_game() -> void:
         push_warning("存档版本不兼容，已拒绝读取：%s" % save_version)
         return
 
-    data = _validate_save_data(data)
+    data = SaveGameCodec.validate_save_data(data)
     if data.has("_invalid_reason"):
         _show_menu_status(str(data["_invalid_reason"]))
         return
@@ -1417,7 +537,7 @@ func _continue_saved_game() -> void:
     selected_quality_name = str(data.get("quality_name", "中"))
     GameConfig.set_palette_by_name(palette_name)
     GameConfig.set_quality_by_name(selected_quality_name)
-    _start_game(_sanitize_grid_size(data.get("grid_size", 40)), true, false)
+    _start_game(LayoutProfiles.sanitize_grid_size(data.get("grid_size", 40)), true, false)
     game_elapsed_time = maxf(0.0, float(data.get("game_elapsed_time", 0.0)))
     _sync_chamber_game_elapsed_time()
     _apply_saved_state(data)
@@ -1441,7 +561,10 @@ func _apply_saved_state(data: Dictionary) -> void:
             loaded_owners.append(col)
         battlefield.owners = loaded_owners
         battlefield.rebuild_owner_counts()
-        battlefield.queue_redraw()
+        if battlefield.has_method("flush_visual_update"):
+            battlefield.flush_visual_update()
+        else:
+            battlefield.queue_redraw()
         _on_scores_changed(battlefield.count_cells_by_team())
 
     var factions = data.get("factions", [])
@@ -1495,10 +618,10 @@ func _apply_chamber_state(chamber, state: Dictionary) -> void:
                 continue
             var ball = ControlBall.new()
             ball.radius = clampf(float(ball_state.get("radius", chamber.CONTROL_BALL_RADIUS)), 3.0, 12.0)
-            var pos: Vector2 = _arr_to_vec2(ball_state.get("position", [chamber.chamber_size.x * 0.5, 18.0]), Vector2(chamber.chamber_size.x * 0.5, 18.0))
+            var pos: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("position", [chamber.chamber_size.x * 0.5, 18.0]), Vector2(chamber.chamber_size.x * 0.5, 18.0))
             pos.x = clampf(pos.x, ball.radius, chamber.chamber_size.x - ball.radius)
             pos.y = clampf(pos.y, ball.radius, chamber.chamber_size.y - ball.radius)
-            var vel: Vector2 = _arr_to_vec2(ball_state.get("velocity", [0, 0]), Vector2.ZERO)
+            var vel: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("velocity", [0, 0]), Vector2.ZERO)
             vel = vel.limit_length(520.0)
             ball.setup(chamber.faction_id, pos, vel)
             chamber.add_child(ball)

@@ -3,6 +3,14 @@ class_name BulletPool
 
 var inactive_bullets: Array = []
 var active_bullets: Array = []
+var visual_pressure_update_timer: float = 0.0
+const VISUAL_PRESSURE_UPDATE_INTERVAL: float = 0.25
+
+func _process(delta: float) -> void:
+    visual_pressure_update_timer -= delta
+    if visual_pressure_update_timer <= 0.0:
+        visual_pressure_update_timer = VISUAL_PRESSURE_UPDATE_INTERVAL
+        update_visual_pressure()
 
 func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, target_turrets: Dictionary = {}) -> Bullet:
     # 性能保护阀：
@@ -38,6 +46,21 @@ func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, targ
     bullet.activate()
     active_bullets.append(bullet)
     return bullet
+
+func update_visual_pressure() -> void:
+    var active_count: int = active_bullets.size()
+    var use_simple_draw: bool = active_count >= GameConfig.get_force_simple_threshold()
+    var use_reduced_effects: bool = active_count >= GameConfig.get_high_pressure_threshold()
+    var trail_points: int = GameConfig.get_normal_trail_points()
+
+    if active_count >= GameConfig.get_high_pressure_threshold():
+        trail_points = GameConfig.get_high_trail_points()
+    elif active_count >= GameConfig.get_mid_pressure_threshold():
+        trail_points = GameConfig.get_mid_trail_points()
+
+    for bullet in active_bullets:
+        if bullet != null and is_instance_valid(bullet) and bullet.is_active:
+            bullet.configure_visuals(use_simple_draw, use_reduced_effects, trail_points)
 
 func recycle_bullet(bullet: Bullet) -> void:
     if bullet == null:

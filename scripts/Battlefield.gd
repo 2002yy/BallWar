@@ -7,6 +7,32 @@ var grid_size: int = GameConfig.GRID_SIZE
 var cell_size: int = GameConfig.CELL_SIZE
 var owners: Array = []
 var owner_counts: Dictionary = {0: 0, 1: 0, 2: 0, 3: 0}
+var redraw_pending: bool = false
+var score_emit_pending: bool = false
+var redraw_elapsed: float = 0.0
+var score_emit_elapsed: float = 0.0
+var changed_cells_since_draw: int = 0
+
+const LOW_CHANGE_REDRAW_INTERVAL: float = 0.016
+const MID_CHANGE_REDRAW_INTERVAL: float = 0.033
+const HIGH_CHANGE_REDRAW_INTERVAL: float = 0.050
+const SCORE_EMIT_INTERVAL: float = 0.080
+
+func _process(delta: float) -> void:
+    if redraw_pending:
+        redraw_elapsed += delta
+        if redraw_elapsed >= _current_redraw_interval():
+            queue_redraw()
+            redraw_pending = false
+            redraw_elapsed = 0.0
+            changed_cells_since_draw = 0
+
+    if score_emit_pending:
+        score_emit_elapsed += delta
+        if score_emit_elapsed >= SCORE_EMIT_INTERVAL:
+            scores_changed.emit(count_cells_by_team())
+            score_emit_pending = false
+            score_emit_elapsed = 0.0
 
 func configure(new_grid_size: int) -> void:
     grid_size = new_grid_size
@@ -73,12 +99,37 @@ func apply_bullet(cell: Vector2i, faction_id: int) -> String:
     owners[cell.x][cell.y] = faction_id
     owner_counts[old] -= 1
     owner_counts[faction_id] += 1
-    queue_redraw()
-    scores_changed.emit(count_cells_by_team())
+    _request_visual_update()
+    _request_score_emit()
     return "HIT_ENEMY_CELL"
 
 func count_cells_by_team() -> Dictionary:
     return owner_counts.duplicate()
+
+func flush_visual_update() -> void:
+    redraw_pending = false
+    redraw_elapsed = 0.0
+    changed_cells_since_draw = 0
+    queue_redraw()
+
+func flush_score_emit() -> void:
+    score_emit_pending = false
+    score_emit_elapsed = 0.0
+    scores_changed.emit(count_cells_by_team())
+
+func _request_visual_update() -> void:
+    changed_cells_since_draw += 1
+    redraw_pending = true
+
+func _request_score_emit() -> void:
+    score_emit_pending = true
+
+func _current_redraw_interval() -> float:
+    if changed_cells_since_draw >= 48:
+        return HIGH_CHANGE_REDRAW_INTERVAL
+    if changed_cells_since_draw >= 12:
+        return MID_CHANGE_REDRAW_INTERVAL
+    return LOW_CHANGE_REDRAW_INTERVAL
 
 func _draw() -> void:
     var size: float = grid_size * cell_size
