@@ -13,7 +13,7 @@ var all_turrets = {}
 var sweep_phase: float = 0.0
 var sweep_speed: float = 0.95
 var center_angle: float = 0.0
-var sweep_amplitude: float = PI * 0.25
+var sweep_amplitude: float = deg_to_rad(50.0) # total sweep about 100 degrees
 
 var max_health: int = GameConfig.TURRET_MAX_HEALTH
 var health: int = GameConfig.TURRET_MAX_HEALTH

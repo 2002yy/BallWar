@@ -13,9 +13,113 @@ const TURRET_MAX_HEALTH = 30
 const TURRET_HIT_RADIUS = 24.0
 const BULLET_DAMAGE = 1
 
-const MAX_PENDING_COUNT = 64
+const MAX_PENDING_COUNT = 2048
 const MAX_CONTROL_BALLS_PER_CHAMBER = 8
+const MAX_ACTIVE_BULLETS = 6000
 const BURST_FIRE_INTERVAL = 0.045
+
+
+static var _quality_name = "中"
+
+static func get_quality_names() -> Array:
+    return ["低", "中", "高"]
+
+static func set_quality_by_name(name: String) -> void:
+    if name in get_quality_names():
+        _quality_name = name
+    else:
+        _quality_name = "中"
+
+static func get_quality_name() -> String:
+    return _quality_name
+
+static func get_max_active_bullets() -> int:
+    match _quality_name:
+        "低":
+            return 2200
+        "高":
+            return MAX_ACTIVE_BULLETS
+        _:
+            return 4200
+
+static func get_restore_bullet_limit() -> int:
+    match _quality_name:
+        "低":
+            return 1200
+        "高":
+            return MAX_ACTIVE_BULLETS
+        _:
+            return 3500
+
+static func get_restore_per_frame() -> int:
+    match _quality_name:
+        "低":
+            return 80
+        "高":
+            return 180
+        _:
+            return 120
+
+static func get_mid_pressure_threshold() -> int:
+    match _quality_name:
+        "低":
+            return 500
+        "高":
+            return 1000
+        _:
+            return 850
+
+static func get_high_pressure_threshold() -> int:
+    match _quality_name:
+        "低":
+            return 1200
+        "高":
+            return 2500
+        _:
+            return 1800
+
+static func get_force_simple_threshold() -> int:
+    match _quality_name:
+        "低":
+            return 1800
+        "高":
+            return 5000
+        _:
+            return 3200
+
+static func get_normal_trail_points() -> int:
+    match _quality_name:
+        "低":
+            return 3
+        "高":
+            return 8
+        _:
+            return 6
+
+static func get_mid_trail_points() -> int:
+    return 3
+
+static func get_high_trail_points() -> int:
+    return 1
+
+static func get_grid_line_alpha() -> float:
+    match _quality_name:
+        "低":
+            return 0.035
+        "高":
+            return 0.10
+        _:
+            return 0.065
+
+static func get_emblem_alpha_mul() -> float:
+    match _quality_name:
+        "低":
+            return 0.35
+        "高":
+            return 1.0
+        _:
+            return 0.65
+
 
 enum Faction { BLUE, RED, GREEN, YELLOW }
 

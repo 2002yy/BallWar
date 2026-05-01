@@ -12,6 +12,8 @@ var trail_points = []
 var trail_max_points = 8
 var pool
 var is_active: bool = false
+var simple_draw: bool = false
+var reduce_visual_effects: bool = false
 
 func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, new_battlefield, new_target_turrets = {}) -> void:
     faction_id = new_faction_id
@@ -53,7 +55,7 @@ func _despawn() -> void:
     if pool != null and is_instance_valid(pool):
         pool.recycle_bullet(self)
     else:
-        _despawn()
+        queue_free()
 
 func _physics_process(delta: float) -> void:
     if not is_active:
@@ -138,16 +140,26 @@ func _draw() -> void:
     var base = GameConfig.faction_color(faction_id)
     var radius: float = _visual_radius()
 
-    for i in range(trail_points.size() - 1, -1, -1):
-        var world_point = trail_points[i]
-        var p = to_local(world_point)
-        var alpha = 0.08 + 0.36 * (1.0 - float(i) / maxf(1.0, float(trail_points.size())))
-        var trail_r = radius * (0.45 + 0.45 * (1.0 - float(i) / maxf(1.0, float(trail_points.size()))))
-        draw_circle(p, trail_r, Color(base.r, base.g, base.b, alpha))
+    if not simple_draw:
+        var trail_count: int = trail_points.size()
+        for i in range(trail_count - 1, -1, -1):
+            var world_point = trail_points[i]
+            var p = to_local(world_point)
+            var alpha_mul: float = 0.60 if reduce_visual_effects else 1.0
+            var alpha = (0.08 + 0.36 * (1.0 - float(i) / maxf(1.0, float(trail_count)))) * alpha_mul
+            var trail_r = radius * (0.45 + 0.45 * (1.0 - float(i) / maxf(1.0, float(trail_count))))
+            draw_circle(p, trail_r, Color(base.r, base.g, base.b, alpha))
 
-    draw_circle(Vector2(2.8, 2.8), radius + 2.2, Color(0.0, 0.0, 0.0, 0.34))
-    draw_circle(Vector2.ZERO, radius + 1.2, Color(0.05, 0.05, 0.05, 0.94))
+    if simple_draw:
+        draw_circle(Vector2.ZERO, radius, base)
+        return
+
+    if not reduce_visual_effects:
+        draw_circle(Vector2(2.8, 2.8), radius + 2.2, Color(0.0, 0.0, 0.0, 0.34))
+        draw_circle(Vector2.ZERO, radius + 1.2, Color(0.05, 0.05, 0.05, 0.94))
+
     draw_circle(Vector2.ZERO, radius, base)
-    draw_circle(Vector2(1.8, 1.8), radius * 0.64, base.darkened(0.26))
-    draw_circle(Vector2(-2.2, -2.0), radius * 0.30, Color(1.0, 1.0, 1.0, 0.76))
-    draw_circle(Vector2.ZERO, radius * 0.25, Color(1.0, 1.0, 1.0, 0.14))
+    if not reduce_visual_effects:
+        draw_circle(Vector2(1.8, 1.8), radius * 0.64, base.darkened(0.26))
+        draw_circle(Vector2(-2.2, -2.0), radius * 0.30, Color(1.0, 1.0, 1.0, 0.76))
+        draw_circle(Vector2.ZERO, radius * 0.25, Color(1.0, 1.0, 1.0, 0.14))

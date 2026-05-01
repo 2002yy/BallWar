@@ -6,6 +6,7 @@ signal scores_changed(counts)
 var grid_size: int = GameConfig.GRID_SIZE
 var cell_size: int = GameConfig.CELL_SIZE
 var owners: Array = []
+var owner_counts: Dictionary = {0: 0, 1: 0, 2: 0, 3: 0}
 
 func configure(new_grid_size: int) -> void:
     grid_size = new_grid_size
@@ -32,6 +33,7 @@ func _ready() -> void:
 
 func reset_quadrants() -> void:
     owners.clear()
+    owner_counts = {0: 0, 1: 0, 2: 0, 3: 0}
     var half_grid: int = grid_size >> 1
     for x in range(grid_size):
         var col: Array = []
@@ -44,7 +46,16 @@ func reset_quadrants() -> void:
             elif x >= half_grid and y >= half_grid:
                 f = GameConfig.Faction.YELLOW
             col.append(f)
+            owner_counts[f] += 1
         owners.append(col)
+
+func rebuild_owner_counts() -> void:
+    owner_counts = {0: 0, 1: 0, 2: 0, 3: 0}
+    for x in range(grid_size):
+        for y in range(grid_size):
+            var owner: int = clampi(int(owners[x][y]), 0, 3)
+            owners[x][y] = owner
+            owner_counts[owner] += 1
 
 func world_to_cell(world_position: Vector2) -> Vector2i:
     var lp: Vector2 = to_local(world_position)
@@ -60,16 +71,14 @@ func apply_bullet(cell: Vector2i, faction_id: int) -> String:
     if old == faction_id:
         return "SAME_CELL"
     owners[cell.x][cell.y] = faction_id
+    owner_counts[old] -= 1
+    owner_counts[faction_id] += 1
     queue_redraw()
     scores_changed.emit(count_cells_by_team())
     return "HIT_ENEMY_CELL"
 
 func count_cells_by_team() -> Dictionary:
-    var counts: Dictionary = {0: 0, 1: 0, 2: 0, 3: 0}
-    for x in range(grid_size):
-        for y in range(grid_size):
-            counts[owners[x][y]] += 1
-    return counts
+    return owner_counts.duplicate()
 
 func _draw() -> void:
     var size: float = grid_size * cell_size
@@ -81,7 +90,8 @@ func _draw() -> void:
             c.a = 0.94
             draw_rect(Rect2(x * cell_size, y * cell_size, cell_size, cell_size), c, true)
 
-    _draw_emblems(size)
+    if GameConfig.get_emblem_alpha_mul() > 0.01:
+        _draw_emblems(size)
 
     draw_line(Vector2(half_size, 0), Vector2(half_size, size), Color.BLACK, 2)
     draw_line(Vector2(0, half_size), Vector2(size, half_size), Color.BLACK, 2)
@@ -89,8 +99,9 @@ func _draw() -> void:
 
     for i in range(grid_size + 1):
         var p: float = i * cell_size
-        draw_line(Vector2(p, 0), Vector2(p, size), Color(0, 0, 0, 0.10), 1)
-        draw_line(Vector2(0, p), Vector2(size, p), Color(0, 0, 0, 0.10), 1)
+        var grid_alpha: float = GameConfig.get_grid_line_alpha()
+        draw_line(Vector2(p, 0), Vector2(p, size), Color(0, 0, 0, grid_alpha), 1)
+        draw_line(Vector2(0, p), Vector2(size, p), Color(0, 0, 0, grid_alpha), 1)
 
 func _draw_emblems(size: float) -> void:
     var q: float = size * 0.25
@@ -101,13 +112,13 @@ func _draw_emblems(size: float) -> void:
     _draw_yellow_emblem(Vector2(size - q, size - q), r)
 
 func _draw_blue_emblem(center: Vector2, radius: float) -> void:
-    var c: Color = Color(1, 1, 1, 0.11)
+    var c: Color = Color(1, 1, 1, 0.11 * GameConfig.get_emblem_alpha_mul())
     draw_circle(center, radius, c)
     draw_circle(center + Vector2(radius * 0.25, 0), radius * 0.82, Color(0, 0, 0, 0.06))
-    draw_arc(center, radius * 1.15, 0.2, TAU - 0.2, 40, Color(1, 1, 1, 0.07), 4.0)
+    draw_arc(center, radius * 1.15, 0.2, TAU - 0.2, 40, Color(1, 1, 1, 0.07 * GameConfig.get_emblem_alpha_mul()), 4.0)
 
 func _draw_red_emblem(center: Vector2, radius: float) -> void:
-    var c: Color = Color(1, 1, 1, 0.11)
+    var c: Color = Color(1, 1, 1, 0.11 * GameConfig.get_emblem_alpha_mul())
     draw_circle(center, radius * 0.78, c)
     draw_circle(center + Vector2(-radius * 0.25, -radius * 0.10), radius * 0.14, Color(0, 0, 0, 0.12))
     draw_circle(center + Vector2(radius * 0.25, -radius * 0.10), radius * 0.14, Color(0, 0, 0, 0.12))
@@ -120,15 +131,15 @@ func _draw_red_emblem(center: Vector2, radius: float) -> void:
     draw_colored_polygon(jaw, c)
 
 func _draw_green_emblem(center: Vector2, radius: float) -> void:
-    var c: Color = Color(1, 1, 1, 0.11)
+    var c: Color = Color(1, 1, 1, 0.11 * GameConfig.get_emblem_alpha_mul())
     draw_circle(center, radius * 0.12, c)
     for i in range(8):
         var ang: float = TAU * float(i) / 8.0
         draw_line(center, center + Vector2.RIGHT.rotated(ang) * radius * 0.72, c, 3.0)
-    draw_arc(center, radius * 0.86, 0, TAU, 40, Color(1, 1, 1, 0.09), 4.0)
+    draw_arc(center, radius * 0.86, 0, TAU, 40, Color(1, 1, 1, 0.09 * GameConfig.get_emblem_alpha_mul()), 4.0)
 
 func _draw_yellow_emblem(center: Vector2, radius: float) -> void:
-    var c: Color = Color(1, 1, 1, 0.11)
+    var c: Color = Color(1, 1, 1, 0.11 * GameConfig.get_emblem_alpha_mul())
     var pts: PackedVector2Array = PackedVector2Array()
     for i in range(10):
         var rr: float = radius if i % 2 == 0 else radius * 0.45
