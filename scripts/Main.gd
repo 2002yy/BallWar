@@ -40,6 +40,7 @@ var game_layer
 var selected_grid_size: int = 40
 var selected_palette_name: String = "默认随机"
 var selected_quality_name: String = "中"
+var selected_game_mode_name: String = GameConfig.GAME_MODE_BASIC
 var current_layout: Dictionary = {}
 var game_elapsed_time: float = 0.0
 var is_game_over: bool = false
@@ -86,6 +87,7 @@ func _process(delta: float) -> void:
     if hud_meta_update_timer <= 0.0:
         hud_meta_update_timer = HUD_META_UPDATE_INTERVAL
         RuntimeHudController.update_meta(timer_label, stage_label, leader_label, current_score_counts, game_elapsed_time)
+        _check_winner()
 
     UIAnimationController.animate_menu_and_title(
         ui_time,
@@ -139,6 +141,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
         DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 
     GameConfig.set_quality_by_name(selected_quality_name)
+    GameConfig.set_game_mode_by_name(selected_game_mode_name)
 
     if selected_palette_name == "默认随机":
         GameConfig.set_random_palette()
@@ -255,6 +258,23 @@ func _on_turret_destroyed(faction_id: int) -> void:
 func _check_winner() -> void:
     if is_game_over:
         return
+    if game_layer == null or battlefield == null or turrets.is_empty():
+        return
+
+    var mode_name: String = GameConfig.get_game_mode_name()
+    if mode_name == GameConfig.GAME_MODE_OCCUPATION:
+        var occupation_winner: int = _get_occupation_winner()
+        if occupation_winner != -1:
+            _finish_with_winner(occupation_winner, "占领达成")
+            return
+
+    if mode_name == GameConfig.GAME_MODE_TIMED and game_elapsed_time >= GameConfig.get_time_limit_seconds():
+        var timed_winner: int = _get_score_winner()
+        if timed_winner == -1:
+            _finish_as_draw("时间到")
+        else:
+            _finish_with_winner(timed_winner, "时间到")
+        return
 
     var alive: Array = []
     for faction_id in turrets.keys():
@@ -263,15 +283,67 @@ func _check_winner() -> void:
             alive.append(faction_id)
 
     if alive.size() == 1:
-        is_game_over = true
-        _stop_all_actions_for_game_over()
-        winner_label.text = "%s 胜利！" % GameConfig.faction_name(alive[0])
-        _show_center_banner(winner_label.text, "终局", GameConfig.faction_color(alive[0]).lightened(0.35), false)
+        _finish_with_winner(int(alive[0]), "终局")
     elif alive.size() == 0:
-        is_game_over = true
-        _stop_all_actions_for_game_over()
-        winner_label.text = "平局"
-        _show_center_banner("平局", "终局", Color(1.0, 1.0, 1.0), false)
+        _finish_as_draw("终局")
+
+func _get_occupation_winner() -> int:
+    var counts: Dictionary = current_score_counts
+    if counts.is_empty() and battlefield != null and is_instance_valid(battlefield):
+        counts = battlefield.count_cells_by_team()
+
+    var total: int = 0
+    var best_id: int = -1
+    var best_count: int = -1
+    var tied: bool = false
+    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+        var count: int = int(counts.get(faction_id, 0))
+        total += count
+        if count > best_count:
+            best_count = count
+            best_id = int(faction_id)
+            tied = false
+        elif count == best_count:
+            tied = true
+
+    if total <= 0 or tied:
+        return -1
+    var target_percent: int = GameConfig.get_occupation_target_percent()
+    if best_count * 100 >= total * target_percent:
+        return best_id
+    return -1
+
+func _get_score_winner() -> int:
+    var counts: Dictionary = current_score_counts
+    if counts.is_empty() and battlefield != null and is_instance_valid(battlefield):
+        counts = battlefield.count_cells_by_team()
+
+    var best_id: int = -1
+    var best_count: int = -1
+    var tied: bool = false
+    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+        var count: int = int(counts.get(faction_id, 0))
+        if count > best_count:
+            best_count = count
+            best_id = int(faction_id)
+            tied = false
+        elif count == best_count:
+            tied = true
+    if tied:
+        return -1
+    return best_id
+
+func _finish_with_winner(faction_id: int, sub_text: String) -> void:
+    is_game_over = true
+    _stop_all_actions_for_game_over()
+    winner_label.text = "%s 胜利！" % GameConfig.faction_name(faction_id)
+    _show_center_banner(winner_label.text, sub_text, GameConfig.faction_color(faction_id).lightened(0.35), false)
+
+func _finish_as_draw(sub_text: String) -> void:
+    is_game_over = true
+    _stop_all_actions_for_game_over()
+    winner_label.text = "平局"
+    _show_center_banner("平局", sub_text, Color(1.0, 1.0, 1.0), false)
 
 func _stop_all_actions_for_game_over() -> void:
     for turret in turrets.values():
@@ -476,10 +548,11 @@ func _save_game_progress() -> void:
         })
 
     var data: Dictionary = {
-        "save_version": "1.9.24",
+        "save_version": "1.9.30",
         "grid_size": battlefield.grid_size,
         "palette_name": GameConfig.get_palette_name(),
         "quality_name": GameConfig.get_quality_name(),
+        "game_mode_name": GameConfig.get_game_mode_name(),
         "owners": battlefield.owners,
         "game_elapsed_time": game_elapsed_time,
         "is_game_over": is_game_over,
@@ -535,8 +608,10 @@ func _continue_saved_game() -> void:
     var palette_name: String = str(data.get("palette_name", "经典"))
     selected_palette_name = palette_name
     selected_quality_name = str(data.get("quality_name", "中"))
+    selected_game_mode_name = str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
     GameConfig.set_palette_by_name(palette_name)
     GameConfig.set_quality_by_name(selected_quality_name)
+    GameConfig.set_game_mode_by_name(selected_game_mode_name)
     _start_game(LayoutProfiles.sanitize_grid_size(data.get("grid_size", 40)), true, false)
     game_elapsed_time = maxf(0.0, float(data.get("game_elapsed_time", 0.0)))
     _sync_chamber_game_elapsed_time()

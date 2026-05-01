@@ -8,6 +8,15 @@ static func format_time_text(seconds: float) -> String:
     return "%02d:%02d" % [mm, ss]
 
 static func current_stage_name(game_elapsed_time: float) -> String:
+    var mode_name: String = GameConfig.get_game_mode_name()
+    if mode_name == GameConfig.GAME_MODE_OCCUPATION:
+        return "占领目标 %d%%" % GameConfig.get_occupation_target_percent()
+    if mode_name == GameConfig.GAME_MODE_TIMED:
+        var remain: float = maxf(0.0, GameConfig.get_time_limit_seconds() - game_elapsed_time)
+        return "限时 %s" % format_time_text(remain)
+    if mode_name == GameConfig.GAME_MODE_WILD:
+        return "狂野模式"
+
     if game_elapsed_time < 120.0:
         return "前期扩张"
     elif game_elapsed_time < 300.0:
@@ -29,7 +38,7 @@ static func get_burst_queue_count(turrets: Dictionary) -> int:
     return total
 
 static func get_pressure_label(active_count: int, burst_queue: int) -> String:
-    var fps: int = Engine.get_frames_per_second()
+    var fps: int = floori(Engine.get_frames_per_second())
     if active_count >= GameConfig.get_force_simple_threshold():
         return "极高"
     if active_count >= GameConfig.get_high_pressure_threshold():
@@ -53,7 +62,7 @@ static func get_perf_debug_text(bullet_container, battlefield, selected_grid_siz
     if battlefield != null and is_instance_valid(battlefield) and battlefield.has_method("get_redraw_debug_text"):
         redraw_text = str(battlefield.get_redraw_debug_text())
     return "FPS %d | 子弹 %d/%d | 队列 %d | 画质 %s | 地图 %d×%d | 战场 %s | 压力 %s" % [
-        Engine.get_frames_per_second(),
+        floori(Engine.get_frames_per_second()),
         active_count,
         max_active,
         burst_queue,

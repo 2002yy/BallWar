@@ -124,7 +124,7 @@ func _next_burst_interval() -> float:
     return float(pulse_pattern[idx]) * _burst_interval_multiplier()
 
 func _burst_interval_multiplier() -> float:
-    var fps: int = Engine.get_frames_per_second()
+    var fps: int = floori(Engine.get_frames_per_second())
     var mul: float = 1.0
 
     if fps > 0:
@@ -147,7 +147,7 @@ func _burst_interval_multiplier() -> float:
     return clampf(mul, 1.0, 3.50)
 
 func _max_shots_this_frame() -> int:
-    var fps: int = Engine.get_frames_per_second()
+    var fps: int = floori(Engine.get_frames_per_second())
     if fps > 0:
         if fps < 18:
             return 1

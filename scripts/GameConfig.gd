@@ -21,6 +21,33 @@ const BURST_FIRE_INTERVAL = 0.040
 const BURST_MAX_SHOTS_PER_FRAME = 3
 
 
+const GAME_MODE_BASIC = "基础模式"
+const GAME_MODE_OCCUPATION = "占领模式"
+const GAME_MODE_TIMED = "限时模式"
+const GAME_MODE_WILD = "狂野模式"
+const OCCUPATION_TARGET_PERCENT = 60
+const TIMED_MODE_SECONDS = 180.0
+static var _game_mode_name = GAME_MODE_BASIC
+
+static func get_game_mode_names() -> Array:
+    return [GAME_MODE_BASIC, GAME_MODE_OCCUPATION, GAME_MODE_TIMED, GAME_MODE_WILD]
+
+static func set_game_mode_by_name(name: String) -> void:
+    if name in get_game_mode_names():
+        _game_mode_name = name
+    else:
+        _game_mode_name = GAME_MODE_BASIC
+
+static func get_game_mode_name() -> String:
+    return _game_mode_name
+
+static func get_occupation_target_percent() -> int:
+    return OCCUPATION_TARGET_PERCENT
+
+static func get_time_limit_seconds() -> float:
+    return TIMED_MODE_SECONDS
+
+
 static var _quality_name = "中"
 
 static func get_quality_names() -> Array:
