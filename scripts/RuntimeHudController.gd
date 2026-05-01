@@ -30,11 +30,12 @@ static func get_perf_debug_text(bullet_container, battlefield, selected_grid_siz
     var active_count: int = get_active_bullet_count(bullet_container)
     var max_active: int = GameConfig.get_max_active_bullets()
     var grid_value: int = battlefield.grid_size if battlefield != null and is_instance_valid(battlefield) else selected_grid_size
-    return "FPS %d | active %d/%d | quality %s | grid %d | pressure %s" % [
+    return "FPS %d | 子弹 %d/%d | 画质 %s | 地图 %d×%d | 压力 %s" % [
         Engine.get_frames_per_second(),
         active_count,
         max_active,
         GameConfig.get_quality_name(),
+        grid_value,
         grid_value,
         get_bullet_pressure_level(bullet_container),
     ]

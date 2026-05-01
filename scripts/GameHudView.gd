@@ -1,7 +1,7 @@
 extends RefCounted
 class_name GameHudView
 
-static func create_runtime_ui(owner, game_layer: Node, battlefield, current_layout: Dictionary, view_size: Vector2, mobile_mode: bool) -> Dictionary:
+static func create_runtime_ui(owner, game_layer: Node, _battlefield, current_layout: Dictionary, view_size: Vector2, mobile_mode: bool) -> Dictionary:
     var ui_canvas = CanvasLayer.new()
     ui_canvas.name = "UICanvas"
     ui_canvas.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -86,8 +86,10 @@ static func create_runtime_ui(owner, game_layer: Node, battlefield, current_layo
         var palette_label = UIFactory.make_outline_label(Vector2(top_panel.size.x - 166.0, 66.0), Vector2(152, 22), "配色：%s" % GameConfig.get_palette_name(), current_layout.get("palette_font", 16), Color(0.88, 0.92, 1.0), HORIZONTAL_ALIGNMENT_RIGHT, 1)
         top_panel.add_child(palette_label)
 
-    var side_x: float = view_size.x - (150.0 if mobile_mode else 188.0)
     var side_button_size: Vector2 = Vector2(114.0, 46.0) if mobile_mode else Vector2(96.0, 42.0)
+    # 右侧系统按钮固定贴近屏幕右边，避免 30/40/50/60 地图时被右侧 +球按钮遮挡。
+    var side_margin: float = 18.0 if not mobile_mode else 12.0
+    var side_x: float = view_size.x - side_button_size.x - side_margin
     var side_gap: float = 8.0
 
     var settings_button = UIFactory.make_action_button(Vector2(side_x, 84), side_button_size, "设置", Color(0.34, 0.34, 0.54))
@@ -102,7 +104,9 @@ static func create_runtime_ui(owner, game_layer: Node, battlefield, current_layo
     exit_button.pressed.connect(Callable(owner, "_save_and_exit_to_menu"))
     ui_canvas.add_child(exit_button)
 
-    var settings_panel = UIFactory.make_panel_shell(Vector2(maxf(10.0, side_x - 170.0), exit_button.position.y + side_button_size.y + 10.0), Vector2(286, 96) if not mobile_mode else Vector2(278, 92), Color(0.94, 0.97, 1.0, 0.96))
+    var settings_panel_size: Vector2 = Vector2(286, 96) if not mobile_mode else Vector2(278, 92)
+    var settings_panel_x: float = clampf(side_x - settings_panel_size.x + side_button_size.x, 10.0, view_size.x - settings_panel_size.x - 10.0)
+    var settings_panel = UIFactory.make_panel_shell(Vector2(settings_panel_x, exit_button.position.y + side_button_size.y + 10.0), settings_panel_size, Color(0.94, 0.97, 1.0, 0.96))
     settings_panel.visible = false
     settings_panel.process_mode = Node.PROCESS_MODE_ALWAYS
     ui_canvas.add_child(settings_panel)
@@ -128,7 +132,7 @@ static func create_runtime_ui(owner, game_layer: Node, battlefield, current_layo
     fps_bg.visible = not mobile_mode
     ui_canvas.add_child(fps_bg)
 
-    var fps_label = UIFactory.make_outline_label(current_layout.get("fps_label_pos", Vector2(646.0, 649.0)), current_layout.get("fps_label_size", Vector2(466.0, 24.0)), "FPS -- | active -- | quality -- | grid --", 15 if not mobile_mode else 14, Color(0.72, 1.0, 0.72), HORIZONTAL_ALIGNMENT_RIGHT, 3)
+    var fps_label = UIFactory.make_outline_label(current_layout.get("fps_label_pos", Vector2(646.0, 649.0)), current_layout.get("fps_label_size", Vector2(466.0, 24.0)), "FPS -- | 子弹 -- | 画质 -- | 地图 -- | 压力 --", 15 if not mobile_mode else 14, Color(0.72, 1.0, 0.72), HORIZONTAL_ALIGNMENT_RIGHT, 3)
     fps_label.process_mode = Node.PROCESS_MODE_ALWAYS
     fps_label.visible = not mobile_mode
     ui_canvas.add_child(fps_label)
