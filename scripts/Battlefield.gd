@@ -13,6 +13,15 @@ var redraw_elapsed: float = 0.0
 var score_emit_elapsed: float = 0.0
 var changed_cells_since_draw: int = 0
 
+var cell_image: Image
+var cell_texture: ImageTexture
+var cell_texture_dirty: bool = false
+var debug_elapsed: float = 0.0
+var redraw_calls_this_second: int = 0
+var redraw_calls_per_second: int = 0
+var cell_changes_this_second: int = 0
+var cell_changes_per_second: int = 0
+
 const LOW_CHANGE_REDRAW_INTERVAL: float = 0.016
 const MID_CHANGE_REDRAW_INTERVAL: float = 0.033
 const HIGH_CHANGE_REDRAW_INTERVAL: float = 0.050
@@ -22,6 +31,7 @@ func _process(delta: float) -> void:
     if redraw_pending:
         redraw_elapsed += delta
         if redraw_elapsed >= _current_redraw_interval():
+            _upload_cell_texture()
             queue_redraw()
             redraw_pending = false
             redraw_elapsed = 0.0
@@ -33,6 +43,14 @@ func _process(delta: float) -> void:
             scores_changed.emit(count_cells_by_team())
             score_emit_pending = false
             score_emit_elapsed = 0.0
+
+    debug_elapsed += delta
+    if debug_elapsed >= 1.0:
+        redraw_calls_per_second = redraw_calls_this_second
+        cell_changes_per_second = cell_changes_this_second
+        redraw_calls_this_second = 0
+        cell_changes_this_second = 0
+        debug_elapsed = 0.0
 
 func configure(new_grid_size: int) -> void:
     grid_size = new_grid_size
@@ -53,6 +71,7 @@ func configure(new_grid_size: int) -> void:
             cell_size = GameConfig.CELL_SIZE
 
 func _ready() -> void:
+    texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     reset_quadrants()
     queue_redraw()
     scores_changed.emit(count_cells_by_team())
@@ -74,6 +93,7 @@ func reset_quadrants() -> void:
             col.append(f)
             owner_counts[f] += 1
         owners.append(col)
+    _rebuild_cell_texture()
 
 func rebuild_owner_counts() -> void:
     owner_counts = {0: 0, 1: 0, 2: 0, 3: 0}
@@ -82,6 +102,7 @@ func rebuild_owner_counts() -> void:
             var cell_owner: int = clampi(int(owners[x][y]), 0, 3)
             owners[x][y] = cell_owner
             owner_counts[cell_owner] += 1
+    _rebuild_cell_texture()
 
 func world_to_cell(world_position: Vector2) -> Vector2i:
     var lp: Vector2 = to_local(world_position)
@@ -99,6 +120,7 @@ func apply_bullet(cell: Vector2i, faction_id: int) -> String:
     owners[cell.x][cell.y] = faction_id
     owner_counts[old] -= 1
     owner_counts[faction_id] += 1
+    _paint_cached_cell(cell, faction_id)
     _request_visual_update()
     _request_score_emit()
     return "HIT_ENEMY_CELL"
@@ -110,6 +132,7 @@ func flush_visual_update() -> void:
     redraw_pending = false
     redraw_elapsed = 0.0
     changed_cells_since_draw = 0
+    _upload_cell_texture()
     queue_redraw()
 
 func flush_score_emit() -> void:
@@ -119,6 +142,7 @@ func flush_score_emit() -> void:
 
 func _request_visual_update() -> void:
     changed_cells_since_draw += 1
+    cell_changes_this_second += 1
     redraw_pending = true
 
 func _request_score_emit() -> void:
@@ -131,15 +155,59 @@ func _current_redraw_interval() -> float:
         return MID_CHANGE_REDRAW_INTERVAL
     return LOW_CHANGE_REDRAW_INTERVAL
 
+
+func _owner_draw_color(owner_id: int) -> Color:
+    var c: Color = GameConfig.faction_color(owner_id).darkened(0.08)
+    c.a = 0.94
+    return c
+
+func _rebuild_cell_texture() -> void:
+    if owners.size() != grid_size:
+        return
+    cell_image = Image.create(grid_size, grid_size, false, Image.FORMAT_RGBA8)
+    for x in range(grid_size):
+        if not (owners[x] is Array):
+            continue
+        for y in range(grid_size):
+            cell_image.set_pixel(x, y, _owner_draw_color(int(owners[x][y])))
+    cell_texture = ImageTexture.create_from_image(cell_image)
+    cell_texture_dirty = false
+
+func _paint_cached_cell(cell: Vector2i, faction_id: int) -> void:
+    if cell_image == null:
+        return
+    if not is_inside(cell):
+        return
+    cell_image.set_pixel(cell.x, cell.y, _owner_draw_color(faction_id))
+    cell_texture_dirty = true
+
+func _upload_cell_texture() -> void:
+    if not cell_texture_dirty:
+        return
+    if cell_texture == null or cell_image == null:
+        return
+    cell_texture.update(cell_image)
+    cell_texture_dirty = false
+
+func get_redraw_debug_text() -> String:
+    return "%d刷/%d格" % [redraw_calls_per_second, cell_changes_per_second]
+
+
 func _draw() -> void:
+    redraw_calls_this_second += 1
     var size: float = grid_size * cell_size
     var half_size: float = size * 0.5
 
-    for x in range(grid_size):
-        for y in range(grid_size):
-            var c: Color = GameConfig.faction_color(owners[x][y]).darkened(0.08)
-            c.a = 0.94
-            draw_rect(Rect2(x * cell_size, y * cell_size, cell_size, cell_size), c, true)
+    if cell_texture != null:
+        if cell_texture_dirty:
+            _upload_cell_texture()
+        draw_texture_rect(cell_texture, Rect2(Vector2.ZERO, Vector2(size, size)), false)
+    else:
+        # 兜底路径：正常不应该走到这里。
+        for x in range(grid_size):
+            for y in range(grid_size):
+                var c: Color = _owner_draw_color(owners[x][y])
+                draw_rect(Rect2(x * cell_size, y * cell_size, cell_size, cell_size), c, true)
 
     if GameConfig.get_emblem_alpha_mul() > 0.01:
         _draw_emblems(size)

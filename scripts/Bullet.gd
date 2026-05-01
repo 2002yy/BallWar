@@ -11,6 +11,7 @@ var age = 0.0
 var trail_points = []
 var trail_max_points = 8
 var pool
+var trail_layer
 var is_active: bool = false
 var simple_draw: bool = false
 var reduce_visual_effects: bool = false
@@ -35,7 +36,14 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
     trail_points.clear()
     if not simple_draw and trail_max_points > 0:
         trail_points.append(global_position)
+    _request_trail_redraw()
     queue_redraw()
+
+func set_trail_layer(new_trail_layer) -> void:
+    trail_layer = new_trail_layer
+
+func get_visual_radius() -> float:
+    return _visual_radius()
 
 func _ready() -> void:
     z_index = 30
@@ -57,6 +65,11 @@ func deactivate() -> void:
     battlefield = null
     target_turrets = {}
     trail_points.clear()
+    _request_trail_redraw()
+
+func _request_trail_redraw() -> void:
+    if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
+        trail_layer.request_trail_redraw()
 
 func _despawn() -> void:
     if pool != null and is_instance_valid(pool):
@@ -100,7 +113,7 @@ func _physics_process(delta: float) -> void:
         bounced = true
 
     if bounced:
-        direction = direction.normalized()
+        direction = _stabilize_bounce_direction(direction).normalized()
 
     global_position = battlefield.to_global(local_position)
     _update_visual_trace(delta)
@@ -124,6 +137,22 @@ func _physics_process(delta: float) -> void:
     if result == "HIT_ENEMY_CELL":
         _despawn()
 
+func _stabilize_bounce_direction(raw_direction: Vector2) -> Vector2:
+    # v1.9.28：防止正上/正下/正左/正右方向在边界之间无限来回弹。
+    # 初始发射仍然严格跟随炮管方向；只有碰到战场边界后，才给近轴向弹道一点切向分量。
+    var fixed_direction: Vector2 = raw_direction
+    var tangent_min: float = 0.115
+    if absf(fixed_direction.x) < tangent_min:
+        fixed_direction.x = _bounce_tangent_sign() * tangent_min
+    if absf(fixed_direction.y) < tangent_min:
+        fixed_direction.y = _bounce_tangent_sign() * tangent_min
+    return fixed_direction
+
+func _bounce_tangent_sign() -> float:
+    # 用阵营和当前寿命做一个确定性符号，避免每次随机导致轨迹抖动。
+    var seed_value: int = int(age * 1000.0) + faction_id * 37 + int(global_position.x + global_position.y)
+    return -1.0 if seed_value % 2 == 0 else 1.0
+
 func configure_visuals(new_simple_draw: bool, new_reduce_visual_effects: bool, new_trail_max_points: int) -> void:
     var changed: bool = simple_draw != new_simple_draw or reduce_visual_effects != new_reduce_visual_effects or trail_max_points != new_trail_max_points
     simple_draw = new_simple_draw
@@ -133,6 +162,7 @@ func configure_visuals(new_simple_draw: bool, new_reduce_visual_effects: bool, n
     if simple_draw or trail_max_points <= 0:
         if trail_points.size() > 0:
             trail_points.clear()
+            _request_trail_redraw()
             changed = true
     else:
         while trail_points.size() > trail_max_points:
@@ -141,31 +171,38 @@ func configure_visuals(new_simple_draw: bool, new_reduce_visual_effects: bool, n
         if trail_points.size() == 0:
             trail_points.append(global_position)
             last_trail_position = global_position
+            _request_trail_redraw()
             changed = true
 
     if changed:
         queue_redraw()
 
 func _trail_sample_interval() -> float:
+    # v1.9.28：拖尾继续增强。
+    # 高画质/正常状态更接近每帧采样，中低画质也提高连续度；高压状态仍保留保护。
     if simple_draw:
         return 9999.0
     if reduce_visual_effects:
-        return 0.070
-    if trail_max_points <= 2:
-        return 0.050
-    return 0.033
+        return 0.045
+    if trail_max_points >= 12:
+        return 0.016
+    if trail_max_points >= 8:
+        return 0.018
+    if trail_max_points >= 5:
+        return 0.022
+    return 0.032
 
 func _trail_min_distance_sq() -> float:
     var radius: float = _visual_radius()
     if reduce_visual_effects:
-        return radius * radius * 0.64
-    return radius * radius * 0.25
+        return radius * radius * 0.25
+    return radius * radius * 0.035
 
 func _update_visual_trace(delta: float) -> void:
     if simple_draw or trail_max_points <= 0:
         if trail_points.size() > 0:
             trail_points.clear()
-            queue_redraw()
+            _request_trail_redraw()
         return
 
     trail_sample_timer -= delta
@@ -180,7 +217,7 @@ func _update_visual_trace(delta: float) -> void:
     last_trail_position = global_position
     while trail_points.size() > trail_max_points:
         trail_points.pop_back()
-    queue_redraw()
+    _request_trail_redraw()
 
 func _try_hit_enemy_turret() -> bool:
     for target_faction_id in target_turrets.keys():
@@ -206,15 +243,8 @@ func _draw() -> void:
     var base = GameConfig.faction_color(faction_id)
     var radius: float = _visual_radius()
 
-    if not simple_draw:
-        var trail_count: int = trail_points.size()
-        for i in range(trail_count - 1, -1, -1):
-            var world_point = trail_points[i]
-            var p = to_local(world_point)
-            var alpha_mul: float = 0.60 if reduce_visual_effects else 1.0
-            var alpha = (0.08 + 0.36 * (1.0 - float(i) / maxf(1.0, float(trail_count)))) * alpha_mul
-            var trail_r = radius * (0.45 + 0.45 * (1.0 - float(i) / maxf(1.0, float(trail_count))))
-            draw_circle(p, trail_r, Color(base.r, base.g, base.b, alpha))
+    # v1.9.29：拖尾已移到 BulletTrailLayer 统一绘制。
+    # 子弹节点自身只负责主体圆球，避免每颗子弹各自 queue_redraw()。
 
     if simple_draw:
         draw_circle(Vector2.ZERO, radius, base)

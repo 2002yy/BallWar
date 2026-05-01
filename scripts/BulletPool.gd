@@ -4,6 +4,7 @@ class_name BulletPool
 var inactive_bullets: Array = []
 var active_bullets: Array = []
 var visual_pressure_update_timer: float = 0.0
+var trail_layer
 const VISUAL_PRESSURE_UPDATE_INTERVAL: float = 0.25
 
 func _process(delta: float) -> void:
@@ -11,6 +12,11 @@ func _process(delta: float) -> void:
     if visual_pressure_update_timer <= 0.0:
         visual_pressure_update_timer = VISUAL_PRESSURE_UPDATE_INTERVAL
         update_visual_pressure()
+
+func set_trail_layer(new_trail_layer) -> void:
+    trail_layer = new_trail_layer
+    if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("setup"):
+        trail_layer.setup(self)
 
 func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, target_turrets: Dictionary = {}) -> Bullet:
     # 性能保护阀：
@@ -32,6 +38,8 @@ func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, targ
 
     var active_count: int = active_bullets.size()
     bullet.pool = self
+    if bullet.has_method("set_trail_layer"):
+        bullet.set_trail_layer(trail_layer)
     bullet.simple_draw = active_count >= GameConfig.get_force_simple_threshold()
     bullet.reduce_visual_effects = active_count >= GameConfig.get_high_pressure_threshold()
 
@@ -45,6 +53,8 @@ func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, targ
     bullet.setup(faction_id, pos, dir, battlefield, target_turrets)
     bullet.activate()
     active_bullets.append(bullet)
+    if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
+        trail_layer.request_trail_redraw()
     return bullet
 
 func update_visual_pressure() -> void:
@@ -71,6 +81,8 @@ func recycle_bullet(bullet: Bullet) -> void:
     if inactive_bullets.find(bullet) < 0:
         inactive_bullets.append(bullet)
     bullet.deactivate()
+    if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
+        trail_layer.request_trail_redraw()
 
 func clear_active() -> void:
     var copy: Array = active_bullets.duplicate()

@@ -10,13 +10,20 @@ static func create_battlefield(owner, game_layer: Node, grid_size: int, current_
     battlefield.scores_changed.connect(Callable(owner, "_on_scores_changed"))
     game_layer.add_child(battlefield)
 
+    var bullet_trail_layer = BulletTrailLayer.new()
+    bullet_trail_layer.name = "BulletTrailLayer"
+    bullet_trail_layer.z_index = 29
+    game_layer.add_child(bullet_trail_layer)
+
     var bullet_container = BulletPool.new()
     bullet_container.name = "BulletPool"
     game_layer.add_child(bullet_container)
+    bullet_container.set_trail_layer(bullet_trail_layer)
 
     return {
         "battlefield": battlefield,
         "bullet_container": bullet_container,
+        "bullet_trail_layer": bullet_trail_layer,
         "chamber_scale": current_layout.get("chamber_scale", 0.80),
     }
 

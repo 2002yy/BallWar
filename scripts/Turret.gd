@@ -28,6 +28,8 @@ var burst_timer: float = 0.0
 var burst_locked: bool = false
 var burst_index: int = 0
 var burst_origin_angle: float = 0.0
+var burst_progress_emit_timer: float = 0.0
+var burst_last_reported_remaining: int = -1
 
 func setup(new_faction_id: int, new_position: Vector2, new_battlefield, new_bullet_container) -> void:
     faction_id = new_faction_id
@@ -53,18 +55,24 @@ func _process(delta: float) -> void:
 
     if burst_remaining > 0 and not is_destroyed:
         burst_timer -= delta
+        burst_progress_emit_timer -= delta
         var shots_this_frame: int = 0
-        while burst_remaining > 0 and burst_timer <= 0.0 and shots_this_frame < GameConfig.BURST_MAX_SHOTS_PER_FRAME:
+        var frame_budget: int = _max_shots_this_frame()
+        while burst_remaining > 0 and burst_timer <= 0.0 and shots_this_frame < frame_budget:
             _spawn_bullet()
             burst_remaining -= 1
             burst_index += 1
             shots_this_frame += 1
-            burst_progress.emit(faction_id, burst_remaining)
             if burst_remaining > 0:
                 burst_timer += _next_burst_interval()
             else:
                 burst_total = 0
+                _emit_burst_progress(true)
                 _set_burst_locked(false)
+
+        if shots_this_frame > 0 and burst_remaining > 0:
+            _emit_burst_progress(false)
+
         if burst_remaining > 0 and burst_timer < -0.10:
             burst_timer = 0.0
 
@@ -102,15 +110,74 @@ func fire_burst(count: int) -> void:
     burst_timer = 0.0
     burst_index = 0
     burst_origin_angle = rotation
+    burst_progress_emit_timer = 0.0
+    burst_last_reported_remaining = burst_remaining
     burst_progress.emit(faction_id, burst_remaining)
     _set_burst_locked(true)
 
 func _next_burst_interval() -> float:
-    # v1.9.26：略微降低连发间隔，让大倍率发射更快完成；
-    # 同时在 _process 中有每帧发射上限，避免低 FPS 时一次补太多子弹。
-    var pulse_pattern: Array = [0.024, 0.028, 0.025, 0.032, 0.026, 0.030, 0.027, 0.034]
+    # v1.9.29：高倍率发射队列优化。
+    # 基础节拍保留 v1.9.28 的回调值；实际间隔会根据 FPS 和剩余队列自动放慢。
+    # 低 FPS 时不再硬追赶发射，避免生成/命中/回收集中在少数帧里把帧率压垮。
+    var pulse_pattern: Array = [0.028, 0.032, 0.030, 0.038, 0.031, 0.036, 0.033, 0.040]
     var idx: int = burst_index % pulse_pattern.size()
-    return pulse_pattern[idx]
+    return float(pulse_pattern[idx]) * _burst_interval_multiplier()
+
+func _burst_interval_multiplier() -> float:
+    var fps: int = Engine.get_frames_per_second()
+    var mul: float = 1.0
+
+    if fps > 0:
+        if fps < 12:
+            mul = 3.00
+        elif fps < 20:
+            mul = 2.25
+        elif fps < 30:
+            mul = 1.60
+        elif fps < 45:
+            mul = 1.20
+
+    if burst_remaining >= 1536:
+        mul *= 1.18
+    elif burst_remaining >= 768:
+        mul *= 1.10
+    elif burst_remaining >= 256:
+        mul *= 1.04
+
+    return clampf(mul, 1.0, 3.50)
+
+func _max_shots_this_frame() -> int:
+    var fps: int = Engine.get_frames_per_second()
+    if fps > 0:
+        if fps < 18:
+            return 1
+        if fps < 35:
+            return 2
+    return GameConfig.BURST_MAX_SHOTS_PER_FRAME
+
+func _emit_burst_progress(force: bool = false) -> void:
+    var gap: int = abs(burst_last_reported_remaining - burst_remaining)
+    var step: int = _burst_progress_emit_step()
+    if force or burst_progress_emit_timer <= 0.0 or gap >= step:
+        burst_last_reported_remaining = burst_remaining
+        burst_progress_emit_timer = _burst_progress_emit_interval()
+        burst_progress.emit(faction_id, burst_remaining)
+
+func _burst_progress_emit_interval() -> float:
+    if burst_remaining >= 1024:
+        return 0.14
+    if burst_remaining >= 256:
+        return 0.10
+    return 0.075
+
+func _burst_progress_emit_step() -> int:
+    if burst_remaining >= 1024:
+        return 32
+    if burst_remaining >= 256:
+        return 16
+    if burst_remaining >= 64:
+        return 8
+    return 1
 
 func _set_burst_locked(locked: bool) -> void:
     if burst_locked == locked:
@@ -123,10 +190,11 @@ func _spawn_bullet() -> void:
         return
 
     var shot_angle: float = _current_burst_shot_angle()
-    var shot_direction: Vector2 = Vector2.RIGHT.rotated(shot_angle)
-    var lateral_wave: float = sin(float(burst_index) * 0.75) * 2.8
-    var lateral: Vector2 = Vector2.RIGHT.rotated(shot_angle + PI * 0.5) * lateral_wave
-    var spawn_position: Vector2 = global_position + shot_direction * 21.0 + lateral
+    var shot_direction: Vector2 = Vector2.RIGHT.rotated(shot_angle).normalized()
+    # v1.9.27：子弹方向与当前可见炮管方向完全一致。
+    # 移除 lateral_wave 出生点横向摆动，避免炮口方向与弹道看起来不一致。
+    var muzzle_distance: float = GameConfig.TURRET_RADIUS + 17.0
+    var spawn_position: Vector2 = global_position + shot_direction * muzzle_distance
 
     if bullet_container.has_method("spawn_bullet"):
         bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
@@ -158,6 +226,8 @@ func _destroy() -> void:
     destroy_anim_time = 0.0
     burst_remaining = 0
     burst_total = 0
+    burst_last_reported_remaining = 0
+    burst_progress_emit_timer = 0.0
     burst_progress.emit(faction_id, 0)
     _set_burst_locked(false)
     destroyed.emit(faction_id)

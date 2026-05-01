@@ -49,7 +49,10 @@ static func get_perf_debug_text(bullet_container, battlefield, selected_grid_siz
     var max_active: int = GameConfig.get_max_active_bullets()
     var burst_queue: int = get_burst_queue_count(turrets)
     var grid_value: int = battlefield.grid_size if battlefield != null and is_instance_valid(battlefield) else selected_grid_size
-    return "FPS %d | 子弹 %d/%d | 队列 %d | 画质 %s | 地图 %d×%d | 压力 %s" % [
+    var redraw_text: String = "--刷/--格"
+    if battlefield != null and is_instance_valid(battlefield) and battlefield.has_method("get_redraw_debug_text"):
+        redraw_text = str(battlefield.get_redraw_debug_text())
+    return "FPS %d | 子弹 %d/%d | 队列 %d | 画质 %s | 地图 %d×%d | 战场 %s | 压力 %s" % [
         Engine.get_frames_per_second(),
         active_count,
         max_active,
@@ -57,6 +60,7 @@ static func get_perf_debug_text(bullet_container, battlefield, selected_grid_siz
         GameConfig.get_quality_name(),
         grid_value,
         grid_value,
+        redraw_text,
         get_pressure_label(active_count, burst_queue),
     ]
 

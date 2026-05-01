@@ -127,12 +127,12 @@ static func create_runtime_ui(owner, game_layer: Node, _battlefield, current_lay
     var winner_label = UIFactory.make_outline_label(Vector2(0, current_layout.get("winner_y", 648.0)), Vector2(view_size.x, 34), "", 28, Color(1.0, 0.94, 0.22), HORIZONTAL_ALIGNMENT_CENTER, 5)
     ui_canvas.add_child(winner_label)
 
-    var fps_bg = UIFactory.make_fill_rect(current_layout.get("fps_bg_pos", Vector2(486.0, 652.0)), current_layout.get("fps_bg_size", Vector2(624.0, 30.0)), Color(0.0, 0.0, 0.0, 0.42 if not mobile_mode else 0.20))
+    var fps_bg = UIFactory.make_fill_rect(current_layout.get("fps_bg_pos", Vector2(396.0, 652.0)), current_layout.get("fps_bg_size", Vector2(714.0, 30.0)), Color(0.0, 0.0, 0.0, 0.42 if not mobile_mode else 0.20))
     fps_bg.process_mode = Node.PROCESS_MODE_ALWAYS
     fps_bg.visible = not mobile_mode
     ui_canvas.add_child(fps_bg)
 
-    var fps_label = UIFactory.make_outline_label(current_layout.get("fps_label_pos", Vector2(492.0, 649.0)), current_layout.get("fps_label_size", Vector2(612.0, 24.0)), "FPS -- | 子弹 -- | 队列 -- | 画质 -- | 地图 -- | 压力 --", 15 if not mobile_mode else 14, Color(0.72, 1.0, 0.72), HORIZONTAL_ALIGNMENT_RIGHT, 3)
+    var fps_label = UIFactory.make_outline_label(current_layout.get("fps_label_pos", Vector2(402.0, 649.0)), current_layout.get("fps_label_size", Vector2(702.0, 24.0)), "FPS -- | 子弹 -- | 队列 -- | 画质 -- | 地图 -- | 战场 -- | 压力 --", 13 if not mobile_mode else 13, Color(0.72, 1.0, 0.72), HORIZONTAL_ALIGNMENT_RIGHT, 3)
     fps_label.process_mode = Node.PROCESS_MODE_ALWAYS
     fps_label.visible = not mobile_mode
     ui_canvas.add_child(fps_label)

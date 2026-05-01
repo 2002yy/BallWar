@@ -6,7 +6,7 @@ const CELL_SIZE = 13
 
 const BULLET_SPEED = 108.0
 const BULLET_RADIUS = 5.0
-const BULLET_MAX_LIFETIME = 30.0
+const BULLET_MAX_LIFETIME = 60.0
 
 const TURRET_RADIUS = 18.0
 const TURRET_MAX_HEALTH = 30
@@ -17,7 +17,7 @@ const BULLET_DAMAGE = 1
 const MAX_PENDING_COUNT = 2048
 const MAX_CONTROL_BALLS_PER_CHAMBER = 8
 const MAX_ACTIVE_BULLETS = 6000
-const BURST_FIRE_INTERVAL = 0.036
+const BURST_FIRE_INTERVAL = 0.040
 const BURST_MAX_SHOTS_PER_FRAME = 3
 
 
@@ -90,19 +90,34 @@ static func get_force_simple_threshold() -> int:
             return 1800
 
 static func get_normal_trail_points() -> int:
+    # v1.9.28：继续增强拖尾可视度。
+    # 低/中/高都保留更长的正常拖尾，高画质接近早期“长尾”观感。
     match _quality_name:
         "低":
-            return 2
+            return 5
         "高":
-            return 6
+            return 16
         _:
-            return 4
+            return 9
 
 static func get_mid_trail_points() -> int:
-    return 2
+    # 中压不再立刻压到 2 点，否则拖尾视觉会突然消失。
+    match _quality_name:
+        "低":
+            return 3
+        "高":
+            return 8
+        _:
+            return 5
 
 static func get_high_trail_points() -> int:
-    return 1
+    match _quality_name:
+        "低":
+            return 1
+        "高":
+            return 3
+        _:
+            return 2
 
 static func get_grid_line_alpha() -> float:
     match _quality_name:
