@@ -127,12 +127,12 @@ static func create_runtime_ui(owner, game_layer: Node, _battlefield, current_lay
     var winner_label = UIFactory.make_outline_label(Vector2(0, current_layout.get("winner_y", 648.0)), Vector2(view_size.x, 34), "", 28, Color(1.0, 0.94, 0.22), HORIZONTAL_ALIGNMENT_CENTER, 5)
     ui_canvas.add_child(winner_label)
 
-    var fps_bg = UIFactory.make_fill_rect(current_layout.get("fps_bg_pos", Vector2(640.0, 652.0)), current_layout.get("fps_bg_size", Vector2(478.0, 30.0)), Color(0.0, 0.0, 0.0, 0.42 if not mobile_mode else 0.20))
+    var fps_bg = UIFactory.make_fill_rect(current_layout.get("fps_bg_pos", Vector2(486.0, 652.0)), current_layout.get("fps_bg_size", Vector2(624.0, 30.0)), Color(0.0, 0.0, 0.0, 0.42 if not mobile_mode else 0.20))
     fps_bg.process_mode = Node.PROCESS_MODE_ALWAYS
     fps_bg.visible = not mobile_mode
     ui_canvas.add_child(fps_bg)
 
-    var fps_label = UIFactory.make_outline_label(current_layout.get("fps_label_pos", Vector2(646.0, 649.0)), current_layout.get("fps_label_size", Vector2(466.0, 24.0)), "FPS -- | 子弹 -- | 画质 -- | 地图 -- | 压力 --", 15 if not mobile_mode else 14, Color(0.72, 1.0, 0.72), HORIZONTAL_ALIGNMENT_RIGHT, 3)
+    var fps_label = UIFactory.make_outline_label(current_layout.get("fps_label_pos", Vector2(492.0, 649.0)), current_layout.get("fps_label_size", Vector2(612.0, 24.0)), "FPS -- | 子弹 -- | 队列 -- | 画质 -- | 地图 -- | 压力 --", 15 if not mobile_mode else 14, Color(0.72, 1.0, 0.72), HORIZONTAL_ALIGNMENT_RIGHT, 3)
     fps_label.process_mode = Node.PROCESS_MODE_ALWAYS
     fps_label.visible = not mobile_mode
     ui_canvas.add_child(fps_label)
@@ -213,7 +213,8 @@ static func create_control_buttons(owner, game_layer: Node, chambers: Dictionary
         button.position.y = clampf(button.position.y, 64.0, view_size.y - button.size.y - 12.0)
 
         add_ball_button_base_positions[faction_id] = button.position
-        button.text = "+球"
+        button.display_text = "+球"
+        button.text = ""
         button.pressed.connect(Callable(owner, "_add_ball_to_chamber").bind(faction_id))
         canvas.add_child(button)
         add_ball_buttons[faction_id] = button

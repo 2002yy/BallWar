@@ -18,12 +18,13 @@ var display_text: String = "+球"
 func _ready() -> void:
     flat = true
     clip_contents = false
+    text = ""
     mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 func set_button_status(state_name: String, new_text: String = "") -> void:
     if new_text != "":
         display_text = new_text
-        text = new_text
+    text = ""
 
     match state_name:
         "locked":
@@ -60,7 +61,7 @@ func _draw() -> void:
     var outer: Rect2 = rect.grow(-1.0)
     var shell: Rect2 = rect.grow(-3.0)
     var core: Rect2 = rect.grow(-6.0)
-    var icon_center: Vector2 = Vector2(18.0, size.y * 0.5)
+    var icon_center: Vector2 = Vector2(clampf(size.x * 0.22, 15.0, 19.0), size.y * 0.5)
 
     var border_color: Color = Color(base.r, base.g, base.b, 0.44)
     var fill_color: Color = base.lightened(0.08)
@@ -127,5 +128,11 @@ func _draw() -> void:
 
     var final_text: String = display_text if display_text != "" else "+球"
     var font = ThemeDB.fallback_font
-    draw_string_outline(font, Vector2(34.0, size.y * 0.5 + 6.0), final_text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 40.0, 18, 2, Color(0.0, 0.0, 0.0, 0.90))
-    draw_string(font, Vector2(34.0, size.y * 0.5 + 6.0), final_text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 40.0, 18, label_color)
+    var font_size: int = 17
+    if size.x < 80.0:
+        font_size = 15
+    var text_x: float = icon_center.x + 14.0
+    var text_width: float = maxf(28.0, size.x - text_x - 5.0)
+    var baseline_y: float = size.y * 0.5 + float(font_size) * 0.36
+    draw_string_outline(font, Vector2(text_x, baseline_y), final_text, HORIZONTAL_ALIGNMENT_LEFT, text_width, font_size, 2, Color(0.0, 0.0, 0.0, 0.90))
+    draw_string(font, Vector2(text_x, baseline_y), final_text, HORIZONTAL_ALIGNMENT_LEFT, text_width, font_size, label_color)

@@ -80,7 +80,7 @@ func _process(delta: float) -> void:
     if perf_debug_update_timer <= 0.0:
         perf_debug_update_timer = PERF_DEBUG_UPDATE_INTERVAL
         if fps_label != null and is_instance_valid(fps_label):
-            fps_label.text = RuntimeHudController.get_perf_debug_text(bullet_container, battlefield, selected_grid_size)
+            fps_label.text = RuntimeHudController.get_perf_debug_text(bullet_container, battlefield, selected_grid_size, turrets)
 
     hud_meta_update_timer -= delta
     if hud_meta_update_timer <= 0.0:

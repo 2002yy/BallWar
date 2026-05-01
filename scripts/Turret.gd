@@ -53,16 +53,20 @@ func _process(delta: float) -> void:
 
     if burst_remaining > 0 and not is_destroyed:
         burst_timer -= delta
-        if burst_timer <= 0.0:
+        var shots_this_frame: int = 0
+        while burst_remaining > 0 and burst_timer <= 0.0 and shots_this_frame < GameConfig.BURST_MAX_SHOTS_PER_FRAME:
             _spawn_bullet()
             burst_remaining -= 1
             burst_index += 1
+            shots_this_frame += 1
             burst_progress.emit(faction_id, burst_remaining)
             if burst_remaining > 0:
-                burst_timer = _next_burst_interval()
+                burst_timer += _next_burst_interval()
             else:
                 burst_total = 0
                 _set_burst_locked(false)
+        if burst_remaining > 0 and burst_timer < -0.10:
+            burst_timer = 0.0
 
     if damage_flash > 0.0:
         damage_flash = maxf(0.0, damage_flash - delta * 3.0)
@@ -102,7 +106,9 @@ func fire_burst(count: int) -> void:
     _set_burst_locked(true)
 
 func _next_burst_interval() -> float:
-    var pulse_pattern: Array = [0.030, 0.036, 0.032, 0.042, 0.031, 0.037, 0.033, 0.044]
+    # v1.9.26：略微降低连发间隔，让大倍率发射更快完成；
+    # 同时在 _process 中有每帧发射上限，避免低 FPS 时一次补太多子弹。
+    var pulse_pattern: Array = [0.024, 0.028, 0.025, 0.032, 0.026, 0.030, 0.027, 0.034]
     var idx: int = burst_index % pulse_pattern.size()
     return pulse_pattern[idx]
 

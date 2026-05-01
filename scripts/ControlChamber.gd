@@ -66,7 +66,7 @@ var status_anim_t: float = 0.0
 var visual_redraw_timer: float = 0.0
 
 const NORMAL_REDRAW_INTERVAL: float = 0.25
-const LOCKED_REDRAW_INTERVAL: float = 0.050
+const LOCKED_REDRAW_INTERVAL: float = 0.080
 const DAMAGED_REDRAW_INTERVAL: float = 0.080
 
 func setup(new_faction_id: int, new_position: Vector2) -> void:

@@ -21,23 +21,43 @@ static func get_active_bullet_count(bullet_container) -> int:
         return int(bullet_container.get_active_count())
     return bullet_container.get_child_count()
 
-static func get_bullet_pressure_level(bullet_container) -> String:
-    if bullet_container != null and is_instance_valid(bullet_container) and bullet_container.has_method("get_pressure_level"):
-        return str(bullet_container.get_pressure_level())
-    return "--"
+static func get_burst_queue_count(turrets: Dictionary) -> int:
+    var total: int = 0
+    for turret in turrets.values():
+        if turret != null and is_instance_valid(turret):
+            total += int(turret.get("burst_remaining"))
+    return total
 
-static func get_perf_debug_text(bullet_container, battlefield, selected_grid_size: int) -> String:
+static func get_pressure_label(active_count: int, burst_queue: int) -> String:
+    var fps: int = Engine.get_frames_per_second()
+    if active_count >= GameConfig.get_force_simple_threshold():
+        return "极高"
+    if active_count >= GameConfig.get_high_pressure_threshold():
+        return "高"
+    if active_count >= GameConfig.get_mid_pressure_threshold():
+        return "中"
+    if burst_queue >= 1024:
+        return "队列高"
+    if burst_queue >= 256:
+        return "队列中"
+    if fps > 0 and fps < 24:
+        return "帧低"
+    return "低"
+
+static func get_perf_debug_text(bullet_container, battlefield, selected_grid_size: int, turrets: Dictionary = {}) -> String:
     var active_count: int = get_active_bullet_count(bullet_container)
     var max_active: int = GameConfig.get_max_active_bullets()
+    var burst_queue: int = get_burst_queue_count(turrets)
     var grid_value: int = battlefield.grid_size if battlefield != null and is_instance_valid(battlefield) else selected_grid_size
-    return "FPS %d | 子弹 %d/%d | 画质 %s | 地图 %d×%d | 压力 %s" % [
+    return "FPS %d | 子弹 %d/%d | 队列 %d | 画质 %s | 地图 %d×%d | 压力 %s" % [
         Engine.get_frames_per_second(),
         active_count,
         max_active,
+        burst_queue,
         GameConfig.get_quality_name(),
         grid_value,
         grid_value,
-        get_bullet_pressure_level(bullet_container),
+        get_pressure_label(active_count, burst_queue),
     ]
 
 static func update_meta(timer_label, stage_label, leader_label, current_score_counts: Dictionary, game_elapsed_time: float) -> void:
