@@ -53,9 +53,9 @@ func rebuild_owner_counts() -> void:
     owner_counts = {0: 0, 1: 0, 2: 0, 3: 0}
     for x in range(grid_size):
         for y in range(grid_size):
-            var owner: int = clampi(int(owners[x][y]), 0, 3)
-            owners[x][y] = owner
-            owner_counts[owner] += 1
+            var cell_owner: int = clampi(int(owners[x][y]), 0, 3)
+            owners[x][y] = cell_owner
+            owner_counts[cell_owner] += 1
 
 func world_to_cell(world_position: Vector2) -> Vector2i:
     var lp: Vector2 = to_local(world_position)

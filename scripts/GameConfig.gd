@@ -11,6 +11,7 @@ const BULLET_MAX_LIFETIME = 12.0
 const TURRET_RADIUS = 18.0
 const TURRET_MAX_HEALTH = 30
 const TURRET_HIT_RADIUS = 24.0
+const TURRET_HIT_CHECK_INTERVAL = 0.055
 const BULLET_DAMAGE = 1
 
 const MAX_PENDING_COUNT = 2048
@@ -36,20 +37,20 @@ static func get_quality_name() -> String:
 static func get_max_active_bullets() -> int:
     match _quality_name:
         "低":
-            return 2200
+            return 1800
         "高":
             return MAX_ACTIVE_BULLETS
         _:
-            return 4200
+            return 2800
 
 static func get_restore_bullet_limit() -> int:
     match _quality_name:
         "低":
-            return 1200
+            return 1000
         "高":
             return MAX_ACTIVE_BULLETS
         _:
-            return 3500
+            return 2600
 
 static func get_restore_per_frame() -> int:
     match _quality_name:
@@ -63,41 +64,41 @@ static func get_restore_per_frame() -> int:
 static func get_mid_pressure_threshold() -> int:
     match _quality_name:
         "低":
-            return 500
+            return 360
         "高":
-            return 1000
+            return 800
         _:
-            return 850
+            return 600
 
 static func get_high_pressure_threshold() -> int:
     match _quality_name:
         "低":
-            return 1200
+            return 900
         "高":
-            return 2500
-        _:
             return 1800
+        _:
+            return 1200
 
 static func get_force_simple_threshold() -> int:
     match _quality_name:
         "低":
-            return 1800
+            return 1200
         "高":
-            return 5000
+            return 3600
         _:
-            return 3200
+            return 1800
 
 static func get_normal_trail_points() -> int:
     match _quality_name:
         "低":
-            return 3
+            return 2
         "高":
-            return 8
-        _:
             return 6
+        _:
+            return 4
 
 static func get_mid_trail_points() -> int:
-    return 3
+    return 2
 
 static func get_high_trail_points() -> int:
     return 1

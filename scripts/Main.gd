@@ -75,7 +75,7 @@ func _process(delta: float) -> void:
                 chamber.set_game_elapsed_time(game_elapsed_time)
 
     if fps_label != null and is_instance_valid(fps_label):
-        fps_label.text = "FPS %d" % Engine.get_frames_per_second()
+        fps_label.text = _get_perf_debug_text()
 
     _update_hud_meta()
 
@@ -134,9 +134,34 @@ func _detect_mobile_layout() -> bool:
 
 func _format_time_text(seconds: float) -> String:
     var total_seconds: int = maxi(0, int(floor(seconds)))
-    var mm: int = total_seconds / 60
+    var mm: int = floori(float(total_seconds) / 60.0)
     var ss: int = total_seconds % 60
     return "%02d:%02d" % [mm, ss]
+
+func _get_active_bullet_count() -> int:
+    if bullet_container == null or not is_instance_valid(bullet_container):
+        return 0
+    if bullet_container.has_method("get_active_count"):
+        return int(bullet_container.get_active_count())
+    return bullet_container.get_child_count()
+
+func _get_bullet_pressure_level() -> String:
+    if bullet_container != null and is_instance_valid(bullet_container) and bullet_container.has_method("get_pressure_level"):
+        return str(bullet_container.get_pressure_level())
+    return "--"
+
+func _get_perf_debug_text() -> String:
+    var active_count: int = _get_active_bullet_count()
+    var max_active: int = GameConfig.get_max_active_bullets()
+    var grid_value: int = battlefield.grid_size if battlefield != null and is_instance_valid(battlefield) else selected_grid_size
+    return "FPS %d | active %d/%d | quality %s | grid %d | pressure %s" % [
+        Engine.get_frames_per_second(),
+        active_count,
+        max_active,
+        GameConfig.get_quality_name(),
+        grid_value,
+        _get_bullet_pressure_level(),
+    ]
 
 func _current_stage_name() -> String:
     if game_elapsed_time < 120.0:
@@ -785,12 +810,12 @@ func _create_ui() -> void:
     winner_label = UIFactory.make_outline_label(Vector2(0, current_layout.get("winner_y", 648.0)), Vector2(VIEW_W, 34), "", 28, Color(1.0, 0.94, 0.22), HORIZONTAL_ALIGNMENT_CENTER, 5)
     ui_canvas.add_child(winner_label)
 
-    var fps_bg = UIFactory.make_fill_rect(current_layout.get("fps_bg_pos", Vector2(846.0, 652.0)), current_layout.get("fps_bg_size", Vector2(184.0, 30.0)), Color(0.0, 0.0, 0.0, 0.42 if not mobile_mode else 0.20))
+    var fps_bg = UIFactory.make_fill_rect(current_layout.get("fps_bg_pos", Vector2(640.0, 652.0)), current_layout.get("fps_bg_size", Vector2(478.0, 30.0)), Color(0.0, 0.0, 0.0, 0.42 if not mobile_mode else 0.20))
     fps_bg.process_mode = Node.PROCESS_MODE_ALWAYS
     fps_bg.visible = not mobile_mode
     ui_canvas.add_child(fps_bg)
 
-    fps_label = UIFactory.make_outline_label(current_layout.get("fps_label_pos", Vector2(852.0, 649.0)), current_layout.get("fps_label_size", Vector2(172.0, 24.0)), "FPS --", 18 if not mobile_mode else 14, Color(0.72, 1.0, 0.72), HORIZONTAL_ALIGNMENT_RIGHT, 3)
+    fps_label = UIFactory.make_outline_label(current_layout.get("fps_label_pos", Vector2(646.0, 649.0)), current_layout.get("fps_label_size", Vector2(466.0, 24.0)), "FPS -- | active -- | quality -- | grid --", 15 if not mobile_mode else 14, Color(0.72, 1.0, 0.72), HORIZONTAL_ALIGNMENT_RIGHT, 3)
     fps_label.process_mode = Node.PROCESS_MODE_ALWAYS
     fps_label.visible = not mobile_mode
     ui_canvas.add_child(fps_label)
@@ -1277,7 +1302,7 @@ func _save_game_progress() -> void:
         })
 
     var data: Dictionary = {
-        "save_version": "1.9.19",
+        "save_version": "1.9.20",
         "grid_size": battlefield.grid_size,
         "palette_name": GameConfig.get_palette_name(),
         "quality_name": GameConfig.get_quality_name(),

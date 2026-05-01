@@ -14,6 +14,7 @@ var pool
 var is_active: bool = false
 var simple_draw: bool = false
 var reduce_visual_effects: bool = false
+var turret_hit_check_timer: float = 0.0
 
 func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, new_battlefield, new_target_turrets = {}) -> void:
     faction_id = new_faction_id
@@ -26,6 +27,7 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
     speed = GameConfig.BULLET_SPEED
     last_cell = Vector2i(-999, -999)
     age = 0.0
+    turret_hit_check_timer = 0.0
     trail_points.clear()
     trail_points.append(global_position)
     queue_redraw()
@@ -101,9 +103,12 @@ func _physics_process(delta: float) -> void:
         trail_points.pop_back()
     queue_redraw()
 
-    if _try_hit_enemy_turret():
-        _despawn()
-        return
+    turret_hit_check_timer -= delta
+    if turret_hit_check_timer <= 0.0:
+        turret_hit_check_timer = GameConfig.TURRET_HIT_CHECK_INTERVAL
+        if _try_hit_enemy_turret():
+            _despawn()
+            return
 
     var cell = battlefield.world_to_cell(global_position)
     if not battlefield.is_inside(cell):
@@ -126,7 +131,8 @@ func _try_hit_enemy_turret() -> bool:
             continue
         if turret.is_destroyed:
             continue
-        if global_position.distance_to(turret.global_position) <= GameConfig.TURRET_HIT_RADIUS:
+        var hit_radius_sq: float = GameConfig.TURRET_HIT_RADIUS * GameConfig.TURRET_HIT_RADIUS
+        if global_position.distance_squared_to(turret.global_position) <= hit_radius_sq:
             turret.take_damage(GameConfig.BULLET_DAMAGE)
             return true
     return false

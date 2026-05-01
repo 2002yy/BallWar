@@ -62,7 +62,7 @@ func get_active_bullets() -> Array:
     return result
 
 func get_active_count() -> int:
-    return get_active_bullets().size()
+    return active_bullets.size()
 
 func get_pressure_level() -> String:
     var active_count: int = active_bullets.size()
