@@ -15,7 +15,7 @@ static func current_stage_name(game_elapsed_time: float) -> String:
         var remain: float = maxf(0.0, GameConfig.get_time_limit_seconds() - game_elapsed_time)
         return "限时 %s" % format_time_text(remain)
     if mode_name == GameConfig.GAME_MODE_WILD:
-        return "狂野模式"
+        return "狂野 x3｜上限 %d" % GameConfig.get_max_pending_count()
 
     if game_elapsed_time < 120.0:
         return "前期扩张"

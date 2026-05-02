@@ -105,7 +105,7 @@ func fire_burst(count: int) -> void:
     if burst_remaining > 0:
         return
 
-    burst_remaining = clampi(count, 1, GameConfig.MAX_PENDING_COUNT)
+    burst_remaining = clampi(count, 1, GameConfig.get_max_pending_count())
     burst_total = burst_remaining
     burst_timer = 0.0
     burst_index = 0

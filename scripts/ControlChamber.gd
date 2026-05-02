@@ -365,7 +365,7 @@ func _physics_process(delta: float) -> void:
                 break
 
 func _on_left_gate(ball) -> void:
-    pending_count = clampi(pending_count * 2, 1, GameConfig.MAX_PENDING_COUNT)
+    pending_count = clampi(pending_count * GameConfig.get_gate_multiplier(), 1, GameConfig.get_max_pending_count())
     _update_label()
     _relaunch_control_ball(ball)
 
@@ -577,7 +577,7 @@ func _draw() -> void:
         draw_rect(right_rect.grow(2.0), Color(1.0, 0.64, 0.16, 0.08), false, 1.0)
 
     var font = ThemeDB.fallback_font
-    draw_string(font, Vector2(maxf(6.0, x2_width * 0.5 - 13.0), chamber_size.y - 13), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color.BLACK)
+    draw_string(font, Vector2(maxf(6.0, x2_width * 0.5 - 13.0), chamber_size.y - 13), "x%d" % GameConfig.get_gate_multiplier(), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color.BLACK)
     draw_string(font, Vector2(x2_width + maxf(4.0, (chamber_size.x - x2_width) * 0.5 - 16.0), chamber_size.y - 13), "发射", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
 
     if is_damaged:

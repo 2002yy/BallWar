@@ -2,7 +2,9 @@ extends Node2D
 
 const VIEW_W: float = 1120.0
 const VIEW_H: float = 720.0
-const SAVE_PATH: String = "user://ballwar_save.json"
+const LEGACY_SAVE_PATH: String = "user://ballwar_save.json"
+const SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.json"
+const SAVE_SLOT_COUNT: int = 5
 const SAVE_MAJOR_PREFIX: String = "1.9"
 const MAX_RESTORE_CONTROL_BALLS: int = 8
 const MAX_RESTORE_TRAIL_POINTS: int = 3
@@ -41,6 +43,8 @@ var selected_grid_size: int = 40
 var selected_palette_name: String = "默认随机"
 var selected_quality_name: String = "中"
 var selected_game_mode_name: String = GameConfig.GAME_MODE_BASIC
+var selected_time_limit_minutes: int = GameConfig.DEFAULT_TIMED_MODE_MINUTES
+var selected_save_slot: int = 1
 var current_layout: Dictionary = {}
 var game_elapsed_time: float = 0.0
 var is_game_over: bool = false
@@ -48,6 +52,7 @@ var is_game_over: bool = false
 var menu_title_label
 var menu_start_button
 var menu_continue_button
+var menu_save_slot_buttons: Dictionary = {}
 var menu_status_label
 var ui_time: float = 0.0
 var chamber_scale: float = 1.0
@@ -123,11 +128,12 @@ func _create_start_menu() -> void:
     if menu_layer != null:
         menu_layer.queue_free()
 
-    var menu_nodes: Dictionary = StartMenuView.create(self, Vector2(VIEW_W, VIEW_H), _has_save_file())
+    var menu_nodes: Dictionary = StartMenuView.create(self, Vector2(VIEW_W, VIEW_H), _get_save_slot_summaries())
     menu_layer = menu_nodes.get("menu_layer", null)
     menu_title_label = menu_nodes.get("menu_title_label", null)
     menu_start_button = menu_nodes.get("menu_start_button", null)
     menu_continue_button = menu_nodes.get("menu_continue_button", null)
+    menu_save_slot_buttons = menu_nodes.get("menu_save_slot_buttons", {})
     menu_status_label = menu_nodes.get("menu_status_label", null)
 
 func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool = true) -> void:
@@ -137,11 +143,14 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
     game_elapsed_time = 0.0
     is_game_over = false
 
-    if clear_save and _has_save_file():
-        DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+    if clear_save and _has_save_file(selected_save_slot):
+        DirAccess.remove_absolute(ProjectSettings.globalize_path(_get_save_path(selected_save_slot)))
+        if selected_save_slot == 1 and FileAccess.file_exists(LEGACY_SAVE_PATH):
+            DirAccess.remove_absolute(ProjectSettings.globalize_path(LEGACY_SAVE_PATH))
 
     GameConfig.set_quality_by_name(selected_quality_name)
     GameConfig.set_game_mode_by_name(selected_game_mode_name)
+    GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
 
     if selected_palette_name == "默认随机":
         GameConfig.set_random_palette()
@@ -416,6 +425,7 @@ func _cleanup_menu() -> void:
     menu_title_label = null
     menu_start_button = null
     menu_continue_button = null
+    menu_save_slot_buttons.clear()
     menu_status_label = null
 
 func _cleanup_game_layer() -> void:
@@ -447,8 +457,37 @@ func _cleanup_game_layer() -> void:
     top_bar_labels.clear()
     top_bar_name_labels.clear()
 
-func _has_save_file() -> bool:
-    return FileAccess.file_exists(SAVE_PATH)
+func _get_save_path(slot_index: int) -> String:
+    return SAVE_PATH_TEMPLATE % clampi(slot_index, 1, SAVE_SLOT_COUNT)
+
+func _has_save_file(slot_index: int = -1) -> bool:
+    var slot: int = selected_save_slot if slot_index < 1 else clampi(slot_index, 1, SAVE_SLOT_COUNT)
+    if FileAccess.file_exists(_get_save_path(slot)):
+        return true
+    return slot == 1 and FileAccess.file_exists(LEGACY_SAVE_PATH)
+
+func _get_save_slot_summaries() -> Array:
+    var result: Array = []
+    for slot in range(1, SAVE_SLOT_COUNT + 1):
+        var data: Dictionary = _load_saved_data(slot, true)
+        var has_data: bool = not data.is_empty()
+        var title: String = "空存档"
+        var detail: String = "点击选择此槽"
+        if has_data:
+            var grid_size: int = LayoutProfiles.sanitize_grid_size(data.get("grid_size", 40))
+            var mode_name: String = str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
+            var quality_name: String = str(data.get("quality_name", "中"))
+            var elapsed: float = maxf(0.0, float(data.get("game_elapsed_time", 0.0)))
+            var version: String = str(data.get("save_version", ""))
+            title = "%s｜%d×%d｜%s" % [mode_name, grid_size, grid_size, quality_name]
+            detail = "进度 %s｜版本 %s" % [RuntimeHudController.format_time_text(elapsed), version]
+        result.append({
+            "slot": slot,
+            "has_data": has_data,
+            "title": title,
+            "detail": detail,
+        })
+    return result
 
 func _clear_bullets() -> void:
     if bullet_container == null:
@@ -548,11 +587,13 @@ func _save_game_progress() -> void:
         })
 
     var data: Dictionary = {
-        "save_version": "1.9.30",
+        "save_version": "1.9.31",
+        "save_slot": selected_save_slot,
         "grid_size": battlefield.grid_size,
         "palette_name": GameConfig.get_palette_name(),
         "quality_name": GameConfig.get_quality_name(),
         "game_mode_name": GameConfig.get_game_mode_name(),
+        "time_limit_minutes": GameConfig.get_time_limit_minutes(),
         "owners": battlefield.owners,
         "game_elapsed_time": game_elapsed_time,
         "is_game_over": is_game_over,
@@ -561,15 +602,22 @@ func _save_game_progress() -> void:
         "winner_text": winner_label.text if winner_label != null else "",
     }
 
-    var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+    var file = FileAccess.open(_get_save_path(selected_save_slot), FileAccess.WRITE)
     if file != null:
         file.store_string(JSON.stringify(data))
 
 
-func _load_saved_data() -> Dictionary:
-    if not _has_save_file():
-        return {}
-    var file = FileAccess.open(SAVE_PATH, FileAccess.READ)
+func _load_saved_data(slot_index: int = -1, allow_legacy: bool = true) -> Dictionary:
+    var slot: int = selected_save_slot if slot_index < 1 else clampi(slot_index, 1, SAVE_SLOT_COUNT)
+    var path: String = _get_save_path(slot)
+
+    if not FileAccess.file_exists(path):
+        if allow_legacy and slot == 1 and FileAccess.file_exists(LEGACY_SAVE_PATH):
+            path = LEGACY_SAVE_PATH
+        else:
+            return {}
+
+    var file = FileAccess.open(path, FileAccess.READ)
     if file == null:
         return {}
     var content: String = file.get_as_text()
@@ -577,6 +625,32 @@ func _load_saved_data() -> Dictionary:
     if typeof(parsed) == TYPE_DICTIONARY:
         return parsed
     return {}
+
+func _select_save_slot(slot_index: int) -> void:
+    selected_save_slot = clampi(slot_index, 1, SAVE_SLOT_COUNT)
+    if _has_save_file(selected_save_slot):
+        _show_menu_status("已选择存档槽 %d，可继续或覆盖开始" % selected_save_slot)
+    else:
+        _show_menu_status("已选择空存档槽 %d，新游戏会保存在这里" % selected_save_slot)
+    _refresh_menu_save_slots()
+
+func _refresh_menu_save_slots() -> void:
+    if menu_save_slot_buttons.is_empty():
+        return
+    for summary in _get_save_slot_summaries():
+        if not (summary is Dictionary):
+            continue
+        var slot: int = int(summary.get("slot", 1))
+        if not menu_save_slot_buttons.has(slot):
+            continue
+        var button: Button = menu_save_slot_buttons[slot] as Button
+        var marker: String = "▶ " if slot == selected_save_slot else ""
+        var title: String = str(summary.get("title", "空存档"))
+        button.text = "%s槽%d  %s" % [marker, slot, title]
+        button.self_modulate = Color(0.28, 0.54, 0.88) if slot == selected_save_slot else Color(0.16, 0.22, 0.32)
+    if menu_continue_button != null and is_instance_valid(menu_continue_button):
+        menu_continue_button.disabled = not _has_save_file(selected_save_slot)
+        menu_continue_button.text = "读取槽%d" % selected_save_slot
 
 func _show_menu_status(message: String) -> void:
     if menu_status_label != null and is_instance_valid(menu_status_label):
@@ -596,6 +670,11 @@ func _continue_saved_game() -> void:
         push_warning("存档版本不兼容，已拒绝读取：%s" % save_version)
         return
 
+    selected_game_mode_name = str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
+    selected_time_limit_minutes = clampi(int(data.get("time_limit_minutes", GameConfig.DEFAULT_TIMED_MODE_MINUTES)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)
+    GameConfig.set_game_mode_by_name(selected_game_mode_name)
+    GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
+
     data = SaveGameCodec.validate_save_data(data)
     if data.has("_invalid_reason"):
         _show_menu_status(str(data["_invalid_reason"]))
@@ -609,9 +688,11 @@ func _continue_saved_game() -> void:
     selected_palette_name = palette_name
     selected_quality_name = str(data.get("quality_name", "中"))
     selected_game_mode_name = str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
+    selected_time_limit_minutes = clampi(int(data.get("time_limit_minutes", selected_time_limit_minutes)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)
     GameConfig.set_palette_by_name(palette_name)
     GameConfig.set_quality_by_name(selected_quality_name)
     GameConfig.set_game_mode_by_name(selected_game_mode_name)
+    GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
     _start_game(LayoutProfiles.sanitize_grid_size(data.get("grid_size", 40)), true, false)
     game_elapsed_time = maxf(0.0, float(data.get("game_elapsed_time", 0.0)))
     _sync_chamber_game_elapsed_time()
@@ -677,8 +758,8 @@ func _apply_chamber_state(chamber, state: Dictionary) -> void:
     chamber.release_ball = null
     chamber.is_damaged = false
     chamber.is_locked = false
-    chamber.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.MAX_PENDING_COUNT)
-    chamber.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
+    chamber.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
+    chamber.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
 
     if bool(state.get("chamber_is_damaged", false)):
         chamber.set_damaged()
@@ -708,8 +789,8 @@ func _apply_chamber_state(chamber, state: Dictionary) -> void:
         for i in range(ball_count):
             chamber.add_control_ball()
 
-    chamber.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.MAX_PENDING_COUNT)
-    chamber.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
+    chamber.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
+    chamber.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
 
     var release_index: int = int(state.get("chamber_release_ball_index", -1))
     if release_index >= 0 and release_index < chamber.balls.size():
@@ -731,9 +812,9 @@ func _apply_turret_state(turret, state: Dictionary) -> void:
     turret.sweep_phase = float(state.get("turret_sweep_phase", turret.sweep_phase))
     turret.rotation = float(state.get("turret_rotation", turret.rotation))
 
-    turret.burst_remaining = clampi(int(state.get("turret_burst_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
-    turret.burst_total = clampi(int(state.get("turret_burst_total", turret.burst_remaining)), turret.burst_remaining, GameConfig.MAX_PENDING_COUNT)
-    turret.burst_index = clampi(int(state.get("turret_burst_index", 0)), 0, GameConfig.MAX_PENDING_COUNT)
+    turret.burst_remaining = clampi(int(state.get("turret_burst_remaining", 0)), 0, GameConfig.get_max_pending_count())
+    turret.burst_total = clampi(int(state.get("turret_burst_total", turret.burst_remaining)), turret.burst_remaining, GameConfig.get_max_pending_count())
+    turret.burst_index = clampi(int(state.get("turret_burst_index", 0)), 0, GameConfig.get_max_pending_count())
     turret.burst_timer = clampf(float(state.get("turret_burst_timer", 0.0)), 0.0, 1.0)
 
     var should_lock: bool = bool(state.get("turret_burst_locked", false)) and turret.burst_remaining > 0 and not turret.is_destroyed

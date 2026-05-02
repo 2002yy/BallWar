@@ -14,7 +14,8 @@ const TURRET_HIT_RADIUS = 24.0
 const TURRET_HIT_CHECK_INTERVAL = 0.055
 const BULLET_DAMAGE = 1
 
-const MAX_PENDING_COUNT = 2048
+const BASE_MAX_PENDING_COUNT = 2048
+const WILD_MAX_PENDING_COUNT = 2187
 const MAX_CONTROL_BALLS_PER_CHAMBER = 8
 const MAX_ACTIVE_BULLETS = 6000
 const BURST_FIRE_INTERVAL = 0.040
@@ -25,9 +26,12 @@ const GAME_MODE_BASIC = "基础模式"
 const GAME_MODE_OCCUPATION = "占领模式"
 const GAME_MODE_TIMED = "限时模式"
 const GAME_MODE_WILD = "狂野模式"
-const OCCUPATION_TARGET_PERCENT = 60
-const TIMED_MODE_SECONDS = 180.0
+const OCCUPATION_TARGET_PERCENT = 75
+const TIMED_MODE_MIN_MINUTES = 5
+const TIMED_MODE_MAX_MINUTES = 15
+const DEFAULT_TIMED_MODE_MINUTES = 5
 static var _game_mode_name = GAME_MODE_BASIC
+static var _timed_mode_minutes: int = DEFAULT_TIMED_MODE_MINUTES
 
 static func get_game_mode_names() -> Array:
     return [GAME_MODE_BASIC, GAME_MODE_OCCUPATION, GAME_MODE_TIMED, GAME_MODE_WILD]
@@ -44,8 +48,24 @@ static func get_game_mode_name() -> String:
 static func get_occupation_target_percent() -> int:
     return OCCUPATION_TARGET_PERCENT
 
+static func set_time_limit_minutes(minutes: int) -> void:
+    _timed_mode_minutes = clampi(minutes, TIMED_MODE_MIN_MINUTES, TIMED_MODE_MAX_MINUTES)
+
+static func get_time_limit_minutes() -> int:
+    return clampi(_timed_mode_minutes, TIMED_MODE_MIN_MINUTES, TIMED_MODE_MAX_MINUTES)
+
 static func get_time_limit_seconds() -> float:
-    return TIMED_MODE_SECONDS
+    return float(get_time_limit_minutes() * 60)
+
+static func get_gate_multiplier() -> int:
+    if _game_mode_name == GAME_MODE_WILD:
+        return 3
+    return 2
+
+static func get_max_pending_count() -> int:
+    if _game_mode_name == GAME_MODE_WILD:
+        return WILD_MAX_PENDING_COUNT
+    return BASE_MAX_PENDING_COUNT
 
 
 static var _quality_name = "中"

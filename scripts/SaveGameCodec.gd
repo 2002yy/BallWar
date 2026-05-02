@@ -78,6 +78,10 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
     if not (str(clean.get("quality_name", "中")) in GameConfig.get_quality_names()):
         clean["quality_name"] = "中"
 
+    if not (str(clean.get("game_mode_name", GameConfig.GAME_MODE_BASIC)) in GameConfig.get_game_mode_names()):
+        clean["game_mode_name"] = GameConfig.GAME_MODE_BASIC
+    clean["time_limit_minutes"] = clampi(int(clean.get("time_limit_minutes", GameConfig.DEFAULT_TIMED_MODE_MINUTES)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)
+
     var owners = clean.get("owners", [])
     var grid_size: int = int(clean["grid_size"])
     var owners_ok: bool = owners is Array and owners.size() == grid_size
@@ -103,11 +107,11 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
                 continue
             var fixed = state.duplicate(true)
             fixed["faction_id"] = clampi(int(fixed.get("faction_id", 0)), 0, 3)
-            fixed["chamber_pending_count"] = clampi(int(fixed.get("chamber_pending_count", 1)), 1, GameConfig.MAX_PENDING_COUNT)
-            fixed["chamber_locked_remaining"] = clampi(int(fixed.get("chamber_locked_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
-            fixed["turret_burst_remaining"] = clampi(int(fixed.get("turret_burst_remaining", 0)), 0, GameConfig.MAX_PENDING_COUNT)
-            fixed["turret_burst_total"] = clampi(int(fixed.get("turret_burst_total", 0)), 0, GameConfig.MAX_PENDING_COUNT)
-            fixed["turret_burst_index"] = clampi(int(fixed.get("turret_burst_index", 0)), 0, GameConfig.MAX_PENDING_COUNT)
+            fixed["chamber_pending_count"] = clampi(int(fixed.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
+            fixed["chamber_locked_remaining"] = clampi(int(fixed.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
+            fixed["turret_burst_remaining"] = clampi(int(fixed.get("turret_burst_remaining", 0)), 0, GameConfig.get_max_pending_count())
+            fixed["turret_burst_total"] = clampi(int(fixed.get("turret_burst_total", 0)), 0, GameConfig.get_max_pending_count())
+            fixed["turret_burst_index"] = clampi(int(fixed.get("turret_burst_index", 0)), 0, GameConfig.get_max_pending_count())
 
             var control_balls = fixed.get("control_balls", [])
             if control_balls is Array:
