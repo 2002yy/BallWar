@@ -1,15 +1,9 @@
-extends Node2D
+﻿extends Node2D
 class_name ControlChamber
 
 signal release_requested(faction_id, bullet_count, chamber)
 signal ball_count_changed(faction_id, count)
 
-# v1.9.5 稳定性收口版：
-# 1) 阵营名移入控制仓内部顶部；
-# 2) 3-4-3-4-3-4 保留；
-# 3) 4 行两侧 peg 视觉半嵌入墙体；
-# 4) 3 行居中，保证 peg 与墙之间的可通行距离大于控制球半径；
-# 5) 增加小球防卡检测。
 const CONTROL_BALL_RADIUS: float = 5.4
 const PEG_RADIUS: float = 7.0
 const PEG_SPACING_X: float = 36.0
@@ -37,10 +31,6 @@ const CONTROL_BALL_MAX_STAY_TIME: float = 14.0
 var faction_id: int = GameConfig.Faction.BLUE
 var pending_count: int = 1
 var locked_remaining: int = 0
-
-# 宽度由 4 行的半嵌入规则反推：
-# 左右侧 peg 圆心距墙 = PEG_RADIUS * 0.5；
-# 四列之间有 3 个 PEG_SPACING_X。
 var chamber_size: Vector2 = Vector2(
     PEG_RADIUS + PEG_SPACING_X * 3.0,
     CHAMBER_HEIGHT
@@ -48,11 +38,14 @@ var chamber_size: Vector2 = Vector2(
 
 var balls: Array = []
 var release_ball = null
+var linked_turret = null
 var gravity: float = 420.0
 var pegs: Array = []
 var peg_radius: float = PEG_RADIUS
 var stuck_states: Dictionary = {}
 var ball_stay_times: Dictionary = {}
+var jammed_time_left: float = 0.0
+var queued_round_modifiers: Array = []
 
 var name_label
 var count_label
@@ -73,6 +66,9 @@ func setup(new_faction_id: int, new_position: Vector2) -> void:
     faction_id = new_faction_id
     global_position = new_position
 
+func set_linked_turret(turret) -> void:
+    linked_turret = turret
+
 func _ready() -> void:
     randomize()
     _create_pegs()
@@ -83,12 +79,20 @@ func _ready() -> void:
 func _process(delta: float) -> void:
     status_anim_t += delta
 
+    if jammed_time_left > 0.0:
+        jammed_time_left = maxf(0.0, jammed_time_left - delta)
+        if jammed_time_left == 0.0:
+            _update_label()
+            _force_visual_redraw()
+
     if is_damaged:
         damage_anim_t += delta
 
     if count_label != null:
         var pulse_amp: float = 0.028
-        if is_locked:
+        if jammed_time_left > 0.0:
+            pulse_amp = 0.060
+        elif is_locked:
             pulse_amp = 0.050
         elif is_damaged:
             pulse_amp = 0.018
@@ -97,6 +101,9 @@ func _process(delta: float) -> void:
     if ball_label != null:
         if is_damaged:
             ball_label.modulate = Color(1.0, 0.66, 0.66, 0.95)
+        elif jammed_time_left > 0.0:
+            var jam_a: float = 0.80 + 0.20 * sin(status_anim_t * 8.0)
+            ball_label.modulate = Color(1.0, 0.72, 0.40, jam_a)
         elif is_locked:
             var a: float = 0.78 + 0.22 * sin(status_anim_t * 6.0)
             ball_label.modulate = Color(1.0, 0.86, 0.52, a)
@@ -116,7 +123,7 @@ func _update_visual_redraw(delta: float) -> void:
 
     if is_damaged:
         visual_redraw_timer = DAMAGED_REDRAW_INTERVAL
-    elif is_locked:
+    elif jammed_time_left > 0.0 or is_locked:
         visual_redraw_timer = LOCKED_REDRAW_INTERVAL
     else:
         visual_redraw_timer = NORMAL_REDRAW_INTERVAL
@@ -132,14 +139,7 @@ func _create_pegs() -> void:
     for row_index in range(row_counts.size()):
         var count: int = row_counts[row_index]
         var y: float = TOP_Y + float(row_index) * PEG_SPACING_Y
-        var start_x: float
-
-        if count == 4:
-            # 两侧 peg 视觉上一半嵌入墙体。
-            start_x = side_center_x
-        else:
-            # 3 行居中，左右墙距离都足够小球通过，避免被墙夹住。
-            start_x = centered_three_start_x
+        var start_x: float = side_center_x if count == 4 else centered_three_start_x
 
         for i in range(count):
             pegs.append(Vector2(start_x + float(i) * PEG_SPACING_X, y))
@@ -161,6 +161,104 @@ func add_control_ball() -> bool:
 
 func get_ball_count() -> int:
     return balls.size()
+
+func apply_pending_bonus(amount: int) -> void:
+    if is_damaged:
+        return
+    pending_count = clampi(pending_count + amount, 1, GameConfig.get_max_pending_count())
+    _update_label()
+    _force_visual_redraw()
+
+func apply_pending_multiplier(multiplier: int) -> void:
+    if is_damaged:
+        return
+    pending_count = clampi(pending_count * maxi(1, multiplier), 1, GameConfig.get_max_pending_count())
+    _update_label()
+    _force_visual_redraw()
+
+func add_control_ball_from_event() -> void:
+    if is_damaged:
+        return
+    if balls.size() < GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER:
+        add_control_ball()
+    else:
+        apply_pending_bonus(10)
+
+func apply_jammed(duration: float) -> void:
+    if is_damaged:
+        return
+    jammed_time_left = maxf(jammed_time_left, duration)
+    _update_label()
+    _force_visual_redraw()
+
+func get_jammed_time_left() -> float:
+    return jammed_time_left
+
+func is_jammed() -> bool:
+    return jammed_time_left > 0.0
+
+func get_pending_count() -> int:
+    return pending_count
+
+func get_queued_modifier_count() -> int:
+    return queued_round_modifiers.size()
+
+func set_jammed_time_left(value: float) -> void:
+    jammed_time_left = maxf(0.0, value)
+    _update_label()
+    _force_visual_redraw()
+
+func queue_next_round_modifier(modifier: Dictionary) -> void:
+    queued_round_modifiers.append(modifier.duplicate(true))
+    _update_label()
+
+func get_queued_round_modifiers() -> Array:
+    return queued_round_modifiers.duplicate(true)
+
+func set_queued_round_modifiers(modifiers: Array) -> void:
+    queued_round_modifiers.clear()
+    for modifier in modifiers:
+        if modifier is Dictionary:
+            queued_round_modifiers.append((modifier as Dictionary).duplicate(true))
+    _update_label()
+
+func cancel_current_burst_with_refund(ratio: float) -> void:
+    if is_damaged:
+        return
+
+    var remaining: int = 0
+    if linked_turret != null and is_instance_valid(linked_turret) and linked_turret.has_method("cancel_burst"):
+        remaining = int(linked_turret.cancel_burst())
+
+    if not is_locked and remaining <= 0:
+        return
+
+    is_locked = false
+    locked_remaining = 0
+    if release_ball != null and is_instance_valid(release_ball):
+        _relaunch_control_ball(release_ball)
+    release_ball = null
+    pending_count = max(1, floori(float(remaining) * ratio))
+    _update_label()
+    _force_visual_redraw()
+
+func _apply_queued_round_modifiers() -> void:
+    if queued_round_modifiers.is_empty():
+        return
+
+    var modifiers: Array = queued_round_modifiers.duplicate(true)
+    queued_round_modifiers.clear()
+    for modifier in modifiers:
+        if not (modifier is Dictionary):
+            continue
+        var modifier_dict: Dictionary = modifier
+        var modifier_type: String = str(modifier_dict.get("type", ""))
+        if modifier_type == "bonus_10":
+            apply_pending_bonus(int(modifier_dict.get("amount", 10)))
+        elif modifier_type == "x2" or modifier_type == "x3":
+            apply_pending_multiplier(int(modifier_dict.get("multiplier", 1)))
+        elif modifier_type == "add_ball":
+            add_control_ball_from_event()
 
 func _create_labels() -> void:
     name_label = Label.new()
@@ -206,13 +304,11 @@ func _relaunch_control_ball(ball) -> void:
     ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-54.0, 54.0), randf_range(24.0, 82.0)))
     _reset_stuck_state(ball)
     _reset_ball_stay_time(ball)
-    _reset_ball_stay_time(ball)
 
 func _is_side_embedded_peg(peg: Vector2) -> bool:
     return peg.x <= PEG_RADIUS * 0.75 or peg.x >= chamber_size.x - PEG_RADIUS * 0.75
 
 func _effective_peg_radius(peg: Vector2) -> float:
-    # 侧边半嵌入 peg 保留视觉，但弱化碰撞，避免墙 + peg 夹住小球。
     if _is_side_embedded_peg(peg):
         return peg_radius * 0.50
     return peg_radius
@@ -273,8 +369,6 @@ func _update_stuck_state(ball, delta: float) -> void:
     var y_progress: float = ball.position.y - last_y
     var near_wall: bool = ball.position.x <= ball.radius + WALL_STUCK_MARGIN or ball.position.x >= chamber_size.x - ball.radius - WALL_STUCK_MARGIN
 
-    # 普通低速卡住：几乎不动 + 速度很低。
-    # 墙边抖动卡住：靠墙并且 y 几乎没有向下推进，即使 x 方向有细碎抖动也算卡。
     var low_speed_stuck: bool = moved < STUCK_MOVE_EPS and ball.velocity.length() < STUCK_SPEED_EPS
     var wall_jitter_stuck: bool = near_wall and y_progress < WALL_STUCK_Y_EPS and ball.velocity.y < STUCK_SPEED_EPS * 1.8
 
@@ -298,8 +392,6 @@ func _update_stuck_state(ball, delta: float) -> void:
     stuck_states[id] = state
 
 func _handle_gate_divider_collision(ball, x2_width: float) -> void:
-    # 底部 x2 / 发射交界处的窄挡板。
-    # 视觉上仍是原来的分界线，但物理上会把小球推向左右任意一侧，避免“正好落在线上”的模糊情况。
     var half_width: float = GATE_DIVIDER_WIDTH * 0.5
     var top_y: float = chamber_size.y - gate_height - GATE_DIVIDER_RISE
     var bottom_y: float = chamber_size.y
@@ -358,7 +450,9 @@ func _physics_process(delta: float) -> void:
         _update_ball_stay_time(ball, delta)
 
         if ball.position.y >= chamber_size.y - ball.radius:
-            if ball.position.x < x2_width:
+            if jammed_time_left > 0.0:
+                _on_jammed_floor(ball)
+            elif ball.position.x < x2_width:
                 _on_left_gate(ball)
             else:
                 _on_right_gate(ball)
@@ -370,7 +464,7 @@ func _on_left_gate(ball) -> void:
     _relaunch_control_ball(ball)
 
 func _on_right_gate(ball) -> void:
-    if is_locked:
+    if is_locked or jammed_time_left > 0.0:
         return
 
     release_ball = ball
@@ -379,6 +473,11 @@ func _on_right_gate(ball) -> void:
     _update_label()
     _force_visual_redraw()
     release_requested.emit(faction_id, pending_count, self)
+
+func _on_jammed_floor(ball) -> void:
+    ball.position.y = chamber_size.y - ball.radius - 2.0
+    ball.velocity.y = -abs(ball.velocity.y) * 0.78 - 36.0
+    ball.velocity.x += randf_range(-36.0, 36.0)
 
 func start_locked(count: int) -> void:
     locked_remaining = maxi(0, count)
@@ -403,6 +502,7 @@ func set_locked(locked: bool) -> void:
         if release_ball != null and is_instance_valid(release_ball):
             _relaunch_control_ball(release_ball)
         release_ball = null
+        _apply_queued_round_modifiers()
 
     _update_label()
     _force_visual_redraw()
@@ -415,6 +515,8 @@ func set_damaged() -> void:
     locked_remaining = 0
     is_locked = false
     release_ball = null
+    jammed_time_left = 0.0
+    queued_round_modifiers.clear()
     for ball in balls:
         if ball != null:
             ball.queue_free()
@@ -433,8 +535,13 @@ func _update_label() -> void:
     name_label.add_theme_color_override("font_color", GameConfig.faction_color(faction_id).lightened(0.80))
 
     if is_damaged:
-        count_label.text = "×"
+        count_label.text = "X"
         ball_label.text = "系统离线"
+        return
+
+    if jammed_time_left > 0.0:
+        count_label.text = str(pending_count)
+        ball_label.text = "短路 %ds" % ceili(jammed_time_left)
         return
 
     if is_locked:
@@ -456,11 +563,25 @@ func _current_release_ratio() -> float:
     return lerpf(GATE_START_RELEASE_RATIO, GATE_END_RELEASE_RATIO, eased)
 
 func _current_x2_width() -> float:
-    if is_locked or is_damaged:
+    if is_locked or is_damaged or jammed_time_left > 0.0:
         return chamber_size.x * 0.5
     var release_ratio: float = clampf(_current_release_ratio(), GATE_MIN_RATIO, 1.0 - GATE_MIN_RATIO)
     var x2_ratio: float = 1.0 - release_ratio
     return chamber_size.x * x2_ratio
+
+func _left_gate_text() -> String:
+    if jammed_time_left > 0.0:
+        return "短路"
+    if is_damaged:
+        return "X"
+    return "x3" if GameConfig.get_gate_multiplier() == 3 else "x2"
+
+func _right_gate_text() -> String:
+    if jammed_time_left > 0.0:
+        return "短路"
+    if is_damaged:
+        return "X"
+    return "发射"
 
 func _draw() -> void:
     var faction_color: Color = GameConfig.faction_color(faction_id)
@@ -469,12 +590,15 @@ func _draw() -> void:
     var inner_color: Color = Color(0.17, 0.19, 0.24, 0.98)
     var top_h: float = 30.0
     var blink: float = 0.5 + 0.5 * sin(status_anim_t * 6.0)
-    var energy_glow: float = 0.22 + 0.12 * sin(status_anim_t * 4.2)
 
     if is_damaged:
         shell_color = Color(0.14, 0.11, 0.11, 1.0)
         border_color = Color(0.86, 0.18, 0.18)
         inner_color = Color(0.10, 0.08, 0.08, 1.0)
+    elif jammed_time_left > 0.0:
+        shell_color = Color(0.15, 0.11, 0.10, 1.0)
+        border_color = Color(1.0, 0.46, 0.16)
+        inner_color = Color(0.12, 0.09, 0.09, 1.0)
 
     var outer_rect: Rect2 = Rect2(Vector2.ZERO, chamber_size)
     var shell_rect: Rect2 = Rect2(Vector2(5.0, 5.0), chamber_size - Vector2(10.0, 10.0))
@@ -489,7 +613,6 @@ func _draw() -> void:
     draw_rect(outer_rect, border_color, false, 3.0)
     draw_rect(Rect2(Vector2(4.0, 4.0), chamber_size - Vector2(8.0, 8.0)), Color(border_color.r, border_color.g, border_color.b, 0.16), false, 1.5)
 
-    # 顶部状态灯 + 组件化机械细节
     for rivet in [Vector2(11, 11), Vector2(chamber_size.x - 11, 11), Vector2(11, chamber_size.y - 11), Vector2(chamber_size.x - 11, chamber_size.y - 11)]:
         draw_circle(rivet, 3.0, Color(0.22, 0.24, 0.28))
         draw_circle(rivet + Vector2(-0.8, -0.8), 1.0, Color(1.0, 1.0, 1.0, 0.18))
@@ -499,6 +622,9 @@ func _draw() -> void:
     if is_damaged:
         light_a = Color(1.0, 0.14, 0.14, 0.55 + 0.35 * blink)
         light_b = Color(0.20, 0.07, 0.07)
+    elif jammed_time_left > 0.0:
+        light_a = Color(1.0, 0.42, 0.18, 0.58 + 0.26 * blink)
+        light_b = Color(1.0, 0.78, 0.18, 0.48 + 0.22 * blink)
     elif is_locked:
         light_a = Color(1.0, 0.82, 0.20, 0.55 + 0.35 * blink)
         light_b = Color(1.0, 0.58, 0.14, 0.48 + 0.28 * blink)
@@ -512,7 +638,6 @@ func _draw() -> void:
         draw_circle(Vector2(pos_x, 21.0), 4.2, Color(c.r, c.g, c.b, 0.18))
         draw_circle(Vector2(pos_x, 21.0), 2.8, c)
 
-    # 内腔增加轻微扫描感
     if not is_damaged:
         for i in range(5):
             var y: float = inner_rect.position.y + 14.0 + float(i) * 18.0
@@ -539,7 +664,10 @@ func _draw() -> void:
     var left_color: Color = Color(0.74, 0.92, 0.22)
     var right_color: Color = Color(1.0, 0.64, 0.16)
 
-    if is_locked:
+    if jammed_time_left > 0.0:
+        left_color = Color(0.42, 0.42, 0.42)
+        right_color = Color(0.42, 0.42, 0.42)
+    elif is_locked:
         left_color = Color(0.42, 0.42, 0.42)
         right_color = Color(0.84, 0.54, 0.14, 0.70 + blink * 0.18)
     elif is_damaged:
@@ -553,38 +681,59 @@ func _draw() -> void:
     draw_rect(left_rect, Color(0.0, 0.0, 0.0, 0.55), false, 1.2)
     draw_rect(right_rect, Color(0.0, 0.0, 0.0, 0.55), false, 1.2)
 
-    var divider_rect: Rect2 = Rect2(Vector2(x2_width - GATE_DIVIDER_WIDTH * 0.5, chamber_size.y - gate_height - GATE_DIVIDER_RISE), Vector2(GATE_DIVIDER_WIDTH, gate_height + GATE_DIVIDER_RISE))
-    draw_rect(divider_rect, Color(0.18, 0.18, 0.20, 0.98), true)
-    draw_rect(divider_rect, Color(0.0, 0.0, 0.0, 0.85), false, 1.2)
+    var gate_font = ThemeDB.fallback_font
+    var gate_font_size: int = 15
+    if left_rect.size.x > 18.0:
+        var left_baseline: float = left_rect.position.y + left_rect.size.y * 0.68
+        draw_string_outline(
+            gate_font,
+            Vector2(left_rect.position.x, left_baseline),
+            _left_gate_text(),
+            HORIZONTAL_ALIGNMENT_CENTER,
+            left_rect.size.x,
+            gate_font_size,
+            2,
+            Color(0.0, 0.0, 0.0, 0.9)
+        )
+        draw_string(
+            gate_font,
+            Vector2(left_rect.position.x, left_baseline),
+            _left_gate_text(),
+            HORIZONTAL_ALIGNMENT_CENTER,
+            left_rect.size.x,
+            gate_font_size,
+            Color(0.06, 0.08, 0.10, 0.95)
+        )
+    if right_rect.size.x > 18.0:
+        var right_baseline: float = right_rect.position.y + right_rect.size.y * 0.68
+        draw_string_outline(
+            gate_font,
+            Vector2(right_rect.position.x, right_baseline),
+            _right_gate_text(),
+            HORIZONTAL_ALIGNMENT_CENTER,
+            right_rect.size.x,
+            gate_font_size,
+            2,
+            Color(0.0, 0.0, 0.0, 0.9)
+        )
+        draw_string(
+            gate_font,
+            Vector2(right_rect.position.x, right_baseline),
+            _right_gate_text(),
+            HORIZONTAL_ALIGNMENT_CENTER,
+            right_rect.size.x,
+            gate_font_size,
+            Color(0.06, 0.08, 0.10, 0.95)
+        )
 
-    # 发射态特效：发射口更亮 + 能量扫动
-    if is_locked and not is_damaged:
-        draw_rect(right_rect.grow(3.0), Color(1.0, 0.64, 0.16, energy_glow * 0.48), false, 2.0)
-        for i in range(3):
-            var bx: float = right_rect.position.x + 10.0 + float(i) * 14.0
-            draw_line(Vector2(bx, right_rect.position.y - 12.0), Vector2(bx + 4.0, right_rect.position.y + 2.0), Color(1.0, 0.80, 0.28, 0.36 + 0.22 * blink), 2.0)
-        var shutter: Rect2 = Rect2(Vector2(9.0, chamber_size.y - gate_height - 10.0), Vector2(chamber_size.x - 18.0, gate_height + 6.0))
-        draw_rect(shutter, Color(0.16, 0.16, 0.18, 0.42), true)
-        for i in range(7):
-            var sx: float = 8.0 + float(i) * 18.0
-            draw_line(Vector2(sx, chamber_size.y - gate_height - 10.0), Vector2(sx + 20.0, chamber_size.y - 2.0), Color(1.0, 1.0, 1.0, 0.08), 2.0)
-        draw_rect(Rect2(Vector2(12.0, chamber_size.y - gate_height - 18.0), Vector2(chamber_size.x - 24.0, 8.0)), Color(0.22, 0.22, 0.24, 0.98), true)
-        for j in range(3):
-            var lx: float = chamber_size.x * 0.5 - 24.0 + float(j) * 18.0
-            draw_circle(Vector2(lx, chamber_size.y - gate_height - 14.0), 3.4, Color(1.0, 0.82, 0.22, 0.55 + 0.35 * blink))
-    elif not is_damaged:
-        draw_rect(left_rect.grow(2.0), Color(0.74, 0.92, 0.22, 0.08), false, 1.0)
-        draw_rect(right_rect.grow(2.0), Color(1.0, 0.64, 0.16, 0.08), false, 1.0)
+    if jammed_time_left > 0.0:
+        for i in range(8):
+            var start_x: float = 12.0 + float(i) * 18.0
+            draw_line(
+                Vector2(start_x, chamber_size.y - gate_height - 10.0),
+                Vector2(start_x + 18.0, chamber_size.y - 8.0),
+                Color(1.0, 0.42, 0.16, 0.28),
+                2.0
+            )
 
-    var font = ThemeDB.fallback_font
-    draw_string(font, Vector2(maxf(6.0, x2_width * 0.5 - 13.0), chamber_size.y - 13), "x%d" % GameConfig.get_gate_multiplier(), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color.BLACK)
-    draw_string(font, Vector2(x2_width + maxf(4.0, (chamber_size.x - x2_width) * 0.5 - 16.0), chamber_size.y - 13), "发射", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
 
-    if is_damaged:
-        var pulse: float = 0.30 + 0.30 * sin(damage_anim_t * 8.0)
-        draw_line(Vector2(14, 22), Vector2(chamber_size.x - 16, chamber_size.y - 52), Color(1.0, 0.12, 0.12, 0.90), 4.4)
-        draw_line(Vector2(chamber_size.x - 18, 26), Vector2(22, chamber_size.y - 76), Color(1.0, 0.12, 0.12, 0.72), 3.0)
-        draw_rect(Rect2(Vector2(5, 5), chamber_size - Vector2(10, 10)), Color(1.0, 0.0, 0.0, pulse), false, 3.0)
-        for c in range(4):
-            var crack_x: float = 22.0 + float(c) * 26.0
-            draw_line(Vector2(crack_x, 40.0), Vector2(crack_x + 7.0, 53.0), Color(0.03, 0.01, 0.01, 0.92), 2.0)

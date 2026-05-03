@@ -34,8 +34,11 @@ var settings_panel
 var leader_label
 var timer_label
 var stage_label
+var event_info_label
 var current_score_counts: Dictionary = {0: 0, 1: 0, 2: 0, 3: 0}
 var is_mobile_layout: bool = false
+var event_roulette_controller = null
+var event_roulette_view = null
 
 var menu_layer
 var game_layer
@@ -62,7 +65,6 @@ var perf_debug_update_timer: float = 0.0
 var hud_meta_update_timer: float = 0.0
 const PERF_DEBUG_UPDATE_INTERVAL: float = 0.25
 const HUD_META_UPDATE_INTERVAL: float = 0.25
-
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
     randomize()
@@ -107,7 +109,9 @@ func _process(delta: float) -> void:
 func _detect_mobile_layout() -> bool:
     if OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios"):
         return true
-    var screen_size: Vector2i = DisplayServer.screen_get_size()
+    if DisplayServer.get_name() == "headless" or GameConfig.is_test_mode():
+        return false
+    var screen_size: Vector2i = GameConfig.get_safe_screen_size()
     if screen_size.x <= 1400 or screen_size.y <= 900:
         return true
     return false
@@ -180,6 +184,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
     _create_turrets()
     _create_control_chambers()
     _create_ui()
+    _create_event_roulette_system()
     _create_control_buttons()
     if not suppress_banner:
         _show_center_banner("领土战争", "开战！", Color(1.0, 0.94, 0.48), true)
@@ -192,6 +197,8 @@ func _create_battlefield(grid_size: int) -> void:
 
 func _create_turrets() -> void:
     turrets = GameSceneBuilder.create_turrets(self, game_layer, battlefield, bullet_container)
+    if bullet_container != null and is_instance_valid(bullet_container) and bullet_container.has_method("set_tracked_turrets"):
+        bullet_container.set_tracked_turrets(turrets)
 
 func _create_control_chambers() -> void:
     chambers = GameSceneBuilder.create_control_chambers(self, game_layer, battlefield, turrets, current_layout, chamber_scale, Vector2(VIEW_W, VIEW_H))
@@ -215,8 +222,25 @@ func _create_ui() -> void:
     leader_label = hud_nodes.get("leader_label", null)
     timer_label = hud_nodes.get("timer_label", null)
     stage_label = hud_nodes.get("stage_label", null)
+    event_info_label = hud_nodes.get("event_label", null)
 
     _on_scores_changed(battlefield.count_cells_by_team())
+
+func _create_event_roulette_system() -> void:
+    if game_layer == null or ui_canvas == null:
+        return
+
+    var event_view_script = load("res://scripts/EventRouletteView.gd")
+    event_roulette_view = event_view_script.new()
+    event_roulette_view.name = "EventRouletteView"
+    event_roulette_view.setup(Vector2(VIEW_W, VIEW_H), current_layout, is_mobile_layout)
+    ui_canvas.add_child(event_roulette_view)
+
+    var event_controller_script = load("res://scripts/EventRouletteController.gd")
+    event_roulette_controller = event_controller_script.new()
+    event_roulette_controller.name = "EventRouletteController"
+    game_layer.add_child(event_roulette_controller)
+    event_roulette_controller.setup(self, battlefield, chambers, turrets, event_info_label, event_roulette_view)
 
 func _create_control_buttons() -> void:
     var button_nodes: Dictionary = GameHudView.create_control_buttons(self, game_layer, chambers, current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
@@ -447,6 +471,9 @@ func _cleanup_game_layer() -> void:
     leader_label = null
     timer_label = null
     stage_label = null
+    event_info_label = null
+    event_roulette_controller = null
+    event_roulette_view = null
     pending_restore_bullets.clear()
     pending_restore_index = 0
     turrets.clear()
@@ -574,6 +601,8 @@ func _save_game_progress() -> void:
             "chamber_is_damaged": chamber.is_damaged if chamber != null else false,
             "chamber_ball_count": chamber.get_ball_count() if chamber != null else 0,
             "chamber_release_ball_index": SaveGameCodec.get_release_ball_index(chamber),
+            "chamber_jammed_time_left": chamber.get_jammed_time_left() if chamber != null else 0.0,
+            "queued_round_modifiers": chamber.get_queued_round_modifiers() if chamber != null else [],
             "control_balls": SaveGameCodec.collect_control_ball_states(chamber),
             "turret_health": turret.health if turret != null else GameConfig.TURRET_MAX_HEALTH,
             "turret_destroyed": turret.is_destroyed if turret != null else false,
@@ -587,7 +616,7 @@ func _save_game_progress() -> void:
         })
 
     var data: Dictionary = {
-        "save_version": "1.9.31",
+        "save_version": "1.9.34",
         "save_slot": selected_save_slot,
         "grid_size": battlefield.grid_size,
         "palette_name": GameConfig.get_palette_name(),
@@ -600,6 +629,7 @@ func _save_game_progress() -> void:
         "factions": factions,
         "bullets": SaveGameCodec.collect_bullet_states(bullet_container),
         "winner_text": winner_label.text if winner_label != null else "",
+        "event_state": event_roulette_controller.export_save_state() if event_roulette_controller != null else {},
     }
 
     var file = FileAccess.open(_get_save_path(selected_save_slot), FileAccess.WRITE)
@@ -740,6 +770,11 @@ func _apply_saved_state(data: Dictionary) -> void:
 
             _refresh_add_ball_button(faction_id)
 
+    if event_roulette_controller != null:
+        var saved_event_state = data.get("event_state", {})
+        if saved_event_state is Dictionary:
+            event_roulette_controller.import_save_state(saved_event_state)
+
     _restore_bullet_states(data.get("bullets", []))
 
     is_game_over = bool(data.get("is_game_over", false))
@@ -760,6 +795,8 @@ func _apply_chamber_state(chamber, state: Dictionary) -> void:
     chamber.is_locked = false
     chamber.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
     chamber.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
+    chamber.set_jammed_time_left(float(state.get("chamber_jammed_time_left", 0.0)))
+    chamber.set_queued_round_modifiers(state.get("queued_round_modifiers", []))
 
     if bool(state.get("chamber_is_damaged", false)):
         chamber.set_damaged()

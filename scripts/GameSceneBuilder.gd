@@ -106,6 +106,7 @@ static func create_control_chambers(owner, game_layer: Node, battlefield, turret
     for faction_id in chamber_positions.keys():
         var chamber = ControlChamber.new()
         chamber.setup(faction_id, chamber_positions[faction_id])
+        chamber.set_linked_turret(turrets.get(faction_id, null))
         chamber.scale = Vector2.ONE * chamber_scale
         chamber.name = "Chamber_%s" % GameConfig.faction_name(faction_id)
         chamber.release_requested.connect(Callable(owner, "_on_chamber_release_requested"))

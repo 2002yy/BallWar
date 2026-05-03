@@ -86,6 +86,8 @@ func _physics_process(delta: float) -> void:
 
     age += delta
     if age >= GameConfig.BULLET_MAX_LIFETIME:
+        if pool != null and is_instance_valid(pool) and pool.has_method("notify_bullet_expired"):
+            pool.notify_bullet_expired()
         _despawn()
         return
 
@@ -183,20 +185,20 @@ func _trail_sample_interval() -> float:
     if simple_draw:
         return 9999.0
     if reduce_visual_effects:
-        return 0.045
+        return 0.075
     if trail_max_points >= 12:
-        return 0.016
-    if trail_max_points >= 8:
-        return 0.018
-    if trail_max_points >= 5:
         return 0.022
-    return 0.032
+    if trail_max_points >= 8:
+        return 0.028
+    if trail_max_points >= 5:
+        return 0.036
+    return 0.050
 
 func _trail_min_distance_sq() -> float:
     var radius: float = _visual_radius()
     if reduce_visual_effects:
-        return radius * radius * 0.25
-    return radius * radius * 0.035
+        return radius * radius * 0.65
+    return radius * radius * 0.14
 
 func _update_visual_trace(delta: float) -> void:
     if simple_draw or trail_max_points <= 0:

@@ -193,6 +193,14 @@ func get_redraw_debug_text() -> String:
     return "%d刷/%d格" % [redraw_calls_per_second, cell_changes_per_second]
 
 
+func get_debug_metrics() -> Dictionary:
+    return {
+        "redraw_calls_per_second": redraw_calls_per_second,
+        "cell_changes_per_second": cell_changes_per_second,
+        "changed_cells_since_draw": changed_cells_since_draw,
+        "redraw_pending": redraw_pending,
+    }
+
 func _draw() -> void:
     redraw_calls_this_second += 1
     var size: float = grid_size * cell_size

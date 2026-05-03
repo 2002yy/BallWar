@@ -115,6 +115,18 @@ func fire_burst(count: int) -> void:
     burst_progress.emit(faction_id, burst_remaining)
     _set_burst_locked(true)
 
+func cancel_burst() -> int:
+    var remaining: int = burst_remaining
+    burst_remaining = 0
+    burst_total = 0
+    burst_index = 0
+    burst_timer = 0.0
+    burst_progress_emit_timer = 0.0
+    burst_last_reported_remaining = 0
+    burst_progress.emit(faction_id, 0)
+    _set_burst_locked(false)
+    return remaining
+
 func _next_burst_interval() -> float:
     # v1.9.29：高倍率发射队列优化。
     # 基础节拍保留 v1.9.28 的回调值；实际间隔会根据 FPS 和剩余队列自动放慢。
@@ -126,33 +138,46 @@ func _next_burst_interval() -> float:
 func _burst_interval_multiplier() -> float:
     var fps: int = floori(Engine.get_frames_per_second())
     var mul: float = 1.0
+    var queue_total: int = _current_total_queue()
 
     if fps > 0:
-        if fps < 12:
-            mul = 3.00
-        elif fps < 20:
-            mul = 2.25
-        elif fps < 30:
-            mul = 1.60
-        elif fps < 45:
+        if fps < 10:
+            mul = 4.25
+        elif fps < 16:
+            mul = 3.25
+        elif fps < 24:
+            mul = 2.50
+        elif fps < 35:
+            mul = 1.70
+        elif fps < 50:
             mul = 1.20
 
     if burst_remaining >= 1536:
-        mul *= 1.18
+        mul *= 1.28
     elif burst_remaining >= 768:
-        mul *= 1.10
+        mul *= 1.18
     elif burst_remaining >= 256:
-        mul *= 1.04
+        mul *= 1.08
 
-    return clampf(mul, 1.0, 3.50)
+    if queue_total >= 1000:
+        mul *= 1.22
+    elif queue_total >= 500:
+        mul *= 1.10
+
+    return clampf(mul, 1.0, 4.50)
 
 func _max_shots_this_frame() -> int:
     var fps: int = floori(Engine.get_frames_per_second())
+    var queue_total: int = _current_total_queue()
     if fps > 0:
-        if fps < 18:
+        if fps < 24:
             return 1
-        if fps < 35:
+        if fps < 40:
             return 2
+    if queue_total >= 1000:
+        return 1
+    if queue_total >= 500:
+        return mini(2, GameConfig.BURST_MAX_SHOTS_PER_FRAME)
     return GameConfig.BURST_MAX_SHOTS_PER_FRAME
 
 func _emit_burst_progress(force: bool = false) -> void:
@@ -209,6 +234,15 @@ func _current_burst_shot_angle() -> float:
     # 之前这里用 fan_start/fan_end 重新计算并混合 rotation，
     # 会导致视觉炮塔摆了 90 度，但实际子弹角度偏小。
     return rotation
+
+func _current_total_queue() -> int:
+    var total: int = burst_remaining
+    for turret in all_turrets.values():
+        if turret == null or turret == self:
+            continue
+        if is_instance_valid(turret):
+            total += int(turret.burst_remaining)
+    return total
 
 func take_damage(amount: int) -> void:
     if is_destroyed:

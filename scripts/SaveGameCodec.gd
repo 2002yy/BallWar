@@ -99,6 +99,19 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
     else:
         clean["bullets"] = []
 
+    var event_state = clean.get("event_state", {})
+    if event_state is Dictionary:
+        clean["event_state"] = {
+            "event_roulette_enabled": bool(event_state.get("event_roulette_enabled", true)),
+            "next_event_time_left": maxf(0.0, float(event_state.get("next_event_time_left", 0.0))),
+            "current_event_interval": maxf(0.0, float(event_state.get("current_event_interval", 0.0))),
+            "last_event_faction": clampi(int(event_state.get("last_event_faction", -1)), -1, 3),
+            "last_event_effect": str(event_state.get("last_event_effect", "")),
+            "reroll_count": clampi(int(event_state.get("reroll_count", 0)), 0, 2),
+        }
+    else:
+        clean["event_state"] = {}
+
     var factions = clean.get("factions", [])
     var fixed_factions: Array = []
     if factions is Array:
@@ -109,9 +122,16 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
             fixed["faction_id"] = clampi(int(fixed.get("faction_id", 0)), 0, 3)
             fixed["chamber_pending_count"] = clampi(int(fixed.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
             fixed["chamber_locked_remaining"] = clampi(int(fixed.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
+            fixed["chamber_jammed_time_left"] = maxf(0.0, float(fixed.get("chamber_jammed_time_left", 0.0)))
             fixed["turret_burst_remaining"] = clampi(int(fixed.get("turret_burst_remaining", 0)), 0, GameConfig.get_max_pending_count())
             fixed["turret_burst_total"] = clampi(int(fixed.get("turret_burst_total", 0)), 0, GameConfig.get_max_pending_count())
             fixed["turret_burst_index"] = clampi(int(fixed.get("turret_burst_index", 0)), 0, GameConfig.get_max_pending_count())
+
+            var queued_modifiers = fixed.get("queued_round_modifiers", [])
+            if queued_modifiers is Array:
+                fixed["queued_round_modifiers"] = queued_modifiers
+            else:
+                fixed["queued_round_modifiers"] = []
 
             var control_balls = fixed.get("control_balls", [])
             if control_balls is Array:
