@@ -65,12 +65,12 @@ func _draw_chamber(pos: Vector2, left_mode: bool) -> void:
         draw_rect(Rect2(pos + Vector2(0, 150), Vector2(size.x * 0.5, 26)), Color(0.76, 1.0, 0.18), true)
         draw_rect(Rect2(pos + Vector2(size.x * 0.5, 150), Vector2(size.x * 0.5, 26)), Color(1.0, 0.57, 0.02), true)
         draw_string(font, pos + Vector2(20, 169), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
-        draw_string(font, pos + Vector2(84, 169), "R", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
+        draw_string(font, pos + Vector2(82, 169), "射", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
     else:
         draw_rect(Rect2(pos + Vector2(0, 150), Vector2(size.x * 0.5, 26)), Color(1.0, 0.57, 0.02), true)
         draw_rect(Rect2(pos + Vector2(size.x * 0.5, 150), Vector2(size.x * 0.5, 26)), Color(0.76, 1.0, 0.18), true)
-        draw_string(font, pos + Vector2(22, 169), "R", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
-        draw_string(font, pos + Vector2(86, 169), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
+        draw_string(font, pos + Vector2(22, 169), "射", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
+        draw_string(font, pos + Vector2(84, 169), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
 
 func _draw_turret(p: Vector2, color: Color, angle: float) -> void:
     draw_circle(p, 14.0, color)

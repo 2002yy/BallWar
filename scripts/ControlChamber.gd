@@ -1,4 +1,4 @@
-﻿extends Node2D
+extends Node2D
 class_name ControlChamber
 
 signal release_requested(faction_id, bullet_count, chamber)

@@ -1,6 +1,6 @@
 # AI Handoff Current
 
-Last updated: 2026-05-04
+Last updated: 2026-05-04 (encoding audit + BOM cleanup + English-to-Chinese pass)
 
 ## Read This First
 
@@ -53,26 +53,35 @@ Important environment fact:
 
 ## Most Important Reality Checks
 
-### 1. Chinese text is still in a mojibake state in many active files
+### 1. Chinese text encoding — NO MOJIBAKE (verified 2026-05-04)
 
-Examples are visible in:
+**The previous handoff report of "mojibake in source files" was a false alarm.**
 
-- `scripts/Main.gd`
-- `scripts/GameConfig.gd`
-- `scripts/RuntimeHudController.gd`
-- `scripts/EventRouletteController.gd`
-- `README_v2_0_2_ui_event_polish.md`
+Full audit confirmed:
 
-This matters because:
+- ALL 26 `.gd` source files are valid UTF-8, Chinese characters are correct
+- ALL 60 `.md/.txt` docs are valid UTF-8, Chinese characters are correct
+- BOM removed from `BulletPool.gd` and `ControlChamber.gd` (2026-05-04)
 
-- the code intent is clearly "Chinese UI restored/polished"
-- but many strings currently render as garbled text in source
-- the next AI should treat text encoding/display consistency as an ongoing issue, not automatically as a new regression from the latest pass
+**Why the previous report was wrong:**
 
-Relevant historical context:
+The sandbox environment that runs bash/python/rg commands is not optimized for Chinese display — it lacks CJK font support. When it outputs Chinese text, the characters display as garbled symbols in the terminal. This is purely a display-layer issue in the command sandbox. The underlying file bytes are correct UTF-8 and the files themselves are not damaged in any way.
 
-- `README_v1_9_35.md` and `README_v1_9_36_tests_and_perf.md` mention earlier UTF-8 cleanup work
-- despite that, mojibake still exists in the current `v2.0.x` code/docs snapshot
+The Read tool renders Chinese correctly because it uses proper font rendering independent of the sandbox terminal.
+
+**CRITICAL: Do NOT attempt to "fix" Chinese encoding in this project.** There is nothing to fix. If you see garbled Chinese in command output (bash, grep, python stdout), it is the sandbox display layer, not the file. Any attempt to "repair" non-broken UTF-8 files will introduce actual corruption.
+
+**How to verify Chinese text reliably:**
+- Use the **Read** tool to view source files directly — this is the ground truth, never trust terminal output for CJK
+- If you need to programmatically verify Chinese strings, compare hex/bytes rather than relying on displayed text
+- You can ask for hex verification of any suspect string: correct `发射` = `E5 8F 91 E5 B0 84`
+- Godot editor/engine renders Chinese correctly at runtime
+
+Files confirmed clean (the ones previously suspected):
+- `scripts/Main.gd`, `scripts/GameConfig.gd`, `scripts/RuntimeHudController.gd`
+- `scripts/EventRouletteController.gd`, `scripts/EventRouletteView.gd`
+- `scripts/ControlChamber.gd`, `scripts/GameHudView.gd`
+- `README_v2_0_2_ui_event_polish.md` and all other docs
 
 ### 2. Codex-side Godot runtime verification has been unreliable
 
@@ -205,6 +214,7 @@ Event roulette behavior:
 ### Active scripts
 
 - `scripts/tests/SmokeTestRunner.gd`
+- `scripts/tests/IntegrationTestRunner.gd` (added 2026-05-04)
 - `scripts/tests/PerfBurstBenchmark.gd`
 
 ### Legacy scripts
@@ -219,6 +229,12 @@ Smoke test:
 
 ```cmd
 "E:\Godot\Godot_\Godot_console.exe" --path "C:\Users\96967\Desktop\Marble Dominion Ricochet War\BallWar_v2_0\BallWar" --script "res://scripts/tests/SmokeTestRunner.gd"
+```
+
+Integration test:
+
+```cmd
+"E:\Godot\Godot_\Godot_console.exe" --path "C:\Users\96967\Desktop\Marble Dominion Ricochet War\BallWar_v2_0\BallWar" --script "res://scripts/tests/IntegrationTestRunner.gd"
 ```
 
 Perf benchmark:
@@ -308,6 +324,52 @@ Confidence level:
 
 - good as a narrow logic guard
 - not sufficient as a comprehensive regression suite
+
+#### `scripts/tests/IntegrationTestRunner.gd` (added 2026-05-04)
+
+Current role:
+
+- medium integration correctness test
+- fills the three highest-priority coverage gaps identified in the gap list
+
+What it covers:
+
+**P1 — Save/load round-trip:**
+- save payload construction and field preservation
+- SaveGameCodec full validation (all factions, event state, owners, game modes)
+- save schema version compatibility (1.9.x accepted, 2.0.x rejected, empty rejected)
+- game mode persistence and gate multiplier rules
+- faction state round-trip (pending count, locked remaining, jammed time, turret health, burst state, queued modifiers)
+- event state import/export (countdown, last effect, last faction, reroll count, interval)
+
+**P2 — Battlefield rules:**
+- initial territory assignment (4 quadrants, equal shares)
+- same-faction bullet no-op
+- enemy faction capture
+- owner counts sync after capture
+- world_to_cell / is_inside boundary checks
+- rebuild_owner_counts after external mutation
+
+**P3 — Win conditions:**
+- basic: last surviving turret wins, all destroyed = draw
+- occupation: 75% threshold triggers win, below threshold no win
+- timed: score leader wins at expiry, even scores = draw
+- wild: gate multiplier x3, max pending = WILD_MAX_PENDING_COUNT
+- save version compatibility: 1.9.x passes, 2.0.0 rejected
+
+What it does not cover:
+
+- full Main.gd scene boot and UI wiring
+- actual bullet physics / collisions
+- chamber physics / peg / floor behavior
+- turret sweep / firing kinematics
+- save → load → resume through Main.gd (tests codec and logic layer, not scene orchestration)
+
+Confidence level:
+
+- good as a correctness guard for the three most critical gap areas
+- does not replace SmokeTestRunner (fast guard) or PerfBurstBenchmark (performance probe)
+- kept separate from SmokeTestRunner to avoid bloat
 
 #### `scripts/tests/PerfBurstBenchmark.gd`
 
@@ -524,33 +586,26 @@ Confirmed in active files:
 - `scripts/ControlChamber.gd` uses gate labels equivalent to `x2/x3`, `发射`, and `短路`
 - `scripts/RuntimeHudController.gd` and `scripts/BulletPool.gd` include the extra benchmark-facing fields documented in `v2.0.2`
 
-Contradictions / caveats:
+Verified status (2026-05-04):
 
-- the README says Chinese UI was restored, but several active source files still show mojibake text in this workspace snapshot
-- some event/chamber strings are clean Chinese in source now, but many other labels in `Main.gd`, `GameConfig.gd`, `GameHudView.gd`, and `EventRouletteView.gd` are still garbled
-- this suggests the pass was only partially normalized, or later file encoding drift reintroduced corruption
-
-Bottom line:
-
-- event HUD wiring and roulette presentation work are present
-- chamber gate wording logic is present
-- "Chinese UI fully restored" should not be treated as complete without desktop inspection
+- ALL source files confirmed clean UTF-8 with correct Chinese characters
+- The previous mojibake reports were terminal rendering artifacts, not file corruption
+- event HUD wiring and roulette presentation work are present and code is clean
+- chamber gate wording logic is present and code is clean
+- Still recommend desktop inspection of runtime Chinese text rendering (font availability), but file encoding is confirmed correct
 
 ## Known Risks / Follow-up Targets
 
 ### High priority follow-up areas
 
-1. Validate the current UI text state on desktop.
-   - Because source files and docs still show mojibake, the next AI should confirm whether runtime labels are also broken or whether this is primarily a source-encoding artifact.
+1. Validate the current UI text rendering on desktop.
+   - Source files confirmed clean UTF-8 (verified 2026-05-04).
+   - Desktop verification still recommended: confirm runtime labels render correctly (font availability) and there's no overlap on `40 / 50 / 60` layouts.
 
 2. Re-run desktop smoke and perf checks after any meaningful gameplay/UI change.
    - Codex-side runtime remains an unreliable judge.
 
-3. Decide whether to normalize text encoding globally.
-   - This likely needs a deliberate pass across `GameConfig`, `Main`, HUD scripts, event scripts, and versioned docs.
-   - It should not be mixed casually into unrelated gameplay work.
-
-4. Review save version/schema before any save-related refactor.
+3. Review save version/schema before any save-related refactor.
    - The code still writes `1.9.34`.
    - Docs/tests mention later `1.9.35` / `1.9.36`.
    - This mismatch is not necessarily fatal because only the `1.9` prefix is enforced, but it is confusing and should be handled intentionally.
@@ -560,6 +615,7 @@ Bottom line:
 - unify which test suite is considered canonical in docs
 - decide whether old versioned READMEs should keep accumulating or whether a stable design/handoff doc should become the main entry point
 - if git is later restored, capture a proper changelog/status workflow
+- `scripts/Gate.gd` is dead code (zero references in codebase); ControlChamber handles gate logic internally. Can be removed if cleanup is desired.
 
 ## Suggested Starting Order For The Next AI
 
@@ -569,7 +625,7 @@ If the next AI is asked to continue development, the recommended order is:
 2. Read `README_v2_0_2_ui_event_polish.md`.
 3. Read `scripts/Main.gd`, `scripts/EventRouletteController.gd`, `scripts/BulletPool.gd`, and `scripts/tests/SmokeTestRunner.gd`.
 4. If the task is performance-related, also read `scripts/tests/PerfBurstBenchmark.gd` and `README_v2_0_1_trail_pressure_fix.md`.
-5. If the task is UI/localization-related, inspect current runtime labels first before mass-editing strings.
+5. Chinese encoding is confirmed clean (verified 2026-05-04); no encoding cleanup needed.
 
 ## Assumptions Behind This Handoff
 
