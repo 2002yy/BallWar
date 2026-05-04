@@ -1,6 +1,13 @@
 # AI Handoff Current
 
-Last updated: 2026-05-04 (encoding audit + BOM cleanup + English-to-Chinese pass)
+Last updated: 2026-05-04 (v2.0.3 final — 107/107 PASS; fix log: README_v2_0_3_fix_log.md)
+
+## 工程原则 (必读)
+
+见 `PROJECT_PRINCIPLES.md`。两条核心原则：
+
+1. **每次优化减低耦合度，提高安全性，保证向后兼容。** 代码在持续改善，不是在积债。
+2. **新代码出问题，优先从新代码入手。** 旧代码已有回归测试和桌面验证。v2.0.3 的 7 项修复全在新测试基础设施上，未改一行生产代码。
 
 ## Read This First
 
@@ -213,9 +220,12 @@ Event roulette behavior:
 
 ### Active scripts
 
-- `scripts/tests/SmokeTestRunner.gd`
-- `scripts/tests/IntegrationTestRunner.gd` (added 2026-05-04)
-- `scripts/tests/PerfBurstBenchmark.gd`
+- `scripts/tests/SmokeTestRunner.gd` (fast guard, codec/event/chamber/turret boundaries)
+- `scripts/tests/IntegrationTestRunner.gd` (medium integration, save round-trip + battlefield + win conditions, refactored v2.0.3)
+- `scripts/tests/PerfBurstBenchmark.gd` (performance probe, FPS/queue/trail/draw_calls)
+- `scripts/tests/TestAssert.gd` (v2.0.3 — reusable assertion utility)
+- `scripts/tests/TestFixtures.gd` (v2.0.3 — test fixture factory)
+
 
 ### Legacy scripts
 
@@ -325,12 +335,13 @@ Confidence level:
 - good as a narrow logic guard
 - not sufficient as a comprehensive regression suite
 
-#### `scripts/tests/IntegrationTestRunner.gd` (added 2026-05-04)
+#### `scripts/tests/IntegrationTestRunner.gd` (refactored v2.0.3)
 
 Current role:
 
-- medium integration correctness test
-- fills the three highest-priority coverage gaps identified in the gap list
+- medium integration correctness test (~57 assertions)
+- uses TestAssert + TestFixtures for cleaner separation
+- fills the three highest-priority coverage gaps
 
 What it covers:
 
