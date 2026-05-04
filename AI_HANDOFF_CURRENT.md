@@ -1,6 +1,6 @@
 # AI Handoff Current
 
-Last updated: 2026-05-04 (v2.0.3 final — 107/107 PASS; fix log: README_v2_0_3_fix_log.md)
+Last updated: 2026-05-04 (v2.0.3 final — 107/107 PASS; `nul` cleaned)
 
 ## 工程原则 (必读)
 
@@ -8,6 +8,10 @@ Last updated: 2026-05-04 (v2.0.3 final — 107/107 PASS; fix log: README_v2_0_3_
 
 1. **每次优化减低耦合度，提高安全性，保证向后兼容。** 代码在持续改善，不是在积债。
 2. **新代码出问题，优先从新代码入手。** 旧代码已有回归测试和桌面验证。v2.0.3 的 7 项修复全在新测试基础设施上，未改一行生产代码。
+
+## 版本路线 (必读)
+
+见 `ROADMAP.md`。v2.0.4 → v2.0.8 五步走：先稳 → 再拆 → 再加功能。当前在 v2.0.3 完成测试基建，下一步是 v2.0.4 安全解耦（抽 WinConditionEvaluator）。
 
 ## Read This First
 

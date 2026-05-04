@@ -2,6 +2,13 @@
 
 日期: 2026-05-04
 
+## 工程原则 (必读)
+
+详见 `PROJECT_PRINCIPLES.md`。两条核心原则：
+
+1. **每次优化减低耦合度，提高安全性，保证向后兼容。** 代码在改善，不是积债。
+2. **新代码出问题，优先从新代码入手。** 旧代码已有回归测试背书。v2.0.3 修复全在新测试基建上，未改生产代码。
+
 ## 改动一览
 
 ### 1. 中文编码审计与修复
@@ -14,14 +21,19 @@
 - `MenuDecor.gd`: gate 标签 `"R"` → `"射"` (与游戏中 `"发射"` 一致)
 - 其余所有英文均为内部逻辑键值/调试字段，不可更改，不是用户可见文本
 
-### 3. 新增集成测试 IntegrationTestRunner.gd
-- `scripts/tests/IntegrationTestRunner.gd` - 新增，覆盖三大缺口：
-  - **P1 存档/读档回环**: save payload 构造验证、SaveGameCodec 全字段校验、schema 版本兼容、game mode 持久化、faction 状态保存恢复、event state 导入导出
-  - **P2 战场规则**: 初始领土分配、同阵营子弹 no-op、敌方占领、owner count 同步、world_to_cell 边界、rebuild_owner_counts
-  - **P3 胜负条件**: basic 最后存活/全灭平局、occupation 75% 阈值、timed 计分领先/均分平局、wild 倍率门 x3
-  - 独立于 SmokeTestRunner，不增加 smoke 臃肿度
+### 5. v2.0.3 测试基础设施升级
+- `scripts/tests/TestAssert.gd` - 通用断言工具 (that/eq/neq/gt/gte/between/report)
+- `scripts/tests/TestFixtures.gd` - MockTurret 类 + fill/paint 夹具 + 胜负模拟 (零 GameConfig 依赖)
+- `scripts/tests/IntegrationTestRunner.gd` - 重构，107 断言，覆盖 P1 存档/P2 战场/P3 胜负，自动退出
+- 详见 `README_v2_0_3_fix_log.md`（7 项修复，现象→根因→修复→验证）
+- 详见 `README_v2_0_3_test_audit.md`（覆盖矩阵 + 未覆盖清单）
 
-### 4. 交接文件更新
+### 6. 工程原则文档
+- `PROJECT_PRINCIPLES.md` - 低耦合/安全/向后兼容 + 新代码优先排查
+
+### 8. 版本路线图
+- `ROADMAP.md` - v2.0.4~v2.0.8 五步走：先稳再拆再加功能
+- 下一版本：v2.0.4 安全解耦（WinConditionEvaluator）
 - `AI_HANDOFF_CURRENT.md`: 
   - 修正乱码误报：明确说明是沙盒终端不优化中文显示，非文件损坏
   - 补充验证方法：Read 工具直接查看源码为唯一可靠方式，可提供 hex 验真
@@ -51,6 +63,12 @@
 - `scripts/BulletPool.gd` - 移除 BOM
 - `scripts/ControlChamber.gd` - 移除 BOM
 - `scripts/MenuDecor.gd` - "R" → "射"
-- `scripts/tests/IntegrationTestRunner.gd` - 新建，P1存档回环/P2战场/P3胜负
-- `AI_HANDOFF_CURRENT.md` - 编码状态修正 + 风险标注
-- `README_SESSION_CHANGES.md` - 本文件（新建）
+- `scripts/tests/TestAssert.gd` - 新建，通用断言
+- `scripts/tests/TestFixtures.gd` - 新建，MockTurret + fill/paint + 胜负模拟
+- `scripts/tests/IntegrationTestRunner.gd` - 重构 (107断言，auto-quit)
+- `AI_HANDOFF_CURRENT.md` - 编码修正 + 风险标注 + 原则速览
+- `PROJECT_PRINCIPLES.md` - 新建，工程原则
+- `README_SESSION_CHANGES.md` - 本文件
+- `README_v2_0_3_fix_log.md` - 新建，7项修复记录
+- `README_v2_0_3_test_audit.md` - 新建，覆盖审计
+- `nul` - 已删除（空文件，Windows 保留设备名误写）
