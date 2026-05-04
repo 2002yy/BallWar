@@ -5,7 +5,6 @@ const VIEW_H: float = 720.0
 const LEGACY_SAVE_PATH: String = "user://ballwar_save.json"
 const SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.json"
 const SAVE_SLOT_COUNT: int = 5
-const SAVE_MAJOR_PREFIX: String = "1.9"
 const MAX_RESTORE_CONTROL_BALLS: int = 8
 const MAX_RESTORE_TRAIL_POINTS: int = 3
 
@@ -289,27 +288,27 @@ func _on_turret_destroyed(faction_id: int) -> void:
     _check_winner()
 
 func _check_winner() -> void:
-	if is_game_over:
-		return
-	if game_layer == null or battlefield == null or turrets.is_empty():
-		return
+    if is_game_over:
+        return
+    if game_layer == null or battlefield == null or turrets.is_empty():
+        return
 
-	var mode_name: String = GameConfig.get_game_mode_name()
-	var counts: Dictionary = current_score_counts
-	if counts.is_empty() and battlefield != null and is_instance_valid(battlefield):
-		counts = battlefield.count_cells_by_team()
+    var mode_name: String = GameConfig.get_game_mode_name()
+    var counts: Dictionary = current_score_counts
+    if counts.is_empty() and battlefield != null and is_instance_valid(battlefield):
+        counts = battlefield.count_cells_by_team()
 
-	var time_expired: bool = mode_name == GameConfig.GAME_MODE_TIMED and game_elapsed_time >= GameConfig.get_time_limit_seconds()
-	var total_cells: int = selected_grid_size * selected_grid_size
+    var time_expired: bool = mode_name == GameConfig.GAME_MODE_TIMED and game_elapsed_time >= GameConfig.get_time_limit_seconds()
+    var total_cells: int = selected_grid_size * selected_grid_size
 
-	var result: Dictionary = WinConditionEvaluator.evaluate(mode_name, turrets, counts, total_cells, time_expired)
+    var result: Dictionary = WinConditionEvaluator.evaluate(mode_name, turrets, counts, total_cells, time_expired)
 
-	if not result.ended:
-		return
-	if result.draw:
-		_finish_as_draw(result.sub_text)
-	else:
-		_finish_with_winner(result.winner, result.sub_text)
+    if not result.ended:
+        return
+    if result.draw:
+        _finish_as_draw(result.sub_text)
+    else:
+        _finish_with_winner(result.winner, result.sub_text)
 
 # Deprecated after v2.0.4:
 # win-condition logic is now delegated to WinConditionEvaluator.
@@ -339,7 +338,7 @@ func _get_occupation_winner() -> int:
     var target_percent: int = GameConfig.get_occupation_target_percent()
     if best_count * 100 >= total * target_percent:
         return best_id
-	return -1
+    return -1
 
 # Deprecated after v2.0.4. See _get_occupation_winner note above.
 func _get_score_winner() -> int:
@@ -585,48 +584,10 @@ func _save_game_progress() -> void:
     if battlefield == null:
         return
 
-    var factions: Array = []
-    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
-        var chamber = chambers.get(faction_id)
-        var turret = turrets.get(faction_id)
-        factions.append({
-            "faction_id": faction_id,
-            "chamber_pending_count": chamber.pending_count if chamber != null else 1,
-            "chamber_locked_remaining": chamber.locked_remaining if chamber != null else 0,
-            "chamber_is_locked": chamber.is_locked if chamber != null else false,
-            "chamber_is_damaged": chamber.is_damaged if chamber != null else false,
-            "chamber_ball_count": chamber.get_ball_count() if chamber != null else 0,
-            "chamber_release_ball_index": SaveGameCodec.get_release_ball_index(chamber),
-            "chamber_jammed_time_left": chamber.get_jammed_time_left() if chamber != null else 0.0,
-            "queued_round_modifiers": chamber.get_queued_round_modifiers() if chamber != null else [],
-            "control_balls": SaveGameCodec.collect_control_ball_states(chamber),
-            "turret_health": turret.health if turret != null else GameConfig.TURRET_MAX_HEALTH,
-            "turret_destroyed": turret.is_destroyed if turret != null else false,
-            "turret_sweep_phase": turret.sweep_phase if turret != null else 0.0,
-            "turret_rotation": turret.rotation if turret != null else 0.0,
-            "turret_burst_remaining": turret.burst_remaining if turret != null else 0,
-            "turret_burst_total": turret.burst_total if turret != null else 0,
-            "turret_burst_index": turret.burst_index if turret != null else 0,
-            "turret_burst_timer": turret.burst_timer if turret != null else 0.0,
-            "turret_burst_locked": turret.burst_locked if turret != null else false,
-        })
-
-    var data: Dictionary = {
-        "save_version": "1.9.34",
-        "save_slot": selected_save_slot,
-        "grid_size": battlefield.grid_size,
-        "palette_name": GameConfig.get_palette_name(),
-        "quality_name": GameConfig.get_quality_name(),
-        "game_mode_name": GameConfig.get_game_mode_name(),
-        "time_limit_minutes": GameConfig.get_time_limit_minutes(),
-        "owners": battlefield.owners,
-        "game_elapsed_time": game_elapsed_time,
-        "is_game_over": is_game_over,
-        "factions": factions,
-        "bullets": SaveGameCodec.collect_bullet_states(bullet_container),
-        "winner_text": winner_label.text if winner_label != null else "",
-        "event_state": event_roulette_controller.export_save_state() if event_roulette_controller != null else {},
-    }
+    var data: Dictionary = SaveStateBuilder.build_save_payload(
+        chambers, turrets, battlefield, bullet_container, event_roulette_controller,
+        game_elapsed_time, is_game_over, selected_save_slot, winner_label
+    )
 
     var file = FileAccess.open(_get_save_path(selected_save_slot), FileAccess.WRITE)
     if file != null:
@@ -691,7 +652,7 @@ func _continue_saved_game() -> void:
         return
 
     var save_version: String = str(data.get("save_version", ""))
-    if save_version == "" or not save_version.begins_with(SAVE_MAJOR_PREFIX):
+    if not SaveGameCodec.is_supported_save_version(save_version):
         _show_menu_status("存档版本不兼容：%s" % save_version)
         push_warning("存档版本不兼容，已拒绝读取：%s" % save_version)
         return
@@ -729,53 +690,18 @@ func _apply_saved_state(data: Dictionary) -> void:
     if battlefield == null:
         return
 
-    var owners = data.get("owners", [])
-    if owners is Array and owners.size() == battlefield.grid_size:
-        var loaded_owners: Array = []
-        for x in range(battlefield.grid_size):
-            var col: Array = []
-            var src_col = owners[x]
-            for y in range(battlefield.grid_size):
-                var raw_owner = 0
-                if src_col is Array and y < src_col.size():
-                    raw_owner = src_col[y]
-                col.append(clampi(int(raw_owner), 0, 3))
-            loaded_owners.append(col)
-        battlefield.owners = loaded_owners
-        battlefield.rebuild_owner_counts()
-        if battlefield.has_method("flush_visual_update"):
-            battlefield.flush_visual_update()
-        else:
-            battlefield.queue_redraw()
-        _on_scores_changed(battlefield.count_cells_by_team())
+    SaveStateApplier.apply_owners(battlefield, data, Callable(self, "_on_scores_changed"))
+    SaveStateApplier.apply_factions(chambers, turrets, data.get("factions", []),
+        Callable(self, "_apply_chamber_state"),
+        Callable(self, "_apply_turret_state"),
+        func(chamber): chamber.set_locked(false),
+        Callable(self, "_refresh_add_ball_button"))
 
-    var factions = data.get("factions", [])
-    if factions is Array:
-        for faction_state in factions:
-            if not (faction_state is Dictionary):
-                continue
-            var faction_id: int = int(faction_state.get("faction_id", 0))
-            if chambers.has(faction_id):
-                _apply_chamber_state(chambers[faction_id], faction_state)
-            if turrets.has(faction_id):
-                _apply_turret_state(turrets[faction_id], faction_state)
-
-            if chambers.has(faction_id) and turrets.has(faction_id):
-                if chambers[faction_id].is_locked and turrets[faction_id].burst_remaining <= 0:
-                    chambers[faction_id].set_locked(false)
-
-            _refresh_add_ball_button(faction_id)
-
-    if event_roulette_controller != null:
-        var saved_event_state = data.get("event_state", {})
-        if saved_event_state is Dictionary:
-            event_roulette_controller.import_save_state(saved_event_state)
+    SaveStateApplier.apply_event_state(event_roulette_controller, data)
 
     _restore_bullet_states(data.get("bullets", []))
 
-    is_game_over = bool(data.get("is_game_over", false))
-    if winner_label != null:
-        winner_label.text = str(data.get("winner_text", ""))
+    is_game_over = SaveStateApplier.apply_game_over_state(data, winner_label)
     if is_game_over:
         _stop_all_actions_for_game_over()
 

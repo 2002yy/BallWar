@@ -1,17 +1,21 @@
 # AI Handoff Current
 
-Last updated: 2026-05-04 (v2.0.4 — WinConditionEvaluator refactor; Smoke 33 PASS; Integration 128 PASS)
+Last updated: 2026-05-04 (v2.0.5 — save centralized + indentation audit + .editorconfig; 33/133 PASS)
 
-### v2.0.4 (in progress)
+### v2.0.5 (complete)
 
-- added `scripts/WinConditionEvaluator.gd` — pure win-condition logic, 5-field fixed return struct
-- moved win-condition evaluation out of `Main.gd._check_winner()` — it now calls `WinConditionEvaluator.evaluate()`
-- `Main.gd._check_winner()` kept as orchestration layer
-- old `_get_occupation_winner` / `_get_score_winner` kept with deprecated comment for rollback safety
-- added WinConditionEvaluator coverage to `IntegrationTestRunner.gd` (evaluate_basic / evaluate_occupation / evaluate_timed / evaluate dispatcher)
-- SmokeTestRunner PASS 33 checks
-- IntegrationTestRunner PASS 128 checks
-- see `README_v2_0_4_win_condition_refactor.md` for full change log
+- save version centralized: `SaveGameCodec.CURRENT_SAVE_VERSION` + `get_current_save_version()` + `is_supported_save_version()`
+- added `scripts/SaveStateBuilder.gd` — collects state from objects → Dictionary
+- added `scripts/SaveStateApplier.gd` — applies clean data → objects via callbacks
+- `Main.gd._save_game_progress()` → `SaveStateBuilder.build_save_payload()`
+- `Main.gd._apply_saved_state()` → `SaveStateApplier`
+- `Main.gd` no longer hardcodes `"1.9.34"`
+- `Main.gd` 42-line tab contamination fixed to spaces (historical mix)
+- GDScript indentation audit: 14 tab files / 18 space files / 0 mixed (see README_v2_0_5)
+- `.editorconfig` added: charset/trim/newline only; no global `indent_style` to avoid polluting old space files
+- save major prefix still `"1.9"` — no version bump. Old saves remain compatible.
+- SmokeTestRunner PASS 33, IntegrationTestRunner PASS 133
+- see `README_v2_0_5_save_centralization.md`
 
 ## 工程原则 (必读)
 

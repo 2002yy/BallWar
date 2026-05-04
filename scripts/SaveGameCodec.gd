@@ -2,7 +2,14 @@ extends RefCounted
 class_name SaveGameCodec
 
 const SAVE_MAJOR_PREFIX: String = "1.9"
+const CURRENT_SAVE_VERSION: String = "1.9.34"
 const MAX_RESTORE_CONTROL_BALLS: int = 8
+
+static func get_current_save_version() -> String:
+    return CURRENT_SAVE_VERSION
+
+static func is_supported_save_version(version: String) -> bool:
+    return str(version).begins_with(SAVE_MAJOR_PREFIX)
 
 static func vec2_to_arr(v: Vector2) -> Array:
     return [v.x, v.y]
