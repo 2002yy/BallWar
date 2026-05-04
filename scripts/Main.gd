@@ -289,37 +289,32 @@ func _on_turret_destroyed(faction_id: int) -> void:
     _check_winner()
 
 func _check_winner() -> void:
-    if is_game_over:
-        return
-    if game_layer == null or battlefield == null or turrets.is_empty():
-        return
+	if is_game_over:
+		return
+	if game_layer == null or battlefield == null or turrets.is_empty():
+		return
 
-    var mode_name: String = GameConfig.get_game_mode_name()
-    if mode_name == GameConfig.GAME_MODE_OCCUPATION:
-        var occupation_winner: int = _get_occupation_winner()
-        if occupation_winner != -1:
-            _finish_with_winner(occupation_winner, "占领达成")
-            return
+	var mode_name: String = GameConfig.get_game_mode_name()
+	var counts: Dictionary = current_score_counts
+	if counts.is_empty() and battlefield != null and is_instance_valid(battlefield):
+		counts = battlefield.count_cells_by_team()
 
-    if mode_name == GameConfig.GAME_MODE_TIMED and game_elapsed_time >= GameConfig.get_time_limit_seconds():
-        var timed_winner: int = _get_score_winner()
-        if timed_winner == -1:
-            _finish_as_draw("时间到")
-        else:
-            _finish_with_winner(timed_winner, "时间到")
-        return
+	var time_expired: bool = mode_name == GameConfig.GAME_MODE_TIMED and game_elapsed_time >= GameConfig.get_time_limit_seconds()
+	var total_cells: int = selected_grid_size * selected_grid_size
 
-    var alive: Array = []
-    for faction_id in turrets.keys():
-        var turret = turrets[faction_id]
-        if not turret.is_destroyed:
-            alive.append(faction_id)
+	var result: Dictionary = WinConditionEvaluator.evaluate(mode_name, turrets, counts, total_cells, time_expired)
 
-    if alive.size() == 1:
-        _finish_with_winner(int(alive[0]), "终局")
-    elif alive.size() == 0:
-        _finish_as_draw("终局")
+	if not result.ended:
+		return
+	if result.draw:
+		_finish_as_draw(result.sub_text)
+	else:
+		_finish_with_winner(result.winner, result.sub_text)
 
+# Deprecated after v2.0.4:
+# win-condition logic is now delegated to WinConditionEvaluator.
+# Kept temporarily for safe rollback in non-git workspace.
+# Remove in v2.0.5 or v2.0.6 once confirmed stable.
 func _get_occupation_winner() -> int:
     var counts: Dictionary = current_score_counts
     if counts.is_empty() and battlefield != null and is_instance_valid(battlefield):
@@ -344,8 +339,9 @@ func _get_occupation_winner() -> int:
     var target_percent: int = GameConfig.get_occupation_target_percent()
     if best_count * 100 >= total * target_percent:
         return best_id
-    return -1
+	return -1
 
+# Deprecated after v2.0.4. See _get_occupation_winner note above.
 func _get_score_winner() -> int:
     var counts: Dictionary = current_score_counts
     if counts.is_empty() and battlefield != null and is_instance_valid(battlefield):

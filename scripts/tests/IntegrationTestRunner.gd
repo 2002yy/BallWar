@@ -3,9 +3,11 @@ extends SceneTree
 const SaveGameCodec = preload("res://scripts/SaveGameCodec.gd")
 const EventRouletteController = preload("res://scripts/EventRouletteController.gd")
 const Battlefield = preload("res://scripts/Battlefield.gd")
+const Turret = preload("res://scripts/Turret.gd")
 const GameConfig = preload("res://scripts/GameConfig.gd")
 const TestAssert = preload("res://scripts/tests/TestAssert.gd")
 const Fixtures = preload("res://scripts/tests/TestFixtures.gd")
+const WinConditionEvaluator = preload("res://scripts/WinConditionEvaluator.gd")
 
 var _assert: TestAssert
 
@@ -14,7 +16,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_assert = TestAssert.new()
-	print("[IntegrationTest] v2.0.3 — save / battlefield / win-condition coverage")
+	print("[IntegrationTest] v2.0.4 — save / battlefield / win-condition / evaluator coverage")
 	await process_frame
 
 	_test_save_load_roundtrip()
@@ -341,6 +343,11 @@ func _manual_scan(bf: Battlefield, grid: int) -> Dictionary:
 func _test_win_conditions() -> void:
 	print("  [P3] win conditions")
 
+	_test_wce_api_basic()
+	_test_wce_api_occupation()
+	_test_wce_api_timed()
+	_test_wce_api_wild()
+	_test_wce_evaluate_dispatcher()
 	_test_basic_win_last_turret()
 	_test_basic_win_all_destroyed_draw()
 	_test_basic_win_multiple_alive_no_result()
@@ -350,6 +357,109 @@ func _test_win_conditions() -> void:
 	_test_timed_draw()
 	_test_wild_mode()
 	_test_save_version_compatibility()
+
+func _test_wce_api_basic() -> void:
+	var turrets := {}
+	var mock_green := Turret.new()
+	mock_green.is_destroyed = false
+	turrets[GameConfig.Faction.GREEN] = mock_green
+	for fid in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.YELLOW]:
+		var m := Turret.new()
+		m.is_destroyed = true
+		turrets[fid] = m
+
+	var r: Dictionary = WinConditionEvaluator.evaluate_basic(turrets)
+	_assert.eq(r.ended, true, "WCE basic: single alive ends game")
+	_assert.eq(r.winner, GameConfig.Faction.GREEN, "WCE basic: GREEN wins")
+	_assert.eq(r.draw, false, "WCE basic: not draw")
+	_assert.eq(r.sub_text, "终局", "WCE basic: sub_text 终局")
+	_assert.eq(r.reason, "basic", "WCE basic: reason basic")
+
+	mock_green.is_destroyed = true
+	var r2: Dictionary = WinConditionEvaluator.evaluate_basic(turrets)
+	_assert.eq(r2.ended, true, "WCE basic: all destroyed ends game")
+	_assert.eq(r2.draw, true, "WCE basic: all destroyed = draw")
+	_assert.eq(r2.reason, "basic", "WCE basic draw: reason basic")
+
+	for m in turrets.values():
+		Fixtures.cleanup_node(m if m is Node else null)
+
+func _test_wce_api_occupation() -> void:
+	var counts := {GameConfig.Faction.BLUE: 300, GameConfig.Faction.RED: 50, GameConfig.Faction.GREEN: 25, GameConfig.Faction.YELLOW: 25}
+	var r: Dictionary = WinConditionEvaluator.evaluate_occupation(counts, 400, 75)
+	_assert.eq(r.ended, true, "WCE occ: 300/400=75%% ends")
+	_assert.eq(r.winner, GameConfig.Faction.BLUE, "WCE occ: BLUE wins at 75%%")
+	_assert.eq(r.reason, "occupation", "WCE occ: reason occupation")
+
+	var counts2 := {GameConfig.Faction.BLUE: 280, GameConfig.Faction.RED: 120, GameConfig.Faction.GREEN: 0, GameConfig.Faction.YELLOW: 0}
+	var r2: Dictionary = WinConditionEvaluator.evaluate_occupation(counts2, 400, 75)
+	_assert.eq(r2.ended, false, "WCE occ: 70%% does not end")
+
+	var tie := {GameConfig.Faction.BLUE: 200, GameConfig.Faction.RED: 200, GameConfig.Faction.GREEN: 0, GameConfig.Faction.YELLOW: 0}
+	var r3: Dictionary = WinConditionEvaluator.evaluate_occupation(tie, 400, 75)
+	_assert.eq(r3.ended, false, "WCE occ: tied leader no win")
+
+func _test_wce_api_timed() -> void:
+	var counts := {GameConfig.Faction.BLUE: 10, GameConfig.Faction.RED: 50, GameConfig.Faction.GREEN: 20, GameConfig.Faction.YELLOW: 20}
+	var r: Dictionary = WinConditionEvaluator.evaluate_timed(counts, true)
+	_assert.eq(r.ended, true, "WCE timed: expired=true ends")
+	_assert.eq(r.winner, GameConfig.Faction.RED, "WCE timed: RED leader wins")
+	_assert.eq(r.reason, "timed", "WCE timed: reason timed")
+
+	var r2: Dictionary = WinConditionEvaluator.evaluate_timed(counts, false)
+	_assert.eq(r2.ended, false, "WCE timed: expired=false no result")
+
+	var tie := {GameConfig.Faction.BLUE: 50, GameConfig.Faction.RED: 50, GameConfig.Faction.GREEN: 0, GameConfig.Faction.YELLOW: 0}
+	var r3: Dictionary = WinConditionEvaluator.evaluate_timed(tie, true)
+	_assert.eq(r3.ended, true, "WCE timed: tie expired ends")
+	_assert.eq(r3.draw, true, "WCE timed: tie = draw")
+
+func _test_wce_api_wild() -> void:
+	var turrets := {}
+	for fid in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+		var m := Turret.new()
+		m.is_destroyed = true
+		turrets[fid] = m
+
+	var r: Dictionary = WinConditionEvaluator.evaluate(GameConfig.GAME_MODE_WILD, turrets, {}, 0, false)
+	_assert.eq(r.ended, true, "WCE wild: evaluates as basic, all dead = draw")
+	_assert.eq(r.draw, true, "WCE wild: draw")
+	_assert.eq(r.reason, "basic", "WCE wild: reason basic (delegates to basic)")
+
+	for m in turrets.values():
+		Fixtures.cleanup_node(m)
+
+	var t2 := {}
+	var alive := Turret.new()
+	alive.is_destroyed = false
+	t2[GameConfig.Faction.YELLOW] = alive
+	for fid in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN]:
+		var m := Turret.new()
+		m.is_destroyed = true
+		t2[fid] = m
+
+	var r2: Dictionary = WinConditionEvaluator.evaluate(GameConfig.GAME_MODE_WILD, t2, {}, 0, false)
+	_assert.eq(r2.ended, true, "WCE wild: last turret YELLOW wins")
+	_assert.eq(r2.winner, GameConfig.Faction.YELLOW, "WCE wild: YELLOW wins")
+
+	for m in t2.values():
+		Fixtures.cleanup_node(m)
+
+func _test_wce_evaluate_dispatcher() -> void:
+	var turrets := {}
+	for fid in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+		var m := Turret.new()
+		m.is_destroyed = true
+		turrets[fid] = m
+
+	var r: Dictionary = WinConditionEvaluator.evaluate(GameConfig.GAME_MODE_BASIC, turrets, {}, 0, false)
+	_assert.eq(r.ended, true, "WCE dispatch: BASIC → evaluate_basic")
+
+	var r2: Dictionary = WinConditionEvaluator.evaluate("invalid_mode", turrets, {}, 0, false)
+	_assert.eq(r2.ended, false, "WCE dispatch: unknown mode returns no-op")
+
+	for m in turrets.values():
+		Fixtures.cleanup_node(m)
 
 func _test_basic_win_last_turret() -> void:
 	var turrets := Fixtures.make_mock_turrets({

@@ -1,6 +1,17 @@
 # AI Handoff Current
 
-Last updated: 2026-05-04 (v2.0.3 final — 107/107 PASS; `nul` cleaned)
+Last updated: 2026-05-04 (v2.0.4 — WinConditionEvaluator refactor; Smoke 33 PASS; Integration 128 PASS)
+
+### v2.0.4 (in progress)
+
+- added `scripts/WinConditionEvaluator.gd` — pure win-condition logic, 5-field fixed return struct
+- moved win-condition evaluation out of `Main.gd._check_winner()` — it now calls `WinConditionEvaluator.evaluate()`
+- `Main.gd._check_winner()` kept as orchestration layer
+- old `_get_occupation_winner` / `_get_score_winner` kept with deprecated comment for rollback safety
+- added WinConditionEvaluator coverage to `IntegrationTestRunner.gd` (evaluate_basic / evaluate_occupation / evaluate_timed / evaluate dispatcher)
+- SmokeTestRunner PASS 33 checks
+- IntegrationTestRunner PASS 128 checks
+- see `README_v2_0_4_win_condition_refactor.md` for full change log
 
 ## 工程原则 (必读)
 
@@ -224,6 +235,7 @@ Event roulette behavior:
 
 ### Active scripts
 
+- `scripts/WinConditionEvaluator.gd` (v2.0.4 — pure win-condition logic, extracted from Main.gd)
 - `scripts/tests/SmokeTestRunner.gd` (fast guard, codec/event/chamber/turret boundaries)
 - `scripts/tests/IntegrationTestRunner.gd` (medium integration, save round-trip + battlefield + win conditions, refactored v2.0.3)
 - `scripts/tests/PerfBurstBenchmark.gd` (performance probe, FPS/queue/trail/draw_calls)
