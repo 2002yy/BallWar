@@ -1,9 +1,6 @@
 extends RefCounted
 class_name TestFixtures
 
-const GameConfig = preload("res://scripts/GameConfig.gd")
-const EventRouletteController = preload("res://scripts/EventRouletteController.gd")
-
 class MockTurret:
 	var faction_id: int
 	var is_destroyed: bool

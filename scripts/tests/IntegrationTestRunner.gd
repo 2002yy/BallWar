@@ -1,13 +1,6 @@
 extends SceneTree
 
-const SaveGameCodec = preload("res://scripts/SaveGameCodec.gd")
-const EventRouletteController = preload("res://scripts/EventRouletteController.gd")
-const Battlefield = preload("res://scripts/Battlefield.gd")
-const Turret = preload("res://scripts/Turret.gd")
-const GameConfig = preload("res://scripts/GameConfig.gd")
-const TestAssert = preload("res://scripts/tests/TestAssert.gd")
 const Fixtures = preload("res://scripts/tests/TestFixtures.gd")
-const WinConditionEvaluator = preload("res://scripts/WinConditionEvaluator.gd")
 
 var _assert: TestAssert
 

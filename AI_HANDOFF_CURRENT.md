@@ -1,8 +1,23 @@
 # AI Handoff Current
 
-Last updated: 2026-05-04 (v2.0.5 — save centralized + indentation audit + .editorconfig; 33/133 PASS)
+Last updated: 2026-05-04 (v2.0.6 final — 496 total assertions; indentation audit: INDENTATION.md)
 
-### v2.0.5 (complete)
+## 前置必读
+
+- `AI_HANDOFF_CURRENT.md` (本文件) — 入口
+- `PROJECT_PRINCIPLES.md` — 工程原则
+- `ROADMAP.md` — v2.0.4~v2.0.8 路线
+- **`INDENTATION.md`** — 修改 .gd 文件前必须查阅，确认目标文件是 TAB 还是 SPACE
+
+### v2.0.6 (complete)
+
+- added `scripts/LayoutCoordinator.gd` — centralized layout calculation with dynamic cell_size matching Battlefield.gd
+- added `scripts/tests/LayoutSanityTestRunner.gd` — 10~60 grid strict boundary checks, bottom HUD group overflow detection
+- no resolution feature — only tested default 1120×720 viewport
+- fixed 23 SHADOWED_GLOBAL_IDENTIFIER warnings (removed redundant class_name preloads)
+- Smoke 33 / Integration 133 / LayoutSanity 330 PASS
+- Turret.gd has historical mixed indentation — do not format during other changes
+- see `README_v2_0_6_layout_sanity.md`
 
 - save version centralized: `SaveGameCodec.CURRENT_SAVE_VERSION` + `get_current_save_version()` + `is_supported_save_version()`
 - added `scripts/SaveStateBuilder.gd` — collects state from objects → Dictionary

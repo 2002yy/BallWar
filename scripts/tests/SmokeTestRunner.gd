@@ -1,11 +1,5 @@
 extends SceneTree
 
-const SaveGameCodec = preload("res://scripts/SaveGameCodec.gd")
-const EventRouletteController = preload("res://scripts/EventRouletteController.gd")
-const ControlChamber = preload("res://scripts/ControlChamber.gd")
-const Turret = preload("res://scripts/Turret.gd")
-const GameConfig = preload("res://scripts/GameConfig.gd")
-
 var _failures: Array[String] = []
 var _passes: int = 0
 

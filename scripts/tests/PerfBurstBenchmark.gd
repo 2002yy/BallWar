@@ -1,11 +1,5 @@
 extends SceneTree
 
-const Battlefield = preload("res://scripts/Battlefield.gd")
-const BulletPool = preload("res://scripts/BulletPool.gd")
-const BulletTrailLayer = preload("res://scripts/BulletTrailLayer.gd")
-const Turret = preload("res://scripts/Turret.gd")
-const GameConfig = preload("res://scripts/GameConfig.gd")
-
 const WARMUP_SECONDS: float = 2.0
 const DISCARD_SECONDS: float = 0.5
 const MEASURED_SECONDS: float = 10.0

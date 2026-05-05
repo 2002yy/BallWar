@@ -1,8 +1,6 @@
 extends RefCounted
 class_name WinConditionEvaluator
 
-const GameConfig = preload("res://scripts/GameConfig.gd")
-
 static func _result(ended: bool, winner: int, draw: bool, sub_text: String, reason: String) -> Dictionary:
 	return {"ended": ended, "winner": winner, "draw": draw, "sub_text": sub_text, "reason": reason}
 

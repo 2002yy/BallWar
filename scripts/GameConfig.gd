@@ -49,6 +49,23 @@ static var _palette_colors: Array = [
 static var _palette_names: Array = ["蓝方", "红方", "绿方", "黄方"]
 static var _palette_nicknames: Array = ["小蓝", "小红", "小绿", "小黄"]
 
+static func get_turret_max_health(grid_size: int) -> int:
+    match grid_size:
+        10:
+            return 30
+        20:
+            return 60
+        30:
+            return 90
+        40:
+            return 120
+        50:
+            return 150
+        60:
+            return 180
+        _:
+            return 30
+
 static func get_game_mode_names() -> Array:
     return [GAME_MODE_BASIC, GAME_MODE_OCCUPATION, GAME_MODE_TIMED, GAME_MODE_WILD]
 
