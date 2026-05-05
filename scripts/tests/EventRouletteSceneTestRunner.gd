@@ -25,6 +25,8 @@ func _run() -> void:
 
 	get_root().add_child(instance)
 	await process_frame
+	instance.setup(Vector2(1120, 720), {}, false)
+	await process_frame
 
 	t.that(instance.has_node("StagePanel"), "has StagePanel")
 	var panel = instance.get_node("StagePanel")
@@ -37,6 +39,11 @@ func _run() -> void:
 	t.that(panel.has_node("LeftPointer"), "has LeftPointer")
 	t.that(panel.has_node("RightPointer"), "has RightPointer")
 	t.that(panel.has_node("ResultLabel"), "has ResultLabel")
+	var stage_panel_count: int = 0
+	for child in instance.get_children():
+		if child.name == "StagePanel":
+			stage_panel_count += 1
+	t.eq(stage_panel_count, 1, "setup should reuse scene StagePanel")
 
 	t.report("[EventRouletteSceneTest]")
 

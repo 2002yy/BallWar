@@ -1,7 +1,7 @@
 extends RefCounted
 class_name GameHudView
 
-static func create_dynamic_ui(owner, ui_canvas: CanvasLayer, current_layout: Dictionary, view_size: Vector2, mobile_mode: bool) -> Dictionary:
+static func create_dynamic_ui(_owner, ui_canvas: CanvasLayer, current_layout: Dictionary, view_size: Vector2, mobile_mode: bool) -> Dictionary:
     ui_canvas.name = "UICanvas"
     ui_canvas.process_mode = Node.PROCESS_MODE_ALWAYS
 

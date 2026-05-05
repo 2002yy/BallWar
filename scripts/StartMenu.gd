@@ -65,9 +65,18 @@ func _init_options() -> void:
 
 func _init_decor() -> void:
 	var decor_node: Node2D = get_node("RootPanel/ChamberPreview")
-	var decor = preload("res://scripts/MenuDecor.gd").new()
-	decor.position = Vector2(420.0, 260.0)
-	decor.scale = Vector2(0.78, 0.78)
+	for child in decor_node.get_children():
+		child.queue_free()
+
+	var decor
+	var preview_scene_path: String = "res://scenes/ui/PreviewScene.tscn"
+	if ResourceLoader.exists(preview_scene_path):
+		var preview_scene: PackedScene = load(preview_scene_path)
+		decor = preview_scene.instantiate()
+	else:
+		decor = preload("res://scripts/MenuDecor.gd").new()
+	decor.position = Vector2.ZERO
+	decor.scale = Vector2.ONE
 	decor_node.add_child(decor)
 
 func _refresh_slots(save_summaries: Array) -> void:

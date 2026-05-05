@@ -3,7 +3,13 @@
 # Only run intentionally when you need to regenerate from scratch.
 extends SceneTree
 
+const ALLOW_OVERWRITE_START_MENU_TSCN: bool = false
+
 func _initialize() -> void:
+	if not ALLOW_OVERWRITE_START_MENU_TSCN:
+		push_error("Refusing to overwrite scenes/ui/StartMenu.tscn. Manual editor adjustments are source of truth. If regeneration is really needed, set ALLOW_OVERWRITE_START_MENU_TSCN = true in build_start_menu_scene.gd first.")
+		quit(1)
+		return
 	call_deferred("_run")
 
 func _run() -> void:

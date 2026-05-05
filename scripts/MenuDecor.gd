@@ -32,8 +32,8 @@ func _draw() -> void:
 
     _draw_chamber(Vector2(-364, -170), true)
     _draw_chamber(Vector2(216, -170), false)
-    _draw_chamber(Vector2(-364, 88), true)
-    _draw_chamber(Vector2(216, 88), false)
+    _draw_chamber(Vector2(-364, 64), true)
+    _draw_chamber(Vector2(216, 64), false)
 
     _draw_turret(board_pos + Vector2(18, 18), Color(0.85, 0.18, 0.18), PI * 0.25 + 0.28 * sin(t * 1.1))
     _draw_turret(board_pos + Vector2(board_size - 18, 18), Color(0.95, 0.85, 0.16), PI * 0.75 + 0.28 * sin(t * 1.2 + 1.2))
@@ -45,7 +45,6 @@ func _draw_chamber(pos: Vector2, left_mode: bool) -> void:
     draw_rect(Rect2(pos, size), Color(0.04, 0.04, 0.05, 0.97), true)
     draw_rect(Rect2(pos, size), Color(0.28, 0.30, 0.33), false, 3.0)
 
-    # 3-4-3-4-3-4 preview peg layout.
     var peg_points: Array = [
         Vector2(33, 28), Vector2(67, 28), Vector2(101, 28),
         Vector2(18, 54), Vector2(52, 54), Vector2(86, 54), Vector2(120, 54),
@@ -64,13 +63,24 @@ func _draw_chamber(pos: Vector2, left_mode: bool) -> void:
     if left_mode:
         draw_rect(Rect2(pos + Vector2(0, 150), Vector2(size.x * 0.5, 26)), Color(0.76, 1.0, 0.18), true)
         draw_rect(Rect2(pos + Vector2(size.x * 0.5, 150), Vector2(size.x * 0.5, 26)), Color(1.0, 0.57, 0.02), true)
-        draw_string(font, pos + Vector2(20, 169), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
-        draw_string(font, pos + Vector2(82, 169), "射", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
+        _draw_footer_text(font, Rect2(pos + Vector2(0, 150), Vector2(size.x * 0.5, 26)), "x2")
+        _draw_footer_text(font, Rect2(pos + Vector2(size.x * 0.5, 150), Vector2(size.x * 0.5, 26)), "发射")
     else:
         draw_rect(Rect2(pos + Vector2(0, 150), Vector2(size.x * 0.5, 26)), Color(1.0, 0.57, 0.02), true)
         draw_rect(Rect2(pos + Vector2(size.x * 0.5, 150), Vector2(size.x * 0.5, 26)), Color(0.76, 1.0, 0.18), true)
-        draw_string(font, pos + Vector2(22, 169), "射", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
-        draw_string(font, pos + Vector2(84, 169), "x2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.BLACK)
+        _draw_footer_text(font, Rect2(pos + Vector2(0, 150), Vector2(size.x * 0.5, 26)), "发射")
+        _draw_footer_text(font, Rect2(pos + Vector2(size.x * 0.5, 150), Vector2(size.x * 0.5, 26)), "x2")
+
+func _draw_footer_text(font, rect: Rect2, text: String) -> void:
+    draw_string(
+        font,
+        Vector2(rect.position.x, rect.position.y + 19.0),
+        text,
+        HORIZONTAL_ALIGNMENT_CENTER,
+        rect.size.x,
+        16,
+        Color.BLACK
+    )
 
 func _draw_turret(p: Vector2, color: Color, angle: float) -> void:
     draw_circle(p, 14.0, color)

@@ -27,7 +27,14 @@ func _run() -> void:
 	await process_frame
 
 	t.that(instance.has_method("get_static_parts"), "has get_static_parts")
+	t.that(instance.has_method("setup_static"), "has setup_static")
+	instance.setup_static(instance, Vector2(1120, 720), LayoutProfiles.get_profile(40), false)
 	var parts: Dictionary = instance.get_static_parts()
+	t.that(parts.has("top_bar_segments"), "part: top_bar_segments")
+	t.that(parts.has("leader_label"), "part: leader_label")
+	t.that(parts.has("timer_label"), "part: timer_label")
+	t.that(parts.has("stage_label"), "part: stage_label")
+	t.that(parts.has("game_title_label"), "part: game_title_label")
 	t.that(parts.has("fps_label"), "part: fps_label")
 	t.that(parts.has("event_label"), "part: event_label")
 	t.that(parts.has("settings_button"), "part: settings_button")
@@ -44,6 +51,8 @@ func _run() -> void:
 	t.that(parts["settings_button"] is Button, "settings_button is Button")
 	t.that(parts["pause_button"] is Button, "pause_button is Button")
 	t.that(parts["exit_button"] is Button, "exit_button is Button")
+	t.that(parts["fps_label"].visible, "fps_label visible after setup_static")
+	t.that((parts["top_bar_segments"] as Dictionary).size() == 4, "top bar has 4 segments")
 
 	t.report("[GameHUDSceneTest]")
 

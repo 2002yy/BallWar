@@ -2,6 +2,27 @@ extends SceneTree
 
 const TestAssert = preload("res://scripts/tests/TestAssert.gd")
 
+class DummyOwner extends RefCounted:
+	var SAVE_SLOT_COUNT: int = 5
+	var selected_grid_size: int = 40
+	var selected_palette_name: String = ""
+	var selected_quality_name: String = ""
+	var selected_game_mode_name: String = ""
+	var selected_time_limit_minutes: int = 5
+	var selected_save_slot: int = 1
+
+	func _has_save_file(_slot_index: int = -1) -> bool:
+		return false
+
+	func _start_game(_grid_size: int) -> void:
+		pass
+
+	func _continue_saved_game() -> void:
+		pass
+
+	func _select_save_slot(_slot_index: int) -> void:
+		pass
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -54,6 +75,40 @@ func _run() -> void:
 	t.that(instance.has_node("RootPanel/SubtitleLabel"), "SubtitleLabel node exists")
 	t.that(instance.has_node("RootPanel/MobileHint"), "MobileHint node exists")
 	t.that(instance.has_node("RootPanel/ConfigPanel/ModeTip"), "ModeTip node exists")
+	var preview_scene = load("res://scenes/ui/PreviewScene.tscn")
+	t.that(preview_scene != null, "PreviewScene.tscn loadable")
+	if preview_scene != null:
+		var preview_instance = preview_scene.instantiate()
+		t.that(preview_instance.has_node("Board"), "PreviewScene has Board")
+		t.that(preview_instance.has_node("ChamberBottomLeft"), "PreviewScene has ChamberBottomLeft")
+		t.that(preview_instance.has_node("ChamberBottomRight"), "PreviewScene has ChamberBottomRight")
+		t.that(preview_instance.has_node("TurretTopLeft"), "PreviewScene has TurretTopLeft")
+
+	var config_panel: Control = instance.get_node("RootPanel/ConfigPanel")
+	var mode_tip: Label = instance.get_node("RootPanel/ConfigPanel/ModeTip")
+	var preview_node: Node2D = instance.get_node("RootPanel/ChamberPreview")
+	var start_button: Button = instance.get_node("RootPanel/ConfigPanel/StartButton")
+
+	var config_pos_before: Vector2 = config_panel.position
+	var config_size_before: Vector2 = config_panel.size
+	var mode_tip_pos_before: Vector2 = mode_tip.position
+	var mode_tip_size_before: Vector2 = mode_tip.size
+	var preview_pos_before: Vector2 = preview_node.position
+	var preview_scale_before: Vector2 = preview_node.scale
+	var start_button_pos_before: Vector2 = start_button.position
+	var start_button_size_before: Vector2 = start_button.size
+
+	var owner := DummyOwner.new()
+	instance.setup(owner, Vector2(1120, 720), [])
+
+	t.eq(config_panel.position, config_pos_before, "setup should not override ConfigPanel position")
+	t.eq(config_panel.size, config_size_before, "setup should not override ConfigPanel size")
+	t.eq(mode_tip.position, mode_tip_pos_before, "setup should not override ModeTip position")
+	t.eq(mode_tip.size, mode_tip_size_before, "setup should not override ModeTip size")
+	t.eq(preview_node.position, preview_pos_before, "setup should not override ChamberPreview position")
+	t.eq(preview_node.scale, preview_scale_before, "setup should not override ChamberPreview scale")
+	t.eq(start_button.position, start_button_pos_before, "setup should not override StartButton position")
+	t.eq(start_button.size, start_button_size_before, "setup should not override StartButton size")
 
 	t.report("[StartMenuSceneTest]")
 

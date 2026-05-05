@@ -41,6 +41,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = false
 	process_mode = Node.PROCESS_MODE_PAUSABLE
+	_bind_scene_nodes()
 
 func setup(view_size: Vector2, new_current_layout: Dictionary, is_mobile: bool) -> void:
 	size = view_size
@@ -90,6 +91,7 @@ func _process(delta: float) -> void:
 		_finish_presentation()
 
 func _rebuild_stage() -> void:
+	_bind_scene_nodes()
 	if stage_panel != null and is_instance_valid(stage_panel):
 		if stage_panel.has_node("HeaderLabel"):
 			_layout_stage()
@@ -129,6 +131,23 @@ func _rebuild_stage() -> void:
 	stage_panel.add_child(right_pointer)
 
 	_layout_stage()
+
+func _bind_scene_nodes() -> void:
+	if not has_node("StagePanel"):
+		return
+
+	stage_panel = get_node("StagePanel") as Panel
+	if stage_panel == null:
+		return
+
+	header_label = stage_panel.get_node_or_null("HeaderLabel") as Label
+	left_title_label = stage_panel.get_node_or_null("LeftTitleLabel") as Label
+	right_title_label = stage_panel.get_node_or_null("RightTitleLabel") as Label
+	left_value_label = stage_panel.get_node_or_null("LeftValueLabel") as Label
+	right_value_label = stage_panel.get_node_or_null("RightValueLabel") as Label
+	result_label = stage_panel.get_node_or_null("ResultLabel") as Label
+	left_pointer = stage_panel.get_node_or_null("LeftPointer") as ColorRect
+	right_pointer = stage_panel.get_node_or_null("RightPointer") as ColorRect
 
 func _layout_stage() -> void:
 	var grid_size: int = int(_payload.get("grid_size", 40))

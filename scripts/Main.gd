@@ -118,7 +118,17 @@ func _detect_mobile_layout() -> bool:
 func _toggle_settings_panel() -> void:
     if settings_panel == null or not is_instance_valid(settings_panel):
         return
-    settings_panel.visible = not settings_panel.visible
+    if settings_panel.visible:
+        if settings_panel.has_method("hide_panel"):
+            settings_panel.hide_panel()
+        else:
+            settings_panel.visible = false
+        return
+
+    if settings_panel.has_method("show_content"):
+        settings_panel.show_content(GameConfig.get_quality_name(), "手机横屏" if is_mobile_layout else "电脑")
+    else:
+        settings_panel.visible = true
 
 func _create_background() -> void:
     var background = ColorRect.new()
@@ -224,13 +234,8 @@ func _create_ui() -> void:
         var game_hud: CanvasLayer = scene.instantiate()
         game_hud.name = "UICanvas"
         game_layer.add_child(game_hud)
-
-        var dynamic: Dictionary = GameHudView.create_dynamic_ui(self, game_hud, current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
-        var st: Dictionary = game_hud.get_static_parts()
-        game_hud.setup_side_buttons(self)
-
-        hud_nodes = st
-        hud_nodes.merge(dynamic)
+        game_hud.setup_static(self, Vector2(VIEW_W, VIEW_H), current_layout, is_mobile_layout)
+        hud_nodes = game_hud.get_static_parts()
         print("[GameHUD] Loaded scene GameHUD.tscn")
     else:
         hud_nodes = GameHudView.create_runtime_ui(self, game_layer, battlefield, current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)

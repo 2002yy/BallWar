@@ -1,0 +1,54 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/PreviewBoard.gd" id="1_board"]
+[ext_resource type="Script" path="res://scripts/PreviewChamber.gd" id="2_chamber"]
+[ext_resource type="Script" path="res://scripts/PreviewTurret.gd" id="3_turret"]
+
+[node name="PreviewScene" type="Node2D"]
+
+[node name="Board" type="Node2D" parent="."]
+script = ExtResource("1_board")
+
+[node name="ChamberTopLeft" type="Node2D" parent="."]
+position = Vector2(-364, -170)
+script = ExtResource("2_chamber")
+left_mode = true
+
+[node name="ChamberTopRight" type="Node2D" parent="."]
+position = Vector2(216, -170)
+script = ExtResource("2_chamber")
+left_mode = false
+
+[node name="ChamberBottomLeft" type="Node2D" parent="."]
+position = Vector2(-364, 64)
+script = ExtResource("2_chamber")
+left_mode = true
+
+[node name="ChamberBottomRight" type="Node2D" parent="."]
+position = Vector2(216, 64)
+script = ExtResource("2_chamber")
+left_mode = false
+
+[node name="TurretTopLeft" type="Node2D" parent="."]
+position = Vector2(-132, -132)
+script = ExtResource("3_turret")
+turret_color = Color(0.85, 0.18, 0.18, 1)
+barrel_angle_deg = 45.0
+
+[node name="TurretTopRight" type="Node2D" parent="."]
+position = Vector2(132, -132)
+script = ExtResource("3_turret")
+turret_color = Color(0.95, 0.85, 0.16, 1)
+barrel_angle_deg = 135.0
+
+[node name="TurretBottomLeft" type="Node2D" parent="."]
+position = Vector2(-132, 132)
+script = ExtResource("3_turret")
+turret_color = Color(0.20, 0.88, 0.26, 1)
+barrel_angle_deg = -45.0
+
+[node name="TurretBottomRight" type="Node2D" parent="."]
+position = Vector2(132, 132)
+script = ExtResource("3_turret")
+turret_color = Color(0.22, 0.54, 0.96, 1)
+barrel_angle_deg = 225.0

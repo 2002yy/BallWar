@@ -178,3 +178,46 @@ README   → 告诉人在哪里改
 - Confirmed Remote tree `@ColorRect@2` comes from `Main.gd:124` unnamed background ColorRect, now named `MainBackground`.
 - Added `layout_mode = 0` + `clip_contents = true` to RootPanel; `layout_mode = 0` to SaveSlotContainer.
 - All node positions verified against old StartMenuView.gd: 21/25 exact match, 4 minor (1-2px label auto-height, SpinBox auto-width).
+
+## v2.0.7.2 Manual-Edit Safety
+
+- **Source of truth is the local file**: `scenes/ui/StartMenu.tscn`
+- **Do not edit Remote runtime nodes** in the Godot Remote tree when your goal is to persist layout changes
+- Remote nodes are only live instances created after `Main.gd` runs `load -> instantiate -> setup()`
+- Persistent layout edits must be made in the Scene editor on the local `StartMenu.tscn` resource
+
+### Runtime ownership boundaries
+
+- `setup()`
+  - initializes selected values on the owner
+  - calls `_init_options()`, `_init_decor()`, `_refresh_slots()`, `_connect_signals()`
+  - **does not modify** `ConfigPanel`, `ModeTip`, `StartButton`, or `ChamberPreview` transform
+- `_init_options()`
+  - only fills `OptionButton` items and selected state
+  - **does not modify** position / size / scale
+- `_init_decor()`
+  - only mounts `PreviewScene.tscn` under `ChamberPreview`
+  - preview instance is reset to local `Vector2.ZERO` / `Vector2.ONE`
+  - **does not modify** the `ChamberPreview` container transform from `.tscn`
+- `_refresh_slots()`
+  - only updates text / tooltip / disabled / self_modulate
+  - **does not modify** position / size / scale
+
+### What `.tscn` controls vs runtime code
+
+| Node / property | Controlled by `.tscn` | Runtime override |
+|---|---|---|
+| `ConfigPanel` position / size | yes | none |
+| `ModeTip` position / size / font size | yes | none |
+| `StartButton` position / size / theme | yes | text only remains static, no transform override |
+| `ChamberPreview` position / scale | yes | container transform not overridden |
+| `ContinueButton` position / size / theme | yes | text + disabled |
+| `SlotButton_*` position / size / theme | yes | text + tooltip + self_modulate |
+| `MenuStatusLabel` position / size / theme | yes | text |
+| `OptionButton` position / size / theme | yes | items + selected |
+
+### Regeneration guard
+
+- `scripts/tools/build_start_menu_scene.gd` is now guarded by `ALLOW_OVERWRITE_START_MENU_TSCN = false`
+- Running the script now aborts by default instead of overwriting your manual scene edits
+- To regenerate from scratch, you must **intentionally edit the script** and flip that constant to `true`
