@@ -170,4 +170,5 @@ P4 — Event integration：
 - 桌面 Godot 验证仍是权威路径
 - 存档兼容 1.9 前缀
 - 生产代码不可因测试失败而改动（v2.0.3 7 项修复全在测试基建）
-- `PROJECT_PRINCIPLES.md` 的两条原则（低耦合/安全/向后兼容 + 新代码优先排查）
+- `PROJECT_PRINCIPLES.md` 的三条原则（低耦合/安全/向后兼容 + 新代码优先排查 + UI .tscn 优先）
+- **组件分类**（见 `PROJECT_PRINCIPLES.md` 原则 3）：人类调外观 → .tscn，Agent 跑逻辑 → .gd，数量巨大 → 代码/对象池

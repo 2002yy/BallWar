@@ -1,13 +1,16 @@
 # AI Handoff Current
 
-Last updated: 2026-05-04 (v2.0.6 final — 496 total assertions; indentation audit: INDENTATION.md)
+Last updated: 2026-05-04 (v2.0.8 — 4 .tscn migrated, 7 test suites, 557 total assertions)
 
 ## 前置必读
 
 - `AI_HANDOFF_CURRENT.md` (本文件) — 入口
-- `PROJECT_PRINCIPLES.md` — 工程原则
+- `PROJECT_PRINCIPLES.md` — 三条工程原则
 - `ROADMAP.md` — v2.0.4~v2.0.8 路线
-- **`INDENTATION.md`** — 修改 .gd 文件前必须查阅，确认目标文件是 TAB 还是 SPACE
+- **`INDENTATION.md`** — 修改 .gd 文件前必须查阅
+- `README_EDITOR_HANDOFF.md` — UI 组件的 .tscn 入口和编辑方法
+- `README_START_MENU_TSCN_MIGRATION_PLAN.md` — 迁移图纸 + 通用模板
+- **`README_TSCN_AUDIT.md`** — 4 个 .tscn 接入状态、fallback、属性边界、验收清单
 
 ### v2.0.6 (complete)
 
@@ -31,6 +34,18 @@ Last updated: 2026-05-04 (v2.0.6 final — 496 total assertions; indentation aud
 - save major prefix still `"1.9"` — no version bump. Old saves remain compatible.
 - SmokeTestRunner PASS 33, IntegrationTestRunner PASS 133
 - see `README_v2_0_5_save_centralization.md`
+
+### v2.0.7 (complete)
+
+- **UI .tscn-first policy**: all new UI panels must use `.tscn` scenes (see PROJECT_PRINCIPLES.md principle 3)
+- added `scenes/ui/StartMenu.tscn` — first visual scene (Godot PackedScene generated via `scripts/tools/build_start_menu_scene.gd`)
+- added `scripts/StartMenu.gd` — CanvasLayer script: `get_node()` paths, `get_parts()`, `setup()`, refresh, signal wiring
+- `Main.gd._create_start_menu()`: `.tscn` load first, fallback to `StartMenuView.create()`
+- `StartMenuView.gd` retained as fallback (not deleted)
+- added `scripts/tests/StartMenuSceneTestRunner.gd` — scene load + 6 required keys + @onready checks (18 assertions)
+- 4 suites pass: Scene 18 + Smoke 33 + Integration 133 + LayoutSanity 330 = **514 total**
+- see `README_v2_0_7_start_menu_scene.md`
+- see `README_START_MENU_TSCN_MIGRATION_PLAN.md` (migration blueprint for future .tscn work)
 
 ## 工程原则 (必读)
 
@@ -254,12 +269,40 @@ Event roulette behavior:
 
 ### Active scripts
 
-- `scripts/WinConditionEvaluator.gd` (v2.0.4 — pure win-condition logic, extracted from Main.gd)
-- `scripts/tests/SmokeTestRunner.gd` (fast guard, codec/event/chamber/turret boundaries)
-- `scripts/tests/IntegrationTestRunner.gd` (medium integration, save round-trip + battlefield + win conditions, refactored v2.0.3)
-- `scripts/tests/PerfBurstBenchmark.gd` (performance probe, FPS/queue/trail/draw_calls)
+**Production:**
+- `scripts/WinConditionEvaluator.gd` (v2.0.4 — pure win-condition logic)
+- `scripts/SaveStateBuilder.gd` (v2.0.5 — save payload construction)
+- `scripts/SaveStateApplier.gd` (v2.0.5 — save data restoration)
+- `scripts/StartMenu.gd` (v2.0.7 — CanvasLayer controller for StartMenu.tscn)
+- `scripts/GameHUD.gd` (v2.0.8 — CanvasLayer controller for GameHUD.tscn)
+
+**Utility:**
 - `scripts/tests/TestAssert.gd` (v2.0.3 — reusable assertion utility)
 - `scripts/tests/TestFixtures.gd` (v2.0.3 — test fixture factory)
+
+**Tests (7 suites, 557 assertions):**
+
+| # | Test | 断言 | 类型 | 覆盖 |
+|---|---|---|---|---|
+| 1 | `SmokeTestRunner.gd` | 33 | 快速冒烟 | codec 边界、事件间隔/权重、chamber 事件、turret cancel |
+| 2 | `IntegrationTestRunner.gd` | 133 | 中量集成 | P1 存档回环、P2 战场规则、P3 胜负条件、WCE 专项 |
+| 3 | `LayoutSanityTestRunner.gd` | 330 | 布局边界 | 10~60 grid × desktop/mobile 是否越界 |
+| 4 | `StartMenuSceneTestRunner.gd` | 22 | 场景加载 | StartMenu.tscn load/instantiate/nodes/parts |
+| 5 | `GameHUDSceneTestRunner.gd` | 17 | 场景加载 | GameHUD.tscn load/instantiate/nodes/parts |
+| 6 | `EventRouletteSceneTestRunner.gd` | 13 | 场景加载 | EventRouletteView.tscn load/instantiate/nodes |
+| 7 | `SettingsPanelSceneTestRunner.gd` | 9 | 场景加载 | SettingsPanel.tscn load/show_content/hide_panel |
+| — | `PerfBurstBenchmark.gd` | — | 性能探针 | FPS/p95/p99/stutter/draw_calls（不作为 correctness） |
+
+**Scene scripts (.tscn 迁移进度):**
+
+| 组件 | .tscn | .gd | 集成 Main.gd |
+|---|---|---|---|
+| 开始菜单 | `scenes/ui/StartMenu.tscn` ✓ | `StartMenu.gd` ✓ | ✓ fallback 旧版 |
+| GameHUD | `scenes/ui/GameHUD.tscn` ✓ | `GameHUD.gd` ✓ | ✓ fallback 旧版 |
+| 事件转盘 | `scenes/ui/EventRouletteView.tscn` ✓ | `EventRouletteView.gd` ✓ | ✓ fallback 旧版 |
+| 设置面板 | `scenes/ui/SettingsPanel.tscn` ✓ | `SettingsPanel.gd` ✓ | scene ready, 独立面板 |
+| 控制仓 | 暂不急 | — | — |
+| 炮塔 | 暂不急 | — | — |
 
 
 ### Legacy scripts

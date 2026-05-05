@@ -1,0 +1,46 @@
+extends SceneTree
+
+const TestAssert = preload("res://scripts/tests/TestAssert.gd")
+
+func _initialize() -> void:
+	call_deferred("_run")
+
+func _run() -> void:
+	var t: TestAssert = TestAssert.new()
+	print("[EventRouletteSceneTest] v2.0.8 — scene load verification")
+
+	var scene_path: String = "res://scenes/ui/EventRouletteView.tscn"
+	var resource = load(scene_path)
+	t.that(resource != null, "scene loadable")
+	if resource == null:
+		quit(1)
+		return
+
+	var instance = resource.instantiate()
+	t.that(instance != null, "instantiable")
+	t.that(instance is Control, "root is Control")
+	if instance == null:
+		quit(1)
+		return
+
+	get_root().add_child(instance)
+	await process_frame
+
+	t.that(instance.has_node("StagePanel"), "has StagePanel")
+	var panel = instance.get_node("StagePanel")
+	t.that(panel != null, "StagePanel not null")
+	t.that(panel.has_node("HeaderLabel"), "has HeaderLabel")
+	t.that(panel.has_node("LeftTitleLabel"), "has LeftTitleLabel")
+	t.that(panel.has_node("RightTitleLabel"), "has RightTitleLabel")
+	t.that(panel.has_node("LeftValueLabel"), "has LeftValueLabel")
+	t.that(panel.has_node("RightValueLabel"), "has RightValueLabel")
+	t.that(panel.has_node("LeftPointer"), "has LeftPointer")
+	t.that(panel.has_node("RightPointer"), "has RightPointer")
+	t.that(panel.has_node("ResultLabel"), "has ResultLabel")
+
+	t.report("[EventRouletteSceneTest]")
+
+	if t.failures.is_empty():
+		quit(0)
+	else:
+		quit(1)

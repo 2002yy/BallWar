@@ -1,0 +1,82 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/GameHUD.gd" id="1_f41ut"]
+
+[node name="GameHUD" type="CanvasLayer" unique_id=1361185303]
+process_mode = 3
+script = ExtResource("1_f41ut")
+
+[node name="FPSLabel" type="Label" parent="." unique_id=993794903]
+process_mode = 3
+visible = false
+offset_left = 402.0
+offset_top = 649.0
+offset_right = 1104.0
+offset_bottom = 673.0
+theme_override_colors/font_color = Color(0.72, 1, 0.72, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
+text = "FPS -- | 子弹 -- | 队列 -- | 画质 -- | 地图 -- | 战场 -- | 压力 --"
+horizontal_alignment = 2
+
+[node name="EventLabel" type="Label" parent="." unique_id=1665911210]
+process_mode = 3
+offset_left = 772.0
+offset_top = 621.0
+offset_right = 1104.0
+offset_bottom = 645.0
+theme_override_colors/font_color = Color(1, 0.94, 0.68, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 14
+text = "事件：无 | 下次 00:00"
+horizontal_alignment = 2
+
+[node name="SettingsButton" type="Button" parent="." unique_id=977359703]
+self_modulate = Color(0.34, 0.34, 0.54, 1)
+offset_left = 1006.0
+offset_top = 84.0
+offset_right = 1102.0
+offset_bottom = 126.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "设置"
+
+[node name="PauseButton" type="Button" parent="." unique_id=262423170]
+self_modulate = Color(0.24, 0.52, 0.92, 1)
+offset_left = 1006.0
+offset_top = 134.0
+offset_right = 1102.0
+offset_bottom = 176.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "暂停"
+
+[node name="ExitButton" type="Button" parent="." unique_id=1990761899]
+self_modulate = Color(0.62, 0.24, 0.22, 1)
+offset_left = 1006.0
+offset_top = 184.0
+offset_right = 1102.0
+offset_bottom = 226.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "退出"
+
+[node name="PauseOverlay" type="Control" parent="." unique_id=860529416]
+process_mode = 3
+visible = false
+layout_mode = 3
+anchors_preset = 0
+offset_right = 1120.0
+offset_bottom = 720.0
+
+[node name="WinnerLabel" type="Label" parent="." unique_id=1189442416]
+offset_top = 648.0
+offset_right = 1120.0
+offset_bottom = 682.0
+theme_override_colors/font_color = Color(1, 0.94, 0.22, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1

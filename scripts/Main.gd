@@ -122,6 +122,7 @@ func _toggle_settings_panel() -> void:
 
 func _create_background() -> void:
     var background = ColorRect.new()
+    background.name = "MainBackground"
     background.color = Color(0.03, 0.07, 0.14)
     background.size = Vector2(VIEW_W, VIEW_H)
     add_child(background)
@@ -131,7 +132,19 @@ func _create_start_menu() -> void:
     if menu_layer != null:
         menu_layer.queue_free()
 
-    var menu_nodes: Dictionary = StartMenuView.create(self, Vector2(VIEW_W, VIEW_H), _get_save_slot_summaries())
+    var menu_nodes: Dictionary
+    var scene_path: String = "res://scenes/ui/StartMenu.tscn"
+    if ResourceLoader.exists(scene_path):
+        var scene: PackedScene = load(scene_path)
+        var instance: CanvasLayer = scene.instantiate()
+        add_child(instance)
+        instance.setup(self, Vector2(VIEW_W, VIEW_H), _get_save_slot_summaries())
+        menu_nodes = instance.get_parts()
+        print("[StartMenu] Loaded scene StartMenu.tscn")
+    else:
+        menu_nodes = StartMenuView.create(self, Vector2(VIEW_W, VIEW_H), _get_save_slot_summaries())
+        print("[StartMenu] Scene load failed, fallback to legacy StartMenuView.gd")
+
     menu_layer = menu_nodes.get("menu_layer", null)
     menu_title_label = menu_nodes.get("menu_title_label", null)
     menu_start_button = menu_nodes.get("menu_start_button", null)
@@ -204,7 +217,25 @@ func _create_control_chambers() -> void:
     _sync_chamber_game_elapsed_time()
 
 func _create_ui() -> void:
-    var hud_nodes: Dictionary = GameHudView.create_runtime_ui(self, game_layer, battlefield, current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
+    var hud_nodes: Dictionary
+    var scene_path: String = "res://scenes/ui/GameHUD.tscn"
+    if ResourceLoader.exists(scene_path):
+        var scene: PackedScene = load(scene_path)
+        var game_hud: CanvasLayer = scene.instantiate()
+        game_hud.name = "UICanvas"
+        game_layer.add_child(game_hud)
+
+        var dynamic: Dictionary = GameHudView.create_dynamic_ui(self, game_hud, current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
+        var st: Dictionary = game_hud.get_static_parts()
+        game_hud.setup_side_buttons(self)
+
+        hud_nodes = st
+        hud_nodes.merge(dynamic)
+        print("[GameHUD] Loaded scene GameHUD.tscn")
+    else:
+        hud_nodes = GameHudView.create_runtime_ui(self, game_layer, battlefield, current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
+        print("[GameHUD] Scene load failed, fallback to legacy GameHudView.gd")
+
     ui_canvas = hud_nodes.get("ui_canvas", null)
     top_bar_segments = hud_nodes.get("top_bar_segments", {})
     top_bar_labels = hud_nodes.get("top_bar_labels", {})
@@ -229,10 +260,18 @@ func _create_event_roulette_system() -> void:
     if game_layer == null or ui_canvas == null:
         return
 
-    var event_view_script = load("res://scripts/EventRouletteView.gd")
-    event_roulette_view = event_view_script.new()
-    event_roulette_view.name = "EventRouletteView"
-    event_roulette_view.setup(Vector2(VIEW_W, VIEW_H), current_layout, is_mobile_layout)
+    var scene_path: String = "res://scenes/ui/EventRouletteView.tscn"
+    if ResourceLoader.exists(scene_path):
+        var scene: PackedScene = load(scene_path)
+        event_roulette_view = scene.instantiate()
+        event_roulette_view.setup(Vector2(VIEW_W, VIEW_H), current_layout, is_mobile_layout)
+        print("[EventRoulette] Loaded scene EventRouletteView.tscn")
+    else:
+        var event_view_script = load("res://scripts/EventRouletteView.gd")
+        event_roulette_view = event_view_script.new()
+        event_roulette_view.name = "EventRouletteView"
+        event_roulette_view.setup(Vector2(VIEW_W, VIEW_H), current_layout, is_mobile_layout)
+        print("[EventRoulette] Scene load failed, fallback to legacy EventRouletteView.gd")
     ui_canvas.add_child(event_roulette_view)
 
     var event_controller_script = load("res://scripts/EventRouletteController.gd")

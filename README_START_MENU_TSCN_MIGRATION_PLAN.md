@@ -1,6 +1,6 @@
 # StartMenu.tscn 迁移方案
 
-日期: 2026-05-04 | 状态: 图纸阶段，不实际迁移
+日期: 2026-05-04 | 状态: StartMenu 已完成 (v2.0.7)，模板供后续迁移用
 
 ## 目标
 
@@ -172,3 +172,33 @@ func _refresh_slots(save_summaries: Array) -> void:
 - **Owner 引用**：开始菜单的按钮回调大量依赖 `owner` (Main.gd)，迁移后需确认 `owner` 引用在 `.tscn` 实例化后仍然有效
 - **动态节点**：5 个 SlotButton 目前是 for-loop 动态创建；迁移后可改为 5 个静态节点 → `@onready` 数组
 - **向后兼容**：迁移后旧存档、所有玩法规则、事件规则均不受影响
+
+## 通用迁移模板（后续 .tscn 迁移遵循此模式）
+
+### 三条铁律
+
+1. **节点命名固定** — 关键节点在 `.tscn` 中设 `unique_name_in_owner=true`，脚本用 `@onready var node: Type = %NodeName`（编辑器保存后生效）或 `get_node("Path/To/Node")`
+2. **脚本只写 @onready 绑定 + 信号 + 逻辑** — 不 `new()` 节点
+3. **每次迁移后运行场景测试** — 验证 .tscn 可 load、instantiate、get_parts() 返回完整
+
+### 迁移步骤
+
+```
+1. Godot 脚本生成 .tscn 初版 (PackedScene.pack)
+2. 人在编辑器中整理节点、样式、唯一名称
+3. @onready 绑定到 .gd 脚本
+4. Main.gd 优先 load .tscn → fallback 旧代码
+5. SceneTestRunner 验证 → 全量测试通过
+6. README 更新信号表 + 编辑器编辑说明 + 人工验收清单
+```
+
+## 下一步迁移目标
+
+按组件分类（`PROJECT_PRINCIPLES.md` 原则 3）：
+
+| 优先级 | 组件 | 理由 |
+|---|---|---|
+| **1** | **GameHUD.tscn** | 底部 perf/event HUD 右溢出需手动调位置；编辑器中改比改代码快得多 |
+| 2 | EventRouletteView.tscn | 转盘舞台动画，迁移后可在编辑器中调位置和大小 |
+| 3 | SettingsPanel.tscn | 设置面板独立场景 |
+| — | ControlChamber / Turret | 暂不急，功能复杂且涉及大量动态绘制 |

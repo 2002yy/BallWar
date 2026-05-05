@@ -91,6 +91,9 @@ func _process(delta: float) -> void:
 
 func _rebuild_stage() -> void:
 	if stage_panel != null and is_instance_valid(stage_panel):
+		if stage_panel.has_node("HeaderLabel"):
+			_layout_stage()
+			return
 		stage_panel.queue_free()
 
 	stage_panel = Panel.new()

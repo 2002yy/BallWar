@@ -1,0 +1,29 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/SettingsPanel.gd" id="1_741xb"]
+
+[node name="SettingsPanel" type="Panel" unique_id=26256766]
+process_mode = 3
+visible = false
+self_modulate = Color(0.94, 0.97, 1, 0.96)
+offset_right = 286.0
+offset_bottom = 96.0
+script = ExtResource("1_741xb")
+
+[node name="Bg" type="ColorRect" parent="." unique_id=1809665041]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 282.0
+offset_bottom = 92.0
+color = Color(0.06, 0.09, 0.15, 0.96)
+
+[node name="ContentLabel" type="Label" parent="." unique_id=142976368]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 10.0
+offset_right = 274.0
+offset_bottom = 86.0
+theme_override_colors/font_color = Color(0.88, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 15
+autowrap_mode = 3

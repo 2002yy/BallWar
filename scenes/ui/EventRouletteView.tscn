@@ -1,0 +1,123 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/EventRouletteView.gd" id="1_qhmk8"]
+
+[node name="EventRouletteView" type="Control" unique_id=413962153]
+process_mode = 1
+visible = false
+layout_mode = 3
+anchors_preset = 0
+mouse_filter = 2
+script = ExtResource("1_qhmk8")
+
+[node name="StagePanel" type="Panel" parent="." unique_id=923579651]
+visible = false
+self_modulate = Color(0.94, 0.97, 1, 0.96)
+layout_mode = 0
+offset_right = 448.0
+offset_bottom = 168.0
+
+[node name="Bg" type="ColorRect" parent="StagePanel" unique_id=139003437]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 444.0
+offset_bottom = 164.0
+color = Color(0.05, 0.08, 0.14, 0.98)
+
+[node name="HeaderLabel" type="Label" parent="StagePanel" unique_id=712225029]
+layout_mode = 0
+offset_top = 8.0
+offset_right = 448.0
+offset_bottom = 36.0
+theme_override_colors/font_color = Color(1, 0.95, 0.72, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 24
+text = "事件转盘"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="LeftTitleLabel" type="Label" parent="StagePanel" unique_id=851307134]
+layout_mode = 0
+offset_left = 34.0
+offset_top = 44.0
+offset_right = 184.0
+offset_bottom = 67.0
+theme_override_colors/font_color = Color(0.84, 0.92, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 16
+text = "阵营"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RightTitleLabel" type="Label" parent="StagePanel" unique_id=401655541]
+layout_mode = 0
+offset_left = 264.0
+offset_top = 44.0
+offset_right = 414.0
+offset_bottom = 67.0
+theme_override_colors/font_color = Color(0.84, 0.92, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 16
+text = "效果"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="LeftValueLabel" type="Label" parent="StagePanel" unique_id=595432566]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 66.0
+offset_right = 212.0
+offset_bottom = 124.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RightValueLabel" type="Label" parent="StagePanel" unique_id=18928273]
+layout_mode = 0
+offset_left = 236.0
+offset_top = 66.0
+offset_right = 424.0
+offset_bottom = 124.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="LeftPointer" type="ColorRect" parent="StagePanel" unique_id=1748427706]
+layout_mode = 0
+offset_left = 36.0
+offset_top = 128.0
+offset_right = 200.0
+offset_bottom = 132.0
+color = Color(1, 0.84, 0.18, 0.58)
+
+[node name="RightPointer" type="ColorRect" parent="StagePanel" unique_id=27069701]
+layout_mode = 0
+offset_left = 248.0
+offset_top = 128.0
+offset_right = 412.0
+offset_bottom = 132.0
+color = Color(1, 0.84, 0.18, 0.58)
+
+[node name="ResultLabel" type="Label" parent="StagePanel" unique_id=815289496]
+visible = false
+layout_mode = 0
+offset_left = 18.0
+offset_top = 120.0
+offset_right = 430.0
+offset_bottom = 150.0
+theme_override_colors/font_color = Color(1, 0.94, 0.42, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
+vertical_alignment = 1
