@@ -28,10 +28,9 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var t: TestAssert = TestAssert.new()
-	print("[StartMenuSceneTest] v2.0.7 — scene load verification")
+	print("[StartMenuSceneTest] v2.0.7 - scene load verification")
 
 	var scene_path: String = "res://scenes/ui/StartMenu.tscn"
-
 	var scene_resource = load(scene_path)
 	t.that(scene_resource != null, "scene resource loadable")
 	if scene_resource == null:
@@ -46,7 +45,6 @@ func _run() -> void:
 		quit(1)
 		return
 
-	# Must add to tree for @onready vars to initialize
 	get_root().add_child(instance)
 	await process_frame
 
@@ -60,8 +58,8 @@ func _run() -> void:
 	t.that(parts.has("menu_save_slot_buttons"), "parts: menu_save_slot_buttons")
 	t.that(parts.has("menu_status_label"), "parts: menu_status_label")
 
-	var sb: Dictionary = parts["menu_save_slot_buttons"]
-	t.that(sb is Dictionary, "save_slot_buttons is Dictionary")
+	var slot_buttons: Dictionary = parts["menu_save_slot_buttons"]
+	t.that(slot_buttons is Dictionary, "save_slot_buttons is Dictionary")
 
 	t.that(parts["menu_start_button"] is Button, "start_button is Button")
 	t.that(parts["menu_continue_button"] is Button, "continue_button is Button")
@@ -74,25 +72,27 @@ func _run() -> void:
 	t.that(instance.has_node("RootPanel/ChamberPreview"), "ChamberPreview node exists in .tscn")
 	t.that(instance.has_node("RootPanel/SubtitleLabel"), "SubtitleLabel node exists")
 	t.that(instance.has_node("RootPanel/MobileHint"), "MobileHint node exists")
-	t.that(instance.has_node("RootPanel/ConfigPanel/ModeTip"), "ModeTip node exists")
+	t.that(instance.has_node("RootPanel/ConfigPanel/ConfigBg"), "ConfigBg node exists")
+
 	var preview_scene = load("res://scenes/ui/PreviewScene.tscn")
+	var preview_instance = null
 	t.that(preview_scene != null, "PreviewScene.tscn loadable")
 	if preview_scene != null:
-		var preview_instance = preview_scene.instantiate()
+		preview_instance = preview_scene.instantiate()
 		t.that(preview_instance.has_node("Board"), "PreviewScene has Board")
 		t.that(preview_instance.has_node("ChamberBottomLeft"), "PreviewScene has ChamberBottomLeft")
 		t.that(preview_instance.has_node("ChamberBottomRight"), "PreviewScene has ChamberBottomRight")
 		t.that(preview_instance.has_node("TurretTopLeft"), "PreviewScene has TurretTopLeft")
 
 	var config_panel: Control = instance.get_node("RootPanel/ConfigPanel")
-	var mode_tip: Label = instance.get_node("RootPanel/ConfigPanel/ModeTip")
+	var config_bg: ColorRect = instance.get_node("RootPanel/ConfigPanel/ConfigBg")
 	var preview_node: Node2D = instance.get_node("RootPanel/ChamberPreview")
 	var start_button: Button = instance.get_node("RootPanel/ConfigPanel/StartButton")
 
 	var config_pos_before: Vector2 = config_panel.position
 	var config_size_before: Vector2 = config_panel.size
-	var mode_tip_pos_before: Vector2 = mode_tip.position
-	var mode_tip_size_before: Vector2 = mode_tip.size
+	var config_bg_pos_before: Vector2 = config_bg.position
+	var config_bg_size_before: Vector2 = config_bg.size
 	var preview_pos_before: Vector2 = preview_node.position
 	var preview_scale_before: Vector2 = preview_node.scale
 	var start_button_pos_before: Vector2 = start_button.position
@@ -103,12 +103,18 @@ func _run() -> void:
 
 	t.eq(config_panel.position, config_pos_before, "setup should not override ConfigPanel position")
 	t.eq(config_panel.size, config_size_before, "setup should not override ConfigPanel size")
-	t.eq(mode_tip.position, mode_tip_pos_before, "setup should not override ModeTip position")
-	t.eq(mode_tip.size, mode_tip_size_before, "setup should not override ModeTip size")
+	t.eq(config_bg.position, config_bg_pos_before, "setup should not override ConfigBg position")
+	t.eq(config_bg.size, config_bg_size_before, "setup should not override ConfigBg size")
 	t.eq(preview_node.position, preview_pos_before, "setup should not override ChamberPreview position")
 	t.eq(preview_node.scale, preview_scale_before, "setup should not override ChamberPreview scale")
 	t.eq(start_button.position, start_button_pos_before, "setup should not override StartButton position")
 	t.eq(start_button.size, start_button_size_before, "setup should not override StartButton size")
+
+	if preview_instance != null and is_instance_valid(preview_instance):
+		preview_instance.queue_free()
+	instance.queue_free()
+	await process_frame
+	await process_frame
 
 	t.report("[StartMenuSceneTest]")
 

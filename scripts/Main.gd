@@ -74,10 +74,10 @@ func _ready() -> void:
 func _process(delta: float) -> void:
     ui_time += delta
 
-    if pending_restore_bullets.size() > 0 and not get_tree().paused and not is_game_over:
+    if GameStateCoordinator.should_process_restore_queue(get_tree(), is_game_over, pending_restore_bullets.size()):
         _process_pending_bullet_restore()
 
-    if game_layer != null and not get_tree().paused and not is_game_over:
+    if GameStateCoordinator.should_advance_gameplay(get_tree(), game_layer, is_game_over):
         game_elapsed_time += delta
         for chamber in chambers.values():
             if chamber != null and is_instance_valid(chamber):
@@ -406,18 +406,31 @@ func _get_score_winner() -> int:
     return best_id
 
 func _finish_with_winner(faction_id: int, sub_text: String) -> void:
+    GameStateCoordinator.finish_with_winner(self, winner_label, faction_id, sub_text)
+    return
     is_game_over = true
     _stop_all_actions_for_game_over()
     winner_label.text = "%s 胜利！" % GameConfig.faction_name(faction_id)
     _show_center_banner(winner_label.text, sub_text, GameConfig.faction_color(faction_id).lightened(0.35), false)
 
 func _finish_as_draw(sub_text: String) -> void:
+    GameStateCoordinator.finish_as_draw(self, winner_label, sub_text)
+    return
     is_game_over = true
     _stop_all_actions_for_game_over()
     winner_label.text = "平局"
     _show_center_banner("平局", sub_text, Color(1.0, 1.0, 1.0), false)
 
 func _stop_all_actions_for_game_over() -> void:
+    GameStateCoordinator.stop_actions_for_game_over(
+        turrets,
+        chambers,
+        Callable(self, "_refresh_add_ball_button"),
+        Callable(self, "_clear_bullets"),
+        event_roulette_controller,
+        event_roulette_view
+    )
+    return
     for turret in turrets.values():
         if turret == null:
             continue
@@ -457,6 +470,15 @@ func _sync_chamber_game_elapsed_time() -> void:
             chamber.queue_redraw()
 
 func _toggle_pause() -> void:
+    if GameStateCoordinator.should_ignore_pause(is_game_over, game_layer):
+        return
+    GameStateCoordinator.apply_pause_toggle(
+        get_tree(),
+        pause_overlay,
+        pause_button,
+        Callable(self, "_save_game_progress")
+    )
+    return
     if game_layer == null:
         return
     if get_tree().paused:
@@ -492,6 +514,7 @@ func _cleanup_menu() -> void:
     menu_status_label = null
 
 func _cleanup_game_layer() -> void:
+    GameStateCoordinator.reset_pause_and_winner_state(pause_overlay, pause_button, winner_label)
     if game_layer != null:
         game_layer.queue_free()
         game_layer = null

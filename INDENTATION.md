@@ -1,67 +1,115 @@
 # GDScript 缩进审计 / Indentation Audit
 
-日期: 2026-05-04 | 审计范围: 34 个 .gd 文件
+日期: 2026-05-06
 
-## 规则
+## 正式规则
 
-- **修改任何 .gd 文件前必须先查本表**，确认目标文件是 TAB 还是 SPACE
-- 新增 .gd 文件默认使用 **TAB**
-- 严禁同一文件内混用 tab 和 spaces
-- 不要在功能修改中混入格式化
+1. 新增 `.gd` 文件统一使用 `TAB`
+2. 新增 `scripts/tests/*.gd` 统一使用 `TAB`
+3. 新增 `scripts/tools/*.gd` 统一使用 `TAB`
+4. 修改旧文件时，保持该文件原有缩进风格
+5. 不在功能修改里夹带全文件格式化
+6. 如果要统一全项目缩进，必须单独开一次“格式化版本”
 
-## 全审计结果
+重点：
+- 旧文件原本是 `SPACE`，继续用 `SPACE`
+- 旧文件原本是 `TAB`，继续用 `TAB`
+- 不要在同一个文件里混用
 
-| 文件 | 风格 | tab行 | space行 | mixed | 总缩进行 |
-|---|---|---|---|---|---|
-| `scripts/BannerController.gd` | SPACE | 0 | 41 | 0 | 41 |
-| `scripts/Battlefield.gd` | SPACE | 0 | 187 | 0 | 187 |
-| `scripts/Bullet.gd` | SPACE | 0 | 188 | 0 | 188 |
-| `scripts/BulletPool.gd` | TAB | 229 | 0 | 0 | 229 |
-| `scripts/BulletTrailLayer.gd` | TAB | 122 | 0 | 0 | 122 |
-| `scripts/ControlBall.gd` | SPACE | 0 | 16 | 0 | 16 |
-| `scripts/ControlChamber.gd` | SPACE | 0 | 518 | 0 | 518 |
-| `scripts/EnergyButton.gd` | SPACE | 0 | 107 | 0 | 107 |
-| `scripts/EventRouletteController.gd` | TAB | 317 | 0 | 0 | 317 |
-| `scripts/EventRouletteView.gd` | TAB | 221 | 0 | 0 | 221 |
-| `scripts/GameConfig.gd` | SPACE | 0 | 215 | 0 | 215 |
-| `scripts/GameHudView.gd` | SPACE | 0 | 239 | 0 | 239 |
-| `scripts/GameSceneBuilder.gd` | SPACE | 0 | 92 | 0 | 92 |
-| `scripts/Gate.gd` | SPACE | 0 | 26 | 0 | 26 |
-| `scripts/HudBadge.gd` | SPACE | 0 | 14 | 0 | 14 |
-| `scripts/LayoutCoordinator.gd` | TAB | 117 | 0 | 0 | 117 |
-| `scripts/LayoutProfiles.gd` | SPACE | 0 | 121 | 0 | 121 |
-| `scripts/Main.gd` | SPACE | 0 | 562 | 0 | 562 |
-| `scripts/MenuDecor.gd` | SPACE | 0 | 65 | 0 | 65 |
-| `scripts/RuntimeHudController.gd` | TAB | 155 | 0 | 0 | 155 |
-| `scripts/SaveGameCodec.gd` | SPACE | 0 | 112 | 0 | 112 |
-| `scripts/SaveStateApplier.gd` | TAB | 44 | 0 | 0 | 44 |
-| `scripts/SaveStateBuilder.gd` | TAB | 42 | 0 | 0 | 42 |
-| `scripts/StartMenuView.gd` | SPACE | 0 | 214 | 0 | 214 |
-| `scripts/tests/IntegrationTestRunner.gd` | TAB | 405 | 0 | 0 | 405 |
-| `scripts/tests/LayoutSanityTestRunner.gd` | TAB | 71 | 0 | 0 | 71 |
-| `scripts/tests/PerfBurstBenchmark.gd` | TAB | 525 | 0 | 0 | 525 |
-| `scripts/tests/SmokeTestRunner.gd` | TAB | 199 | 0 | 0 | 199 |
-| `scripts/tests/TestAssert.gd` | TAB | 30 | 0 | 0 | 30 |
-| `scripts/tests/TestFixtures.gd` | TAB | 183 | 0 | 0 | 183 |
-| `scripts/Turret.gd` | SPACE | 0 | 236 | 0 | 236 |
-| `scripts/UIAnimationController.gd` | SPACE | 0 | 36 | 0 | 36 |
-| `scripts/UIFactory.gd` | SPACE | 0 | 28 | 0 | 28 |
-| `scripts/WinConditionEvaluator.gd` | TAB | 57 | 0 | 0 | 57 |
+## 为什么不在 `.editorconfig` 里强制 tab
 
-**汇总: TAB 14 个 / SPACE 18 个 / MIXED 0 个**
+当前项目是历史混合风格，不是全仓统一 `TAB`。
 
-## 已知风险
+如果在 `.editorconfig` 里写：
 
-- `Turret.gd` 历史上部分函数使用 tab（`setup()`），现已在 v2.0.6 中统一为 spaces。若恢复旧备份需注意。
-- `Main.gd` 曾在编辑中混入 42 行 tab（v2.0.5），已修复为 spaces。
-- `SaveGameCodec.gd` 曾在新函数中混入 tab（v2.0.5），已修复为 spaces。
-- `GameConfig.gd` 曾在新函数中混入 tab（v2.0.6），已修复为 spaces。
+```ini
+[*.gd]
+indent_style = tab
+```
 
-## 测试断言统计（v2.0.6 最终）
+那么编辑旧的 `SPACE` 文件时，很容易把新行写成 `TAB`，导致：
+- `Could not preload resource script`
+- `Parse Error`
+- `Cannot resolve class`
 
-| 测试 | 断言数 | 类型 |
-|---|---|---|
-| `SmokeTestRunner.gd` | 33 | 快速冒烟 |
-| `IntegrationTestRunner.gd` | 133 | 中量集成 |
-| `LayoutSanityTestRunner.gd` | 330 | 布局边界 |
-| **合计** | **496** | |
+因此当前策略是：
+- `.editorconfig` 只保留保守的编码/尾空格/换行规则
+- 缩进风格依赖本文件历史风格
+- 真正的检查交给审计工具
+
+## 当前 `.editorconfig` 期望
+
+```ini
+root = true
+
+[*.gd]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+indent_style = space
+indent_size = 2
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = false
+```
+
+## 审计工具
+
+路径：
+- `scripts/tools/audit_gd_indentation.py`
+
+用途：
+1. 扫描所有 `.gd` 文件
+2. 统计 leading tab 行数
+3. 统计 leading space 行数
+4. 统计 mixed 行数
+5. 输出 suspicious files
+
+运行方式：
+
+```powershell
+python scripts/tools/audit_gd_indentation.py
+```
+
+也可以指定子目录：
+
+```powershell
+python scripts/tools/audit_gd_indentation.py scripts
+```
+
+## 结果解释
+
+输出示例：
+
+```text
+scripts/Main.gd                 SPACE  tab=0    space=520 mixed=0
+scripts/TestFixtures.gd         TAB    tab=183  space=0   mixed=0
+scripts/Turret.gd               MIXED  tab=12   space=220 mixed=0
+```
+
+注意：
+- `mixed=0` 不代表整个项目统一
+- 它只代表“单行前导缩进里没有同时 tab+space”
+- 真正要看的是：每个文件内部主要风格是否一致
+
+## 重构时怎么用
+
+在做中大型重构前后，至少做一次：
+
+```powershell
+python scripts/tools/audit_gd_indentation.py
+```
+
+建议在这些场景必跑：
+- 新增多个 `.gd` 文件后
+- 批量修改 `Main.gd` / `ControlChamber.gd` / `Turret.gd` 后
+- Agent 大量补测试后
+
+## 现阶段结论
+
+- 这个项目允许“仓库级混合”，不允许“单文件混合”
+- 新增重构文件统一 `TAB`
+- 旧文件保留原风格
+- 缩进治理靠审计，不靠全仓强推格式化

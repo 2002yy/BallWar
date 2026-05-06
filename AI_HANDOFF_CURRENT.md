@@ -1,6 +1,51 @@
 # AI Handoff Current
 
-Last updated: 2026-05-04 (v2.0.8 — 4 .tscn migrated, 7 test suites, 557 total assertions)
+Last updated: 2026-05-06 (v2.1.2 — GameStateCoordinator phase, local test baseline green)
+
+## v2.1.1 / v2.1.2 Update
+
+Recent work after the older v2.0.8 handoff:
+
+- added `README_MAIN_GD_AUDIT.md`
+  - full function-by-function responsibility audit for `Main.gd`
+  - defines the split boundary for `GameStateCoordinator` vs `SaveFlowController`
+
+- added `scripts/GameStateCoordinator.gd`
+  - low-risk state-flow helper layer
+  - `Main.gd` still keeps entry functions
+  - current completed scope:
+    - pause / game_over / menu_visible predicates
+    - pause_overlay / winner_label state helpers
+    - game over shutdown helper
+    - `_process()` lightweight predicate delegation
+    - `_cleanup_game_layer()` lightweight state cleanup delegation
+
+- added `scripts/tests/GameStateCoordinatorTestRunner.gd`
+  - focused state-flow helper verification
+
+- added `README_TEST_MATRIX.md`
+  - classifies scene tests / state tests / smoke / integration / layout / perf
+
+- local user-verified baseline is green:
+  - `GameStateCoordinatorTestRunner.gd` PASS
+  - `SmokeTestRunner.gd` PASS
+  - `IntegrationTestRunner.gd` PASS
+  - `LayoutSanityTestRunner.gd` PASS
+  - `StartMenuSceneTestRunner.gd` PASS
+  - `GameHUDSceneTestRunner.gd` PASS
+  - `EventRouletteSceneTestRunner.gd` PASS
+  - `SettingsPanelSceneTestRunner.gd` PASS
+
+- still intentionally NOT touched in coordinator phase:
+  - `_start_game()`
+  - `_save_and_exit_to_menu()`
+  - `_continue_saved_game()`
+  - `_apply_saved_state()`
+  - `_process_pending_bullet_restore()`
+
+- next safe direction:
+  - continue tiny `GameStateCoordinator` helpers
+  - do NOT start `SaveFlowController` until explicitly chosen
 
 ## 前置必读
 
