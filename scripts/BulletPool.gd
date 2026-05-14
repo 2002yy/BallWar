@@ -6,6 +6,10 @@ var active_bullets: Array = []
 var visual_pressure_update_timer: float = 0.0
 var trail_layer
 var tracked_turrets: Dictionary = {}
+var tracked_queue_by_faction: Dictionary = {}
+var tracked_queue_total: int = 0
+var bullet_trail_segments: Dictionary = {}
+var trail_segments_total: int = 0
 var perf_elapsed: float = 0.0
 var spawned_bullets_this_second: int = 0
 var spawned_bullets_per_second: int = 0
@@ -46,38 +50,39 @@ func set_trail_layer(new_trail_layer) -> void:
 		trail_layer.setup(self )
 
 func set_tracked_turrets(turret_map: Dictionary) -> void:
+	_disconnect_tracked_turrets()
 	tracked_turrets = turret_map
+	tracked_queue_by_faction.clear()
+	tracked_queue_total = 0
+	for faction_id in tracked_turrets.keys():
+		var turret = tracked_turrets[faction_id]
+		if turret == null or not is_instance_valid(turret):
+			continue
+		tracked_queue_by_faction[faction_id] = int(turret.get("burst_remaining"))
+		tracked_queue_total += int(tracked_queue_by_faction[faction_id])
+		var progress_callable: Callable = Callable(self, "_on_tracked_turret_burst_progress")
+		if not turret.burst_progress.is_connected(progress_callable):
+			turret.burst_progress.connect(progress_callable)
 
 func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, target_turrets: Dictionary = {}):
 	var max_active: int = GameConfig.get_max_active_bullets()
 	while active_bullets.size() >= max_active and active_bullets.size() > 0:
 		recycle_bullet(active_bullets[0])
 
-	var bullet
-	if inactive_bullets.size() > 0:
-		bullet = inactive_bullets.pop_back()
-	else:
-		bullet = Bullet.new()
-		bullet.pool = self
-		add_child(bullet)
-
-	var visual_profile: Dictionary = _resolve_visual_profile(active_bullets.size())
-	last_visual_profile = visual_profile.duplicate(true)
-	bullet.pool = self
-	if bullet.has_method("set_trail_layer"):
-		bullet.set_trail_layer(trail_layer)
-	bullet.simple_draw = bool(visual_profile.get("simple_draw", false))
-	bullet.reduce_visual_effects = bool(visual_profile.get("reduce_visual_effects", false))
-	bullet.trail_max_points = int(visual_profile.get("trail_points", GameConfig.get_normal_trail_points()))
-
+	var bullet = _obtain_bullet_with_visual_profile()
 	bullet.setup(faction_id, pos, dir, battlefield, target_turrets)
 	bullet.activate()
-	active_bullets.append(bullet)
-	spawned_bullets_this_second += 1
+	return _finalize_spawned_bullet(bullet)
 
-	if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
-		trail_layer.request_trail_redraw()
-	return bullet
+func spawn_bullet_from_state(state: Dictionary, battlefield, target_turrets: Dictionary = {}):
+	var max_active: int = GameConfig.get_max_active_bullets()
+	while active_bullets.size() >= max_active and active_bullets.size() > 0:
+		recycle_bullet(active_bullets[0])
+
+	var bullet = _obtain_bullet_with_visual_profile()
+	bullet.restore_from_state(state, battlefield, target_turrets)
+	bullet.activate()
+	return _finalize_spawned_bullet(bullet)
 
 func update_visual_pressure() -> void:
 	var visual_profile: Dictionary = _resolve_visual_profile(active_bullets.size())
@@ -96,6 +101,9 @@ func recycle_bullet(bullet) -> void:
 	var idx: int = active_bullets.find(bullet)
 	if idx >= 0:
 		active_bullets.remove_at(idx)
+		_unregister_active_bullet(bullet)
+	else:
+		_unregister_active_bullet(bullet)
 	if inactive_bullets.find(bullet) < 0:
 		inactive_bullets.append(bullet)
 	recycled_bullets_this_second += 1
@@ -119,21 +127,10 @@ func get_active_count() -> int:
 	return active_bullets.size()
 
 func get_tracked_queue_total() -> int:
-	var total: int = 0
-	for turret in tracked_turrets.values():
-		if turret != null and is_instance_valid(turret):
-			total += int(turret.get("burst_remaining"))
-	return total
+	return tracked_queue_total
 
 func estimate_trail_segments() -> int:
-	var total: int = 0
-	for bullet in active_bullets:
-		if bullet == null or not is_instance_valid(bullet):
-			continue
-		if not bullet.is_active:
-			continue
-		total += maxi(0, bullet.trail_points.size() - 1)
-	return total
+	return trail_segments_total
 
 func get_debug_metrics() -> Dictionary:
 	var visual_profile: Dictionary = _get_current_visual_profile()
@@ -155,6 +152,20 @@ func get_debug_metrics() -> Dictionary:
 
 func notify_bullet_expired() -> void:
 	expired_bullets_this_second += 1
+
+func notify_bullet_trail_changed(bullet, new_segments: int) -> void:
+	if bullet == null or not is_instance_valid(bullet):
+		return
+	var bullet_id: int = bullet.get_instance_id()
+	var previous_segments: int = int(bullet_trail_segments.get(bullet_id, 0))
+	var next_segments: int = maxi(0, new_segments)
+	if previous_segments == next_segments:
+		return
+	trail_segments_total += next_segments - previous_segments
+	if next_segments <= 0:
+		bullet_trail_segments.erase(bullet_id)
+	else:
+		bullet_trail_segments[bullet_id] = next_segments
 
 func get_trail_pressure_state() -> Dictionary:
 	return _get_current_visual_profile().duplicate(true)
@@ -277,6 +288,64 @@ func _try_get_performance_monitor(constant_name: String):
 
 func _estimate_visible_canvas_items() -> int:
 	return get_active_count() + estimate_trail_segments()
+
+func _disconnect_tracked_turrets() -> void:
+	var progress_callable: Callable = Callable(self, "_on_tracked_turret_burst_progress")
+	for turret in tracked_turrets.values():
+		if turret == null or not is_instance_valid(turret):
+			continue
+		if turret.burst_progress.is_connected(progress_callable):
+			turret.burst_progress.disconnect(progress_callable)
+
+func _on_tracked_turret_burst_progress(faction_id, remaining) -> void:
+	var previous_remaining: int = int(tracked_queue_by_faction.get(faction_id, 0))
+	var next_remaining: int = maxi(0, int(remaining))
+	if previous_remaining == next_remaining:
+		return
+	tracked_queue_total += next_remaining - previous_remaining
+	tracked_queue_by_faction[faction_id] = next_remaining
+
+func _register_active_bullet(bullet) -> void:
+	if bullet == null or not is_instance_valid(bullet):
+		return
+	var current_segments: int = 0
+	if bullet.has_method("get_trail_segment_count"):
+		current_segments = int(bullet.get_trail_segment_count())
+	else:
+		current_segments = maxi(0, bullet.trail_points.size() - 1)
+	notify_bullet_trail_changed(bullet, current_segments)
+
+func _unregister_active_bullet(bullet) -> void:
+	if bullet == null:
+		return
+	notify_bullet_trail_changed(bullet, 0)
+
+func _obtain_bullet_with_visual_profile():
+	var bullet
+	if inactive_bullets.size() > 0:
+		bullet = inactive_bullets.pop_back()
+	else:
+		bullet = Bullet.new()
+		bullet.pool = self
+		add_child(bullet)
+
+	var visual_profile: Dictionary = _resolve_visual_profile(active_bullets.size())
+	last_visual_profile = visual_profile.duplicate(true)
+	bullet.pool = self
+	if bullet.has_method("set_trail_layer"):
+		bullet.set_trail_layer(trail_layer)
+	bullet.simple_draw = bool(visual_profile.get("simple_draw", false))
+	bullet.reduce_visual_effects = bool(visual_profile.get("reduce_visual_effects", false))
+	bullet.trail_max_points = int(visual_profile.get("trail_points", GameConfig.get_normal_trail_points()))
+	return bullet
+
+func _finalize_spawned_bullet(bullet):
+	active_bullets.append(bullet)
+	_register_active_bullet(bullet)
+	spawned_bullets_this_second += 1
+	if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
+		trail_layer.request_trail_redraw()
+	return bullet
 
 func _prefer_reason(current_reason: String, candidate_reason: String, candidate_severity: int, new_severity: int) -> String:
 	if candidate_severity < new_severity and current_reason != "none":

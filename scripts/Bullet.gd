@@ -1,6 +1,8 @@
 extends Node2D
 class_name Bullet
 
+const MAX_RESTORE_TRAIL_POINTS: int = 3
+
 var faction_id: int = GameConfig.Faction.BLUE
 var direction: Vector2 = Vector2.RIGHT
 var speed = GameConfig.BULLET_SPEED
@@ -19,7 +21,11 @@ var turret_hit_check_timer: float = 0.0
 var trail_sample_timer: float = 0.0
 var last_trail_position: Vector2 = Vector2.INF
 
+func get_trail_segment_count() -> int:
+    return maxi(0, trail_points.size() - 1)
+
 func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, new_battlefield, new_target_turrets = {}) -> void:
+    var previous_segments: int = get_trail_segment_count()
     faction_id = new_faction_id
     global_position = new_position
     direction = new_direction.normalized()
@@ -36,6 +42,7 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
     trail_points.clear()
     if not simple_draw and trail_max_points > 0:
         trail_points.append(global_position)
+    _notify_trail_segments_if_needed(previous_segments)
     _request_trail_redraw()
     queue_redraw()
 
@@ -58,6 +65,7 @@ func activate() -> void:
     z_index = 30
 
 func deactivate() -> void:
+    var previous_segments: int = get_trail_segment_count()
     is_active = false
     visible = false
     set_process(false)
@@ -65,11 +73,53 @@ func deactivate() -> void:
     battlefield = null
     target_turrets = {}
     trail_points.clear()
+    _notify_trail_segments_if_needed(previous_segments)
     _request_trail_redraw()
 
 func _request_trail_redraw() -> void:
     if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
         trail_layer.request_trail_redraw()
+
+func _notify_trail_segments_if_needed(previous_segments: int) -> void:
+    var current_segments: int = get_trail_segment_count()
+    if current_segments == previous_segments:
+        return
+    if pool != null and is_instance_valid(pool) and pool.has_method("notify_bullet_trail_changed"):
+        pool.notify_bullet_trail_changed(self, current_segments)
+
+func replace_trail_points(points: Array) -> void:
+    var previous_segments: int = get_trail_segment_count()
+    trail_points.clear()
+    for point in points:
+        if point is Vector2:
+            trail_points.append(point)
+    if trail_points.is_empty():
+        trail_points.append(global_position)
+    last_trail_position = trail_points[0] if trail_points.size() > 0 else global_position
+    _notify_trail_segments_if_needed(previous_segments)
+    _request_trail_redraw()
+    queue_redraw()
+
+func restore_from_state(state: Dictionary, new_battlefield, new_target_turrets = {}) -> void:
+    var restored_faction_id: int = clampi(int(state.get("faction_id", 0)), 0, 3)
+    var restored_position: Vector2 = SaveGameCodec.arr_to_vec2(state.get("position", [0, 0]), Vector2.ZERO)
+    var restored_direction: Vector2 = SaveGameCodec.arr_to_vec2(state.get("direction", [1, 0]), Vector2.RIGHT).normalized()
+    if restored_direction.length() <= 0.001:
+        restored_direction = Vector2.RIGHT
+
+    setup(restored_faction_id, restored_position, restored_direction, new_battlefield, new_target_turrets)
+    age = clampf(float(state.get("age", 0.0)), 0.0, GameConfig.BULLET_MAX_LIFETIME)
+    last_cell = SaveGameCodec.arr_to_vec2i(state.get("last_cell", [-999, -999]))
+
+    var restored_trail_points: Array = []
+    var trail = state.get("trail_points", [])
+    if trail is Array and trail.size() > 0:
+        var trail_count: int = mini(trail.size(), MAX_RESTORE_TRAIL_POINTS)
+        for i in range(trail_count):
+            restored_trail_points.append(SaveGameCodec.arr_to_vec2(trail[i], global_position))
+    else:
+        restored_trail_points.append(global_position)
+    replace_trail_points(restored_trail_points)
 
 func _despawn() -> void:
     if pool != null and is_instance_valid(pool):
@@ -156,6 +206,7 @@ func _bounce_tangent_sign() -> float:
     return -1.0 if seed_value % 2 == 0 else 1.0
 
 func configure_visuals(new_simple_draw: bool, new_reduce_visual_effects: bool, new_trail_max_points: int) -> void:
+    var previous_segments: int = get_trail_segment_count()
     var changed: bool = simple_draw != new_simple_draw or reduce_visual_effects != new_reduce_visual_effects or trail_max_points != new_trail_max_points
     simple_draw = new_simple_draw
     reduce_visual_effects = new_reduce_visual_effects
@@ -177,6 +228,7 @@ func configure_visuals(new_simple_draw: bool, new_reduce_visual_effects: bool, n
             changed = true
 
     if changed:
+        _notify_trail_segments_if_needed(previous_segments)
         queue_redraw()
 
 func _trail_sample_interval() -> float:
@@ -201,9 +253,11 @@ func _trail_min_distance_sq() -> float:
     return radius * radius * 0.14
 
 func _update_visual_trace(delta: float) -> void:
+    var previous_segments: int = get_trail_segment_count()
     if simple_draw or trail_max_points <= 0:
         if trail_points.size() > 0:
             trail_points.clear()
+            _notify_trail_segments_if_needed(previous_segments)
             _request_trail_redraw()
         return
 
@@ -219,6 +273,7 @@ func _update_visual_trace(delta: float) -> void:
     last_trail_position = global_position
     while trail_points.size() > trail_max_points:
         trail_points.pop_back()
+    _notify_trail_segments_if_needed(previous_segments)
     _request_trail_redraw()
 
 func _try_hit_enemy_turret() -> bool:

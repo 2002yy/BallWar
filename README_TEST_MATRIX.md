@@ -1,182 +1,175 @@
-# 测试分类矩阵 / Test Matrix
+# Test Matrix
 
-日期: 2026-05-06
+Date: 2026-05-06
 
-## 目标
+## Goal
 
-这份文档的作用是把当前测试按职责分组，避免后续重构时“想到什么跑什么”。
+This document classifies the active test scripts by responsibility so future
+refactors do not drift into "run whatever seems related".
 
-重点是先区分：
-- 哪些是场景接线测试
-- 哪些是轻量状态/逻辑测试
-- 哪些是集成测试
-- 哪些是布局边界测试
-- 哪些只是性能探针
+## A. Scene Wiring Tests
 
-## A. 场景接线测试
+Purpose:
+- verify `.tscn` scenes load
+- verify required node paths stay stable
+- verify scene scripts do not accidentally stomp intended layout/state on setup
 
-用途：
-- 验证 `.tscn` 能加载
-- 验证关键节点路径没漂
-- 验证 `setup()` / `setup_static()` 不会覆盖约定好的布局边界
-
-文件：
+Files:
 - `scripts/tests/StartMenuSceneTestRunner.gd`
 - `scripts/tests/GameHUDSceneTestRunner.gd`
 - `scripts/tests/EventRouletteSceneTestRunner.gd`
 - `scripts/tests/SettingsPanelSceneTestRunner.gd`
 
-适用时机：
-- 改 `.tscn`
-- 改场景脚本
-- 改节点路径
-- 改 UI 引用收集逻辑
+Run these when:
+- editing `.tscn`
+- changing scene scripts
+- changing node paths / exported references
 
-## B. 轻量状态/逻辑单测
+## B. Coordinator / Helper Unit Tests
 
-用途：
-- 验证新拆分 helper / coordinator 的边界行为
-- 不依赖完整战场运行
+Purpose:
+- verify new extracted helper/coordinator logic without needing full runtime scene boot
 
-文件：
+Files:
 - `scripts/tests/GameStateCoordinatorTestRunner.gd`
+- `scripts/tests/SaveFlowControllerTestRunner.gd`
 
-适用时机：
-- 新增 coordinator / controller helper
-- 把 `Main.gd` 的局部状态职责外移
+Run these when:
+- splitting responsibilities out of `Main.gd`
+- changing state-flow helpers
+- changing save/load orchestration helpers
 
-## C. 冒烟测试
+## C. Smoke Test
 
-用途：
-- 快速确认关键系统还活着
-- 覆盖 save codec、事件规则、控制舱事件、炮塔 burst 取消等高频风险点
+Purpose:
+- fast regression guard
+- confirms the most important systems still behave correctly at a high level
 
-文件：
+Files:
 - `scripts/tests/SmokeTestRunner.gd`
 
-适用时机：
-- 任意中型改动后
-- 不确定是否破坏基础行为时
+Run this when:
+- almost any medium-sized gameplay/system change lands
 
-## D. 集成测试
+## D. Integration Test
 
-用途：
-- 验证保存/读取、战场规则、胜负条件这些跨系统流程
+Purpose:
+- medium-weight cross-system correctness
+- especially save/load, battlefield rules, and win conditions
 
-文件：
+Files:
 - `scripts/tests/IntegrationTestRunner.gd`
 
-适用时机：
-- 改战场规则
-- 改 save/load
-- 改胜负判定
+Run this when:
+- touching save/load
+- touching battlefield rules
+- touching win-condition logic
 
-## E. 布局边界测试
+## E. Layout Boundary Test
 
-用途：
-- 验证布局 profile 和边界约束
-- 防止 UI 或地图布局越界
+Purpose:
+- verify layout profile boundaries
+- catch overflow / placement regressions across supported grid sizes
 
-文件：
+Files:
 - `scripts/tests/LayoutSanityTestRunner.gd`
 
-适用时机：
-- 改布局 profile
-- 改 chamber / map / HUD 位置规则
+Run this when:
+- changing layout profiles
+- changing HUD/chamber/map placement logic
 
-## F. 性能探针
+## F. Performance Probe
 
-用途：
-- 做性能采样和回归观察
-- 不作为 correctness 测试
+Purpose:
+- measure performance and pressure behavior
+- not a correctness test
 
-文件：
+Files:
 - `scripts/tests/PerfBurstBenchmark.gd`
 
-适用时机：
-- 调优发射/性能策略
-- 评估对象池或绘制压力变化
+Run this when:
+- tuning firing/perf policies
+- checking trail-pressure / pool-pressure changes
 
-## G. 测试基础设施
+## G. Test Infrastructure
 
-用途：
-- 断言工具
-- 夹具和测试辅助
+Purpose:
+- shared assertion and fixture utilities
 
-文件：
+Files:
 - `scripts/tests/TestAssert.gd`
 - `scripts/tests/TestFixtures.gd`
 
-## 建议运行顺序
+## Recommended Run Order
 
-### 改 UI / `.tscn`
+### If editing `.tscn` / UI wiring
 
-1. 场景接线测试
-2. 布局边界测试
-3. 冒烟测试
+1. scene wiring tests
+2. layout boundary test
+3. smoke test
 
-### 改状态流转
+### If editing coordinator/helper logic
 
-1. 轻量状态/逻辑单测
-2. 冒烟测试
-3. 相关场景接线测试
+1. relevant helper test
+2. smoke test
+3. related scene tests if UI/state is involved
 
-### 改 save/load
+### If editing save/load orchestration
 
-1. 集成测试
-2. 冒烟测试
-3. 必要时场景接线测试
+1. `SaveFlowControllerTestRunner.gd`
+2. `IntegrationTestRunner.gd`
+3. `SmokeTestRunner.gd`
 
-### 改布局
+### If editing gameplay state flow
 
-1. 布局边界测试
-2. 对应场景接线测试
-3. 冒烟测试
+1. `GameStateCoordinatorTestRunner.gd`
+2. `SmokeTestRunner.gd`
+3. `IntegrationTestRunner.gd` if save/win flow is touched
 
-## 当前 correctness 基线
+## Active Correctness Baseline
 
-当前默认应保持通过的测试：
+These should normally stay green:
+
 - `StartMenuSceneTestRunner.gd`
 - `GameHUDSceneTestRunner.gd`
 - `EventRouletteSceneTestRunner.gd`
 - `SettingsPanelSceneTestRunner.gd`
 - `GameStateCoordinatorTestRunner.gd`
+- `SaveFlowControllerTestRunner.gd`
 - `SmokeTestRunner.gd`
 - `IntegrationTestRunner.gd`
 - `LayoutSanityTestRunner.gd`
 
-`PerfBurstBenchmark.gd` 不列入“必须全绿”的 correctness 基线。
+`PerfBurstBenchmark.gd` is useful, but not part of the strict correctness baseline.
 
-## PASS 分类
+## PASS Labels
 
-建议统一使用 3 种口径：
+Use these consistently:
 
 - `PASS`
-说明断言通过，且测试退出干净。
-
+  - assertions passed and test exits cleanly
 - `PASS with cleanup warnings`
-说明断言通过，但退出时仍有对象/RID/资源清理告警。
-
+  - assertions passed, but there are resource/object cleanup warnings on exit
 - `FAIL`
-说明断言失败、脚本报错，或测试无法完成。
+  - assertion failure, script error, parse error, or incomplete run
 
-后续目标：
-- 场景接线测试尽量达到真正干净的 `PASS`
-- 不接受长期积累的 cleanup warning
+## 2026-05-06 Local Baseline
 
-## 2026-05-06 Baseline
+User-verified local Godot runs passed:
 
-Local Godot verification reported:
-- `GameStateCoordinatorTestRunner.gd` PASS
-- `SmokeTestRunner.gd` PASS
-- `IntegrationTestRunner.gd` PASS
-- `LayoutSanityTestRunner.gd` PASS
-- `StartMenuSceneTestRunner.gd` PASS
-- `GameHUDSceneTestRunner.gd` PASS
-- `EventRouletteSceneTestRunner.gd` PASS
-- `SettingsPanelSceneTestRunner.gd` PASS
+- `StartMenuSceneTestRunner.gd`
+- `GameHUDSceneTestRunner.gd`
+- `EventRouletteSceneTestRunner.gd`
+- `SettingsPanelSceneTestRunner.gd`
+- `GameStateCoordinatorTestRunner.gd`
+- `SaveFlowControllerTestRunner.gd`
+- `SmokeTestRunner.gd`
+- `IntegrationTestRunner.gd`
+- `LayoutSanityTestRunner.gd`
 
-Current recommendation:
-- treat the above eight scripts as the active correctness baseline
+## Current Recommendation
+
+- treat the nine scripts above as the active correctness baseline
 - run `GameStateCoordinatorTestRunner.gd` first for state-flow refactors
-- run scene tests first for `.tscn` or UI-node changes
+- run `SaveFlowControllerTestRunner.gd` first for save/load orchestration refactors
+- run scene tests first for `.tscn` and UI-node changes

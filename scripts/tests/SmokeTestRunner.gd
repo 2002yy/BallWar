@@ -39,7 +39,10 @@ func _run() -> void:
 	_test_save_game_codec_defaults()
 	_test_event_roulette_intervals_and_weights()
 	await _test_control_chamber_event_rules()
+	await _test_restore_from_state_interfaces()
 	_test_turret_cancel_burst()
+	_test_bullet_restore_from_state()
+	_test_bullet_pool_incremental_metrics()
 	await _flush_test_cleanup()
 
 	if _failures.is_empty():
@@ -235,6 +238,58 @@ func _test_control_chamber_event_rules() -> void:
 	_cleanup_node(dummy_turret)
 	await _flush_test_cleanup()
 
+func _test_restore_from_state_interfaces() -> void:
+	var chamber: ControlChamber = ControlChamber.new()
+	chamber.setup(GameConfig.Faction.GREEN, Vector2(48.0, 64.0))
+	get_root().add_child(chamber)
+	await process_frame
+
+	chamber.restore_from_state({
+		"chamber_pending_count": 7,
+		"chamber_locked_remaining": 5,
+		"chamber_jammed_time_left": 2.5,
+		"chamber_is_locked": true,
+		"chamber_release_ball_index": 1,
+		"queued_round_modifiers": [{"type": "bonus_10", "amount": 10}],
+		"control_balls": [
+			{
+				"position": [20.0, 30.0],
+				"velocity": [12.0, -24.0],
+				"stay_time": 0.5,
+			},
+			{
+				"position": [40.0, 56.0],
+				"velocity": [-18.0, 8.0],
+				"stay_time": 1.25,
+			}
+		]
+	})
+	_assert_eq(chamber.pending_count, 7, "restore_from_state should restore chamber pending count")
+	_assert_eq(chamber.locked_remaining, 5, "restore_from_state should restore chamber locked remaining")
+	_assert_true(chamber.is_locked, "restore_from_state should restore chamber locked flag")
+	_assert_eq(chamber.balls.size(), 2, "restore_from_state should rebuild chamber control balls")
+	_assert_true(chamber.release_ball == chamber.balls[1], "restore_from_state should restore chamber release ball")
+	_assert_eq(chamber.get_queued_round_modifiers().size(), 1, "restore_from_state should restore queued chamber modifiers")
+	_assert_eq(snappedf(chamber.get_jammed_time_left(), 0.01), 2.5, "restore_from_state should restore chamber jam timer")
+
+	var turret: Turret = Turret.new()
+	turret.restore_from_state({
+		"turret_health": 17,
+		"turret_burst_remaining": 12,
+		"turret_burst_total": 16,
+		"turret_burst_index": 4,
+		"turret_burst_timer": 0.3,
+		"turret_burst_locked": true,
+	})
+	_assert_eq(turret.health, 17, "restore_from_state should restore turret health")
+	_assert_eq(turret.burst_remaining, 12, "restore_from_state should restore turret burst remaining")
+	_assert_eq(turret.burst_total, 16, "restore_from_state should restore turret burst total")
+	_assert_true(turret.burst_locked, "restore_from_state should restore turret burst lock")
+
+	_cleanup_node(chamber)
+	_cleanup_node(turret)
+	await _flush_test_cleanup()
+
 func _test_turret_cancel_burst() -> void:
 	var turret: Turret = Turret.new()
 	turret.burst_remaining = 32
@@ -250,3 +305,72 @@ func _test_turret_cancel_burst() -> void:
 	_assert_eq(turret.burst_total, 0, "cancel_burst should clear total shots")
 	_assert_true(not turret.burst_locked, "cancel_burst should unlock the turret")
 	_cleanup_node(turret)
+
+func _test_bullet_restore_from_state() -> void:
+	var bullet: Bullet = Bullet.new()
+	bullet.simple_draw = false
+	bullet.trail_max_points = 8
+	bullet.restore_from_state({
+		"faction_id": GameConfig.Faction.YELLOW,
+		"position": [60.0, 80.0],
+		"direction": [0.0, 1.0],
+		"age": 1.75,
+		"last_cell": [3, 4],
+		"trail_points": [
+			[60.0, 80.0],
+			[60.0, 72.0],
+			[60.0, 64.0],
+			[60.0, 56.0],
+		],
+	}, null, {})
+	_assert_eq(bullet.faction_id, GameConfig.Faction.YELLOW, "bullet restore should restore faction")
+	_assert_eq(snappedf(bullet.global_position.x, 0.01), 60.0, "bullet restore should restore position x")
+	_assert_eq(snappedf(bullet.global_position.y, 0.01), 80.0, "bullet restore should restore position y")
+	_assert_eq(snappedf(bullet.direction.x, 0.01), 0.0, "bullet restore should restore direction x")
+	_assert_eq(snappedf(bullet.direction.y, 0.01), 1.0, "bullet restore should restore direction y")
+	_assert_eq(snappedf(bullet.age, 0.01), 1.75, "bullet restore should restore age")
+	_assert_eq(bullet.last_cell, Vector2i(3, 4), "bullet restore should restore last touched cell")
+	_assert_eq(bullet.trail_points.size(), 3, "bullet restore should clamp trail restore length")
+	_assert_eq(bullet.trail_points[0], Vector2(60.0, 80.0), "bullet restore should preserve leading trail point")
+	_cleanup_node(bullet)
+
+func _test_bullet_pool_incremental_metrics() -> void:
+	var turret: Turret = Turret.new()
+	var pool: BulletPool = BulletPool.new()
+	pool.set_tracked_turrets({GameConfig.Faction.BLUE: turret})
+	_assert_eq(pool.get_tracked_queue_total(), 0, "tracked queue total should start from current turret state")
+
+	turret.restore_from_state({
+		"turret_burst_remaining": 18,
+		"turret_burst_total": 18,
+		"turret_burst_locked": true,
+	})
+	_assert_eq(pool.get_tracked_queue_total(), 18, "tracked queue total should update from turret burst progress")
+
+	turret.cancel_burst()
+	_assert_eq(pool.get_tracked_queue_total(), 0, "tracked queue total should shrink when burst is cancelled")
+
+	var bullet: Bullet = Bullet.new()
+	bullet.pool = pool
+	bullet.global_position = Vector2(32.0, 48.0)
+	bullet.replace_trail_points([Vector2(32.0, 48.0), Vector2(40.0, 48.0), Vector2(48.0, 48.0)])
+	_assert_eq(pool.estimate_trail_segments(), 2, "trail segment estimate should track bullet trail changes incrementally")
+	bullet.replace_trail_points([Vector2(48.0, 48.0)])
+	_assert_eq(pool.estimate_trail_segments(), 0, "trail segment estimate should drop when bullet trail collapses")
+
+	var restored = pool.spawn_bullet_from_state({
+		"faction_id": GameConfig.Faction.BLUE,
+		"position": [20.0, 24.0],
+		"direction": [1.0, 0.0],
+		"trail_points": [
+			[20.0, 24.0],
+			[14.0, 24.0],
+			[8.0, 24.0],
+		],
+	}, null, {})
+	_assert_eq(restored.faction_id, GameConfig.Faction.BLUE, "spawn_bullet_from_state should restore faction through pool")
+	_assert_eq(pool.estimate_trail_segments(), 2, "spawn_bullet_from_state should register restored trail segments")
+
+	_cleanup_node(turret)
+	_cleanup_node(bullet)
+	_cleanup_node(pool)

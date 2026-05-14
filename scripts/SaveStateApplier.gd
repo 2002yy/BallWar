@@ -26,16 +26,16 @@ static func apply_owners(battlefield, data: Dictionary, on_scores_changed: Calla
 		if on_scores_changed.is_valid():
 			on_scores_changed.call(battlefield.count_cells_by_team())
 
-static func apply_factions(chambers: Dictionary, turrets: Dictionary, factions: Array, on_chamber_state: Callable, on_turret_state: Callable, on_chamber_unlock: Callable, on_button_refresh: Callable) -> void:
+static func apply_factions(chambers: Dictionary, turrets: Dictionary, factions: Array, on_chamber_unlock: Callable, on_button_refresh: Callable) -> void:
 	if factions is Array:
 		for faction_state in factions:
 			if not (faction_state is Dictionary):
 				continue
 			var faction_id: int = int(faction_state.get("faction_id", 0))
-			if chambers.has(faction_id):
-				on_chamber_state.call(chambers[faction_id], faction_state)
-			if turrets.has(faction_id):
-				on_turret_state.call(turrets[faction_id], faction_state)
+			if chambers.has(faction_id) and chambers[faction_id] != null and is_instance_valid(chambers[faction_id]):
+				chambers[faction_id].restore_from_state(faction_state)
+			if turrets.has(faction_id) and turrets[faction_id] != null and is_instance_valid(turrets[faction_id]):
+				turrets[faction_id].restore_from_state(faction_state)
 
 			if chambers.has(faction_id) and turrets.has(faction_id):
 				if chambers[faction_id].is_locked and turrets[faction_id].burst_remaining <= 0:

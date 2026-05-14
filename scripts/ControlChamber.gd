@@ -27,6 +27,7 @@ const STUCK_TIME_LIMIT: float = 0.80
 const WALL_STUCK_MARGIN: float = 5.0
 const WALL_STUCK_Y_EPS: float = 0.55
 const CONTROL_BALL_MAX_STAY_TIME: float = 14.0
+const MAX_RESTORE_CONTROL_BALLS: int = 8
 
 var faction_id: int = GameConfig.Faction.BLUE
 var pending_count: int = 1
@@ -41,6 +42,7 @@ var release_ball = null
 var linked_turret = null
 var gravity: float = 420.0
 var pegs: Array = []
+var peg_collision_radii: Array = []
 var peg_radius: float = PEG_RADIUS
 var stuck_states: Dictionary = {}
 var ball_stay_times: Dictionary = {}
@@ -131,6 +133,7 @@ func _update_visual_redraw(delta: float) -> void:
 
 func _create_pegs() -> void:
     pegs.clear()
+    peg_collision_radii.clear()
 
     var row_counts: Array = [3, 4, 3, 4, 3, 4]
     var side_center_x: float = PEG_RADIUS * FOUR_ROW_EMBED_RATIO
@@ -142,7 +145,9 @@ func _create_pegs() -> void:
         var start_x: float = side_center_x if count == 4 else centered_three_start_x
 
         for i in range(count):
-            pegs.append(Vector2(start_x + float(i) * PEG_SPACING_X, y))
+            var peg_position: Vector2 = Vector2(start_x + float(i) * PEG_SPACING_X, y)
+            pegs.append(peg_position)
+            peg_collision_radii.append(_effective_peg_radius(peg_position))
 
 func add_control_ball() -> bool:
     if is_damaged or is_locked:
@@ -418,6 +423,68 @@ func _update_ball_stay_time(ball, delta: float) -> void:
         return
     ball_stay_times[id] = stay_time
 
+func _clear_control_balls() -> void:
+    for ball in balls:
+        if ball != null and is_instance_valid(ball):
+            ball.queue_free()
+    balls.clear()
+    stuck_states.clear()
+    ball_stay_times.clear()
+    release_ball = null
+
+func restore_from_state(state: Dictionary) -> void:
+    _clear_control_balls()
+    is_damaged = false
+    is_locked = false
+    damage_anim_t = 0.0
+    pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
+    locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
+    jammed_time_left = maxf(0.0, float(state.get("chamber_jammed_time_left", 0.0)))
+    queued_round_modifiers.clear()
+    for modifier in state.get("queued_round_modifiers", []):
+        if modifier is Dictionary:
+            queued_round_modifiers.append((modifier as Dictionary).duplicate(true))
+
+    if bool(state.get("chamber_is_damaged", false)):
+        set_damaged()
+        return
+
+    var saved_balls = state.get("control_balls", [])
+    if saved_balls is Array and saved_balls.size() > 0:
+        var restore_ball_count: int = mini(saved_balls.size(), MAX_RESTORE_CONTROL_BALLS)
+        for i in range(restore_ball_count):
+            var ball_state = saved_balls[i]
+            if not (ball_state is Dictionary):
+                continue
+            var ball = ControlBall.new()
+            ball.radius = clampf(float(ball_state.get("radius", CONTROL_BALL_RADIUS)), 3.0, 12.0)
+            var pos: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("position", [chamber_size.x * 0.5, 18.0]), Vector2(chamber_size.x * 0.5, 18.0))
+            pos.x = clampf(pos.x, ball.radius, chamber_size.x - ball.radius)
+            pos.y = clampf(pos.y, ball.radius, chamber_size.y - ball.radius)
+            var vel: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("velocity", [0, 0]), Vector2.ZERO)
+            vel = vel.limit_length(520.0)
+            ball.setup(faction_id, pos, vel)
+            add_child(ball)
+            balls.append(ball)
+            _reset_stuck_state(ball)
+            set_ball_stay_time(ball, float(ball_state.get("stay_time", 0.0)))
+    else:
+        var ball_count: int = clampi(int(state.get("chamber_ball_count", 0)), 0, GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER)
+        for i in range(ball_count):
+            add_control_ball()
+
+    pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
+    locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
+
+    var release_index: int = int(state.get("chamber_release_ball_index", -1))
+    if release_index >= 0 and release_index < balls.size():
+        release_ball = balls[release_index]
+
+    is_locked = bool(state.get("chamber_is_locked", false))
+    ball_count_changed.emit(faction_id, balls.size())
+    _update_label()
+    _force_visual_redraw()
+
 func _physics_process(delta: float) -> void:
     if is_damaged or is_locked:
         return
@@ -433,11 +500,17 @@ func _physics_process(delta: float) -> void:
 
         _clamp_ball_to_walls(ball)
 
-        for peg in pegs:
+        for peg_index in range(pegs.size()):
+            var peg: Vector2 = pegs[peg_index]
+            var peg_collision_radius: float = float(peg_collision_radii[peg_index]) if peg_index < peg_collision_radii.size() else _effective_peg_radius(peg)
+            var min_dist: float = peg_collision_radius + ball.radius
+            if absf(ball.position.x - peg.x) >= min_dist or absf(ball.position.y - peg.y) >= min_dist:
+                continue
             var offset: Vector2 = ball.position - peg
-            var dist: float = offset.length()
-            var min_dist: float = _effective_peg_radius(peg) + ball.radius
-            if dist > 0.01 and dist < min_dist:
+            var dist_sq: float = offset.length_squared()
+            var min_dist_sq: float = min_dist * min_dist
+            if dist_sq > 0.0001 and dist_sq < min_dist_sq:
+                var dist: float = sqrt(dist_sq)
                 var normal: Vector2 = offset / dist
                 ball.position = peg + normal * min_dist
                 ball.velocity = ball.velocity.bounce(normal) * 0.86

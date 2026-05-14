@@ -1,74 +1,121 @@
 # 会话改动记录 / Session Changes
 
-日期: 2026-05-04
+最近更新 / Latest update: 2026-05-14
 
-## 工程原则 (必读)
+## 工程原则（必读）/ Project Principles
 
-详见 `PROJECT_PRINCIPLES.md`。两条核心原则：
+详见 `PROJECT_PRINCIPLES.md`。当前这条 BallWar 线的核心原则是：
 
-1. **每次优化减低耦合度，提高安全性，保证向后兼容。** 代码在改善，不是积债。
-2. **新代码出问题，优先从新代码入手。** 旧代码已有回归测试背书。v2.0.3 修复全在新测试基建上，未改生产代码。
+1. 每次重构优先降低耦合、提高安全性、保证向后兼容。
+2. 新代码出问题时，优先从新边界和新接线处排查。
+3. 文档要以代码现状为准，不把“计划中的结构”写成“已经完成的结构”。
 
-## 改动一览
+See `PROJECT_PRINCIPLES.md`. The main principles for this BallWar line are:
 
-### 1. 中文编码审计与修复
-- **全部 26 个 .gd 源文件** 已确认为有效 UTF-8，中文字符完全正确
-- **全部 60 个 .md/.txt 文档** 已确认为有效 UTF-8
-- 移除 `BulletPool.gd` 和 `ControlChamber.gd` 的文件头 BOM (Byte Order Mark)
-- 结论：此前报告的"乱码"是命令沙盒终端渲染限制，**文件本身从未损坏**
+1. Favor lower coupling, higher safety, and backward compatibility in each refactor.
+2. When regressions appear, inspect the newly introduced boundaries first.
+3. Keep docs aligned with live code, not with intended future architecture.
 
-### 2. 英文转中文
-- `MenuDecor.gd`: gate 标签 `"R"` → `"射"` (与游戏中 `"发射"` 一致)
-- 其余所有英文均为内部逻辑键值/调试字段，不可更改，不是用户可见文本
+## 历史记录摘要 / Historical Summary
 
-### 5. v2.0.3 测试基础设施升级
-- `scripts/tests/TestAssert.gd` - 通用断言工具 (that/eq/neq/gt/gte/between/report)
-- `scripts/tests/TestFixtures.gd` - MockTurret 类 + fill/paint 夹具 + 胜负模拟 (零 GameConfig 依赖)
-- `scripts/tests/IntegrationTestRunner.gd` - 重构，107 断言，覆盖 P1 存档/P2 战场/P3 胜负，自动退出
-- 详见 `README_v2_0_3_fix_log.md`（7 项修复，现象→根因→修复→验证）
-- 详见 `README_v2_0_3_test_audit.md`（覆盖矩阵 + 未覆盖清单）
+### v2.0.3
 
-### 6. 工程原则文档
-- `PROJECT_PRINCIPLES.md` - 低耦合/安全/向后兼容 + 新代码优先排查
+- 完成中文编码审计，确认主要 `.gd` / `.md` 文件本体没有损坏。
+- 补齐测试基础设施：`TestAssert.gd`、`TestFixtures.gd`、`IntegrationTestRunner.gd`。
+- 形成 `README_v2_0_3_fix_log.md` 和 `README_v2_0_3_test_audit.md` 两份配套记录。
 
-### 8. 版本路线图
-- `ROADMAP.md` - v2.0.4~v2.0.8 五步走：先稳再拆再加功能
-- 下一版本：v2.0.4 安全解耦（WinConditionEvaluator）
-- `AI_HANDOFF_CURRENT.md`: 
-  - 修正乱码误报：明确说明是沙盒终端不优化中文显示，非文件损坏
-  - 补充验证方法：Read 工具直接查看源码为唯一可靠方式，可提供 hex 验真
-  - 标注 `Gate.gd` 为死代码（零引用，ControlChamber 内部处理 gate 逻辑）
-  - 更新编码状态为"已验证干净"
+- Completed encoding audit and confirmed the main `.gd` / `.md` files were not actually corrupted.
+- Added foundational test infrastructure: `TestAssert.gd`, `TestFixtures.gd`, and `IntegrationTestRunner.gd`.
+- Produced `README_v2_0_3_fix_log.md` and `README_v2_0_3_test_audit.md`.
 
-## 当前已知风险
+### v2.0.4 - v2.1.3
 
-| 风险 | 状态 |
+- `WinConditionEvaluator`、`SaveStateBuilder`、`SaveStateApplier`、`SaveFlowController` 逐步成型。
+- `Main.gd` 开始从“大总管 + 深层恢复写回”向“顶层编排”收缩。
+- 产出了 `README_v2_0_4_*`、`README_v2_0_5_*`、`README_v2_1_1_*`、`README_v2_1_2_*`、`README_v2_1_3_*` 等阶段文档。
+
+- `WinConditionEvaluator`, `SaveStateBuilder`, `SaveStateApplier`, and `SaveFlowController` were introduced in stages.
+- `Main.gd` started shrinking from a deep mutation hub toward a top-level coordinator.
+- Stage docs were added across `README_v2_0_4_*`, `README_v2_0_5_*`, `README_v2_1_1_*`, `README_v2_1_2_*`, and `README_v2_1_3_*`.
+
+## 当前已知风险 / Current Known Risks
+
+| 风险 / Risk | 当前判断 / Status |
 |---|---|
-| 无 git 仓库，无法 git diff/history | 每次修改建议出完整压缩包 + 写 README 记录 |
-| 存档版本混乱 (v2.0.x doc / 1.9 save prefix) | 未改动。若改需同步 Main.gd、SaveGameCodec.gd、SmokeTestRunner.gd |
-| 测试覆盖偏窄 | SmokeTestRunner 有用但非完整回归；PerfBurstBenchmark 是性能探针 |
-| Codex 侧 Godot runtime 不可靠 | 桌面验证是权威路径；Codex crash ≠ 代码错误 |
-| Gate.gd 死代码 | 可后续清理，非第一优先级 |
+| 旧文档较多，部分历史文档存在编码显示问题 | 终端中可能乱码，但当前新增文档应继续保持 UTF-8 双语可读 |
+| BallWar 外层目录不是主要 Git 根 | 当前 Git 范围应继续限定在 `BallWar/` |
+| `Main.gd` 仍是总编排层 | 已明显收缩，但继续游戏入口的端到端运行时测试仍值得补 |
+| 性能验证主要来自结构分析与 headless 回归 | 需要时仍建议做真实局面下的人工 / 运行时压测 |
 
-## 桌面验证命令
+## 桌面验证命令 / Local Verification Commands
 
-```
+```text
 "E:\Godot\Godot_\Godot_console.exe" --path "C:\Users\96967\Desktop\Marble Dominion Ricochet War\BallWar_v2_0\BallWar" --script "res://scripts/tests/SmokeTestRunner.gd"
+"E:\Godot\Godot_\Godot_console.exe" --path "C:\Users\96967\Desktop\Marble Dominion Ricochet War\BallWar_v2_0\BallWar" --script "res://scripts/tests/SaveFlowControllerTestRunner.gd"
 "E:\Godot\Godot_\Godot_console.exe" --path "C:\Users\96967\Desktop\Marble Dominion Ricochet War\BallWar_v2_0\BallWar" --script "res://scripts/tests/IntegrationTestRunner.gd"
-"E:\Godot\Godot_\Godot_console.exe" --path "C:\Users\96967\Desktop\Marble Dominion Ricochet War\BallWar_v2_0\BallWar" --script "res://scripts/tests/PerfBurstBenchmark.gd"
+"E:\Godot\Godot_\Godot_console.exe" --path "C:\Users\96967\Desktop\Marble Dominion Ricochet War\BallWar_v2_0\BallWar" --script "res://scripts/tests/GameStateCoordinatorTestRunner.gd"
 ```
 
-## 本次修改的文件清单
+## 本次更新：v2.1.4 / This Update: v2.1.4
 
-- `scripts/BulletPool.gd` - 移除 BOM
-- `scripts/ControlChamber.gd` - 移除 BOM
-- `scripts/MenuDecor.gd` - "R" → "射"
-- `scripts/tests/TestAssert.gd` - 新建，通用断言
-- `scripts/tests/TestFixtures.gd` - 新建，MockTurret + fill/paint + 胜负模拟
-- `scripts/tests/IntegrationTestRunner.gd` - 重构 (107断言，auto-quit)
-- `AI_HANDOFF_CURRENT.md` - 编码修正 + 风险标注 + 原则速览
-- `PROJECT_PRINCIPLES.md` - 新建，工程原则
-- `README_SESSION_CHANGES.md` - 本文件
-- `README_v2_0_3_fix_log.md` - 新建，7项修复记录
-- `README_v2_0_3_test_audit.md` - 新建，覆盖审计
-- `nul` - 已删除（空文件，Windows 保留设备名误写）
+日期 / Date: 2026-05-14
+
+### 本轮重点 / Highlights
+
+- 完成 continue 流程 `prepare_*` / `apply_*` 两段式边界。
+- `ControlChamber.gd`、`Turret.gd`、`Bullet.gd` 分别补齐 `restore_from_state(...)`。
+- `Main.gd` 不再直接写 chamber / turret / bullet 的多处内部字段。
+- `BulletPool.gd` 改为增量维护 burst queue 与 trail segment 统计。
+- `ControlChamber.gd` peg 碰撞改为轴向预筛 + 平方距离判断。
+- `Battlefield.gd` 将静态装饰层拆分到 `BattlefieldDecorLayer.gd`。
+- 清理 `Main.gd` 中继续游戏、胜负收尾附近残留的 `return` 后死代码。
+
+- Finished the `prepare_*` / `apply_*` split for continue flow.
+- Added explicit `restore_from_state(...)` ownership to `ControlChamber.gd`, `Turret.gd`, and `Bullet.gd`.
+- Removed direct chamber / turret / bullet internal-state mutation from `Main.gd`.
+- Switched `BulletPool.gd` to incremental burst-queue and trail-segment tracking.
+- Optimized peg collision in `ControlChamber.gd` with axis pre-check + squared distance.
+- Split static battlefield decoration into `BattlefieldDecorLayer.gd`.
+- Removed leftover dead code after early `return` branches around continue and win/game-over handling in `Main.gd`.
+
+### 主要涉及文件 / Main Files
+
+- `scripts/Main.gd`
+- `scripts/SaveFlowController.gd`
+- `scripts/SaveStateApplier.gd`
+- `scripts/ControlChamber.gd`
+- `scripts/Turret.gd`
+- `scripts/Bullet.gd`
+- `scripts/BulletPool.gd`
+- `scripts/Battlefield.gd`
+- `scripts/BattlefieldDecorLayer.gd`
+- `scripts/tests/SmokeTestRunner.gd`
+- `scripts/tests/SaveFlowControllerTestRunner.gd`
+- `README_v2_1_4_restore_interfaces_and_perf_cleanup.md`
+
+### 验证结果 / Validation
+
+```text
+SmokeTestRunner.gd               PASS 60 checks
+SaveFlowControllerTestRunner.gd  PASS 75 checks
+IntegrationTestRunner.gd         PASS 133 checks
+GameStateCoordinatorTestRunner   PASS 50 checks
+```
+
+### 对当前结构的结论 / Structural Outcome
+
+- `Main.gd` 继续朝“总编排层”收缩。
+- restore 链的对象边界比 `v2.1.3` 明确很多。
+- 这轮是结构稳定性版本，不是玩法功能版本。
+
+- `Main.gd` is now closer to a true orchestration layer.
+- Restore ownership is much clearer than in `v2.1.3`.
+- This is a structural stability pass, not a feature pass.
+
+### 相关文档 / Related Docs
+
+- `README_v2_1_4_restore_interfaces_and_perf_cleanup.md`
+- `README_v2_1_3_restore_chain_audit.md`
+- `README_v2_1_2_save_flow_controller.md`
+- `README_SAVE_LOAD_FLOW_AUDIT.md`
+- `README_MAIN_GD_AUDIT.md`

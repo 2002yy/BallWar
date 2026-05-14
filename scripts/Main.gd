@@ -1,12 +1,10 @@
-extends Node2D
+﻿extends Node2D
 
 const VIEW_W: float = 1120.0
 const VIEW_H: float = 720.0
 const LEGACY_SAVE_PATH: String = "user://ballwar_save.json"
 const SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.json"
 const SAVE_SLOT_COUNT: int = 5
-const MAX_RESTORE_CONTROL_BALLS: int = 8
-const MAX_RESTORE_TRAIL_POINTS: int = 3
 
 var battlefield
 var bullet_container
@@ -42,8 +40,8 @@ var event_roulette_view = null
 var menu_layer
 var game_layer
 var selected_grid_size: int = 40
-var selected_palette_name: String = "默认随机"
-var selected_quality_name: String = "中"
+var selected_palette_name: String = "榛樿闅忔満"
+var selected_quality_name: String = "涓?
 var selected_game_mode_name: String = GameConfig.GAME_MODE_BASIC
 var selected_time_limit_minutes: int = GameConfig.DEFAULT_TIMED_MODE_MINUTES
 var selected_save_slot: int = 1
@@ -64,6 +62,7 @@ var perf_debug_update_timer: float = 0.0
 var hud_meta_update_timer: float = 0.0
 const PERF_DEBUG_UPDATE_INTERVAL: float = 0.25
 const HUD_META_UPDATE_INTERVAL: float = 0.25
+
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
     randomize()
@@ -126,7 +125,7 @@ func _toggle_settings_panel() -> void:
         return
 
     if settings_panel.has_method("show_content"):
-        settings_panel.show_content(GameConfig.get_quality_name(), "手机横屏" if is_mobile_layout else "电脑")
+        settings_panel.show_content(GameConfig.get_quality_name(), "鎵嬫満妯睆" if is_mobile_layout else "鐢佃剳")
     else:
         settings_panel.visible = true
 
@@ -178,7 +177,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
     GameConfig.set_game_mode_by_name(selected_game_mode_name)
     GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
 
-    if selected_palette_name == "默认随机":
+    if selected_palette_name == "榛樿闅忔満":
         GameConfig.set_random_palette()
     else:
         GameConfig.set_palette_by_name(selected_palette_name)
@@ -197,8 +196,8 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 
     game_layer = Node2D.new()
     game_layer.name = "GameLayer"
-    # Main 为 ALWAYS 以便暂停菜单可点击，但游戏层必须显式设为 PAUSABLE。
-    # 否则子节点继承 Main 的 ALWAYS，暂停后子弹/炮塔/控制仓仍会继续运行。
+    # Main 涓?ALWAYS 浠ヤ究鏆傚仠鑿滃崟鍙偣鍑伙紝浣嗘父鎴忓眰蹇呴』鏄惧紡璁句负 PAUSABLE銆?
+    # 鍚﹀垯瀛愯妭鐐圭户鎵?Main 鐨?ALWAYS锛屾殏鍋滃悗瀛愬脊/鐐/鎺у埗浠撲粛浼氱户缁繍琛屻€?
     game_layer.process_mode = Node.PROCESS_MODE_PAUSABLE
     add_child(game_layer)
 
@@ -209,7 +208,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
     _create_event_roulette_system()
     _create_control_buttons()
     if not suppress_banner:
-        _show_center_banner("领土战争", "开战！", Color(1.0, 0.94, 0.48), true)
+        _show_center_banner("棰嗗湡鎴樹簤", "寮€鎴橈紒", Color(1.0, 0.94, 0.48), true)
 
 func _create_battlefield(grid_size: int) -> void:
     var scene_nodes: Dictionary = GameSceneBuilder.create_battlefield(self, game_layer, grid_size, current_layout, Vector2(VIEW_W, VIEW_H))
@@ -358,6 +357,7 @@ func _check_winner() -> void:
 # win-condition logic is now delegated to WinConditionEvaluator.
 # Kept temporarily for safe rollback in non-git workspace.
 # Remove in v2.0.5 or v2.0.6 once confirmed stable.
+
 func _get_occupation_winner() -> int:
     var counts: Dictionary = current_score_counts
     if counts.is_empty() and battlefield != null and is_instance_valid(battlefield):
@@ -385,6 +385,7 @@ func _get_occupation_winner() -> int:
     return -1
 
 # Deprecated after v2.0.4. See _get_occupation_winner note above.
+
 func _get_score_winner() -> int:
     var counts: Dictionary = current_score_counts
     if counts.is_empty() and battlefield != null and is_instance_valid(battlefield):
@@ -407,19 +408,9 @@ func _get_score_winner() -> int:
 
 func _finish_with_winner(faction_id: int, sub_text: String) -> void:
     GameStateCoordinator.finish_with_winner(self, winner_label, faction_id, sub_text)
-    return
-    is_game_over = true
-    _stop_all_actions_for_game_over()
-    winner_label.text = "%s 胜利！" % GameConfig.faction_name(faction_id)
-    _show_center_banner(winner_label.text, sub_text, GameConfig.faction_color(faction_id).lightened(0.35), false)
 
 func _finish_as_draw(sub_text: String) -> void:
     GameStateCoordinator.finish_as_draw(self, winner_label, sub_text)
-    return
-    is_game_over = true
-    _stop_all_actions_for_game_over()
-    winner_label.text = "平局"
-    _show_center_banner("平局", sub_text, Color(1.0, 1.0, 1.0), false)
 
 func _stop_all_actions_for_game_over() -> void:
     GameStateCoordinator.stop_actions_for_game_over(
@@ -430,23 +421,6 @@ func _stop_all_actions_for_game_over() -> void:
         event_roulette_controller,
         event_roulette_view
     )
-    return
-    for turret in turrets.values():
-        if turret == null:
-            continue
-        turret.burst_remaining = 0
-        turret.burst_total = 0
-        turret.burst_timer = 0.0
-        turret._set_burst_locked(false)
-
-    # 终局后清理已有子弹，避免“胜利后地图还在变化 / 炮台继续掉血”。
-    _clear_bullets()
-
-    for faction_id in chambers.keys():
-        var chamber = chambers[faction_id]
-        if chamber != null and chamber.is_locked:
-            chamber.set_locked(false)
-        _refresh_add_ball_button(faction_id)
 
 func _on_scores_changed(counts: Dictionary) -> void:
     current_score_counts = counts.duplicate()
@@ -478,23 +452,6 @@ func _toggle_pause() -> void:
         pause_button,
         Callable(self, "_save_game_progress")
     )
-    return
-    if game_layer == null:
-        return
-    if get_tree().paused:
-        get_tree().paused = false
-        if pause_overlay != null:
-            pause_overlay.visible = false
-        if pause_button != null:
-            pause_button.text = "暂停"
-    else:
-        # 先暂停整棵游戏树，再保存当前状态，保证暂停后子弹/炮塔/控制球都停止。
-        get_tree().paused = true
-        _save_game_progress()
-        if pause_overlay != null:
-            pause_overlay.visible = true
-        if pause_button != null:
-            pause_button.text = "继续"
 
 func _save_and_exit_to_menu() -> void:
     if battlefield != null:
@@ -547,36 +504,22 @@ func _cleanup_game_layer() -> void:
     top_bar_name_labels.clear()
 
 func _get_save_path(slot_index: int) -> String:
-    return SAVE_PATH_TEMPLATE % clampi(slot_index, 1, SAVE_SLOT_COUNT)
+    return SaveFlowController.get_save_path(slot_index, SAVE_PATH_TEMPLATE, SAVE_SLOT_COUNT)
 
 func _has_save_file(slot_index: int = -1) -> bool:
-    var slot: int = selected_save_slot if slot_index < 1 else clampi(slot_index, 1, SAVE_SLOT_COUNT)
-    if FileAccess.file_exists(_get_save_path(slot)):
-        return true
-    return slot == 1 and FileAccess.file_exists(LEGACY_SAVE_PATH)
+    return SaveFlowController.has_save_file(
+        slot_index,
+        selected_save_slot,
+        SAVE_SLOT_COUNT,
+        SAVE_PATH_TEMPLATE,
+        LEGACY_SAVE_PATH
+    )
 
 func _get_save_slot_summaries() -> Array:
-    var result: Array = []
-    for slot in range(1, SAVE_SLOT_COUNT + 1):
-        var data: Dictionary = _load_saved_data(slot, true)
-        var has_data: bool = not data.is_empty()
-        var title: String = "空存档"
-        var detail: String = "点击选择此槽"
-        if has_data:
-            var grid_size: int = LayoutProfiles.sanitize_grid_size(data.get("grid_size", 40))
-            var mode_name: String = str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
-            var quality_name: String = str(data.get("quality_name", "中"))
-            var elapsed: float = maxf(0.0, float(data.get("game_elapsed_time", 0.0)))
-            var version: String = str(data.get("save_version", ""))
-            title = "%s｜%d×%d｜%s" % [mode_name, grid_size, grid_size, quality_name]
-            detail = "进度 %s｜版本 %s" % [RuntimeHudController.format_time_text(elapsed), version]
-        result.append({
-            "slot": slot,
-            "has_data": has_data,
-            "title": title,
-            "detail": detail,
-        })
-    return result
+    return SaveFlowController.build_save_slot_summaries(
+        SAVE_SLOT_COUNT,
+        Callable(self, "_load_saved_data")
+    )
 
 func _clear_bullets() -> void:
     if bullet_container == null:
@@ -615,31 +558,14 @@ func _process_pending_bullet_restore() -> void:
         if not (state is Dictionary):
             continue
 
-        var faction_id: int = clampi(int(state.get("faction_id", 0)), 0, 3)
-        var pos: Vector2 = SaveGameCodec.arr_to_vec2(state.get("position", [0, 0]), battlefield.global_position)
-        var direction: Vector2 = SaveGameCodec.arr_to_vec2(state.get("direction", [1, 0]), Vector2.RIGHT).normalized()
-        if direction.length() <= 0.001:
-            direction = Vector2.RIGHT
-
         var bullet
-        if bullet_container.has_method("spawn_bullet"):
-            bullet = bullet_container.spawn_bullet(faction_id, pos, direction, battlefield, turrets)
+        if bullet_container.has_method("spawn_bullet_from_state"):
+            bullet = bullet_container.spawn_bullet_from_state(state, battlefield, turrets)
         else:
             bullet = Bullet.new()
-            bullet.setup(faction_id, pos, direction, battlefield, turrets)
+            bullet.restore_from_state(state, battlefield, turrets)
+            bullet.activate()
             bullet_container.add_child(bullet)
-
-        bullet.age = clampf(float(state.get("age", 0.0)), 0.0, GameConfig.BULLET_MAX_LIFETIME)
-        bullet.last_cell = SaveGameCodec.arr_to_vec2i(state.get("last_cell", [-999, -999]))
-        bullet.trail_points.clear()
-        var trail = state.get("trail_points", [])
-        if trail is Array and trail.size() > 0:
-            var trail_count: int = mini(trail.size(), MAX_RESTORE_TRAIL_POINTS)
-            for j in range(trail_count):
-                bullet.trail_points.append(SaveGameCodec.arr_to_vec2(trail[j], bullet.global_position))
-        else:
-            bullet.trail_points.append(bullet.global_position)
-        bullet.queue_redraw()
 
     pending_restore_index = end_index
     if pending_restore_index >= pending_restore_bullets.size():
@@ -648,63 +574,43 @@ func _process_pending_bullet_restore() -> void:
 
 
 func _save_game_progress() -> void:
-    if battlefield == null:
-        return
-
-    var data: Dictionary = SaveStateBuilder.build_save_payload(
-        chambers, turrets, battlefield, bullet_container, event_roulette_controller,
-        game_elapsed_time, is_game_over, selected_save_slot, winner_label
+    SaveFlowController.write_game_progress(
+        selected_save_slot,
+        SAVE_PATH_TEMPLATE,
+        SAVE_SLOT_COUNT,
+        chambers,
+        turrets,
+        battlefield,
+        bullet_container,
+        event_roulette_controller,
+        game_elapsed_time,
+        is_game_over,
+        winner_label
     )
 
-    var file = FileAccess.open(_get_save_path(selected_save_slot), FileAccess.WRITE)
-    if file != null:
-        file.store_string(JSON.stringify(data))
-
-
 func _load_saved_data(slot_index: int = -1, allow_legacy: bool = true) -> Dictionary:
-    var slot: int = selected_save_slot if slot_index < 1 else clampi(slot_index, 1, SAVE_SLOT_COUNT)
-    var path: String = _get_save_path(slot)
-
-    if not FileAccess.file_exists(path):
-        if allow_legacy and slot == 1 and FileAccess.file_exists(LEGACY_SAVE_PATH):
-            path = LEGACY_SAVE_PATH
-        else:
-            return {}
-
-    var file = FileAccess.open(path, FileAccess.READ)
-    if file == null:
-        return {}
-    var content: String = file.get_as_text()
-    var parsed = JSON.parse_string(content)
-    if typeof(parsed) == TYPE_DICTIONARY:
-        return parsed
-    return {}
+    return SaveFlowController.load_saved_data(
+        slot_index,
+        selected_save_slot,
+        SAVE_SLOT_COUNT,
+        SAVE_PATH_TEMPLATE,
+        LEGACY_SAVE_PATH,
+        allow_legacy
+    )
 
 func _select_save_slot(slot_index: int) -> void:
-    selected_save_slot = clampi(slot_index, 1, SAVE_SLOT_COUNT)
-    if _has_save_file(selected_save_slot):
-        _show_menu_status("已选择存档槽 %d，可继续或覆盖开始" % selected_save_slot)
-    else:
-        _show_menu_status("已选择空存档槽 %d，新游戏会保存在这里" % selected_save_slot)
+    selected_save_slot = SaveFlowController.normalize_slot(slot_index, selected_save_slot, SAVE_SLOT_COUNT)
+    _show_menu_status(SaveFlowController.build_slot_selection_status(selected_save_slot, _has_save_file(selected_save_slot)))
     _refresh_menu_save_slots()
 
 func _refresh_menu_save_slots() -> void:
-    if menu_save_slot_buttons.is_empty():
-        return
-    for summary in _get_save_slot_summaries():
-        if not (summary is Dictionary):
-            continue
-        var slot: int = int(summary.get("slot", 1))
-        if not menu_save_slot_buttons.has(slot):
-            continue
-        var button: Button = menu_save_slot_buttons[slot] as Button
-        var marker: String = "▶ " if slot == selected_save_slot else ""
-        var title: String = str(summary.get("title", "空存档"))
-        button.text = "%s槽%d  %s" % [marker, slot, title]
-        button.self_modulate = Color(0.28, 0.54, 0.88) if slot == selected_save_slot else Color(0.16, 0.22, 0.32)
-    if menu_continue_button != null and is_instance_valid(menu_continue_button):
-        menu_continue_button.disabled = not _has_save_file(selected_save_slot)
-        menu_continue_button.text = "读取槽%d" % selected_save_slot
+    SaveFlowController.refresh_menu_slot_ui(
+        menu_save_slot_buttons,
+        selected_save_slot,
+        _get_save_slot_summaries(),
+        menu_continue_button,
+        _has_save_file(selected_save_slot)
+    )
 
 func _show_menu_status(message: String) -> void:
     if menu_status_label != null and is_instance_valid(menu_status_label):
@@ -713,144 +619,65 @@ func _show_menu_status(message: String) -> void:
         push_warning(message)
 
 func _continue_saved_game() -> void:
-    var data: Dictionary = _load_saved_data()
-    if data.is_empty():
-        _show_menu_status("存档读取失败或存档已损坏")
+    var prepared: Dictionary = SaveFlowController.prepare_continue_payload(
+        -1,
+        selected_save_slot,
+        SAVE_SLOT_COUNT,
+        SAVE_PATH_TEMPLATE,
+        LEGACY_SAVE_PATH,
+        true
+    )
+    if not bool(prepared.get("ok", false)):
+        _show_menu_status(str(prepared.get("error_message", "鐎涙ɑ銆傜拠璇插絿婢惰精瑙﹂幋鏍х摠濡楋絽鍑￠幑鐔锋綎")))
+        var warning_message: String = str(prepared.get("warning_message", ""))
+        if warning_message != "":
+            push_warning(warning_message)
         return
 
-    var save_version: String = str(data.get("save_version", ""))
-    if not SaveGameCodec.is_supported_save_version(save_version):
-        _show_menu_status("存档版本不兼容：%s" % save_version)
-        push_warning("存档版本不兼容，已拒绝读取：%s" % save_version)
-        return
+    _continue_from_prepared_payload(prepared)
 
-    selected_game_mode_name = str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
-    selected_time_limit_minutes = clampi(int(data.get("time_limit_minutes", GameConfig.DEFAULT_TIMED_MODE_MINUTES)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)
-    GameConfig.set_game_mode_by_name(selected_game_mode_name)
-    GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
-
-    data = SaveGameCodec.validate_save_data(data)
-    if data.has("_invalid_reason"):
-        _show_menu_status(str(data["_invalid_reason"]))
-        return
-
-    if not data.has("grid_size"):
-        _show_menu_status("存档结构不完整，无法继续")
-        return
-
-    var palette_name: String = str(data.get("palette_name", "经典"))
-    selected_palette_name = palette_name
-    selected_quality_name = str(data.get("quality_name", "中"))
-    selected_game_mode_name = str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
-    selected_time_limit_minutes = clampi(int(data.get("time_limit_minutes", selected_time_limit_minutes)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)
-    GameConfig.set_palette_by_name(palette_name)
-    GameConfig.set_quality_by_name(selected_quality_name)
-    GameConfig.set_game_mode_by_name(selected_game_mode_name)
-    GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
-    _start_game(LayoutProfiles.sanitize_grid_size(data.get("grid_size", 40)), true, false)
-    game_elapsed_time = maxf(0.0, float(data.get("game_elapsed_time", 0.0)))
-    _sync_chamber_game_elapsed_time()
-    _apply_saved_state(data)
-    _show_center_banner("领土战争", "继续作战", Color(0.84, 0.96, 1.0), true)
-
-func _apply_saved_state(data: Dictionary) -> void:
+func _apply_saved_state(restore_input) -> void:
     if battlefield == null:
         return
 
-    SaveStateApplier.apply_owners(battlefield, data, Callable(self, "_on_scores_changed"))
-    SaveStateApplier.apply_factions(chambers, turrets, data.get("factions", []),
-        Callable(self, "_apply_chamber_state"),
-        Callable(self, "_apply_turret_state"),
+    var restore_plan: RestorePlan = restore_input if restore_input is RestorePlan else RestorePlan.build_from_clean_data(restore_input if restore_input is Dictionary else {})
+    var restore_data: Dictionary = restore_plan.to_restore_dictionary()
+
+    SaveStateApplier.apply_owners(battlefield, restore_data, Callable(self, "_on_scores_changed"))
+    SaveStateApplier.apply_factions(
+        chambers,
+        turrets,
+        restore_plan.faction_states,
         func(chamber): chamber.set_locked(false),
-        Callable(self, "_refresh_add_ball_button"))
+        Callable(self, "_refresh_add_ball_button")
+    )
 
-    SaveStateApplier.apply_event_state(event_roulette_controller, data)
+    SaveStateApplier.apply_event_state(event_roulette_controller, {"event_state": restore_plan.event_state})
 
-    _restore_bullet_states(data.get("bullets", []))
+    _restore_bullet_states(restore_plan.bullet_states)
 
-    is_game_over = SaveStateApplier.apply_game_over_state(data, winner_label)
+    is_game_over = SaveStateApplier.apply_game_over_state(restore_plan.game_over_state, winner_label)
     if is_game_over:
         _stop_all_actions_for_game_over()
 
+func _continue_from_prepared_payload(prepared: Dictionary) -> void:
+    var execution_plan: Dictionary = SaveFlowController.prepare_continue_start_plan(prepared.get("data", {}), selected_time_limit_minutes)
+    var execution_data: Dictionary = execution_plan.get("data", {})
+    var restore_plan: RestorePlan = RestorePlan.build_from_clean_data(execution_data)
+    _apply_continue_start_plan(execution_plan, restore_plan)
 
-func _apply_chamber_state(chamber, state: Dictionary) -> void:
-    for ball in chamber.balls:
-        if ball != null and is_instance_valid(ball):
-            ball.queue_free()
-    chamber.balls.clear()
-    chamber.stuck_states.clear()
-    chamber.release_ball = null
-    chamber.is_damaged = false
-    chamber.is_locked = false
-    chamber.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
-    chamber.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
-    chamber.set_jammed_time_left(float(state.get("chamber_jammed_time_left", 0.0)))
-    chamber.set_queued_round_modifiers(state.get("queued_round_modifiers", []))
+func _apply_continue_start_plan(execution_plan: Dictionary, restore_plan: RestorePlan) -> void:
+    var execution_start_values: Dictionary = execution_plan.get("start_values", {})
+    var execution_banner: Dictionary = execution_plan.get("banner", {})
+    SaveFlowController.apply_continue_start_plan(execution_plan, self)
+    _start_game(int(execution_start_values.get("grid_size", 40)), true, false)
+    game_elapsed_time = float(execution_start_values.get("game_elapsed_time", 0.0))
+    _sync_chamber_game_elapsed_time()
+    _apply_saved_state(restore_plan)
+    _show_center_banner(
+        str(execution_banner.get("title", "棰嗗湡鎴樹簤")),
+        str(execution_banner.get("subtitle", "缁х画浣滄垬")),
+        execution_banner.get("accent", Color(0.84, 0.96, 1.0)),
+        bool(execution_banner.get("auto_hide", true))
+    )
 
-    if bool(state.get("chamber_is_damaged", false)):
-        chamber.set_damaged()
-        return
-
-    var saved_balls = state.get("control_balls", [])
-    if saved_balls is Array and saved_balls.size() > 0:
-        var restore_ball_count: int = mini(saved_balls.size(), MAX_RESTORE_CONTROL_BALLS)
-        for i in range(restore_ball_count):
-            var ball_state = saved_balls[i]
-            if not (ball_state is Dictionary):
-                continue
-            var ball = ControlBall.new()
-            ball.radius = clampf(float(ball_state.get("radius", chamber.CONTROL_BALL_RADIUS)), 3.0, 12.0)
-            var pos: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("position", [chamber.chamber_size.x * 0.5, 18.0]), Vector2(chamber.chamber_size.x * 0.5, 18.0))
-            pos.x = clampf(pos.x, ball.radius, chamber.chamber_size.x - ball.radius)
-            pos.y = clampf(pos.y, ball.radius, chamber.chamber_size.y - ball.radius)
-            var vel: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("velocity", [0, 0]), Vector2.ZERO)
-            vel = vel.limit_length(520.0)
-            ball.setup(chamber.faction_id, pos, vel)
-            chamber.add_child(ball)
-            chamber.balls.append(ball)
-            chamber._reset_stuck_state(ball)
-            chamber.set_ball_stay_time(ball, float(ball_state.get("stay_time", 0.0)))
-    else:
-        var ball_count: int = clampi(int(state.get("chamber_ball_count", 0)), 0, GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER)
-        for i in range(ball_count):
-            chamber.add_control_ball()
-
-    chamber.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
-    chamber.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
-
-    var release_index: int = int(state.get("chamber_release_ball_index", -1))
-    if release_index >= 0 and release_index < chamber.balls.size():
-        chamber.release_ball = chamber.balls[release_index]
-
-    if bool(state.get("chamber_is_locked", false)):
-        chamber.is_locked = true
-        chamber._update_label()
-    else:
-        chamber._update_label()
-
-
-func _apply_turret_state(turret, state: Dictionary) -> void:
-    turret.health = clampi(int(state.get("turret_health", GameConfig.TURRET_MAX_HEALTH)), 0, turret.max_health)
-    turret.is_destroyed = bool(state.get("turret_destroyed", false))
-    turret.damage_flash = 0.0
-    turret.destroy_anim_time = 0.0 if turret.is_destroyed else -1.0
-
-    turret.sweep_phase = float(state.get("turret_sweep_phase", turret.sweep_phase))
-    turret.rotation = float(state.get("turret_rotation", turret.rotation))
-
-    turret.burst_remaining = clampi(int(state.get("turret_burst_remaining", 0)), 0, GameConfig.get_max_pending_count())
-    turret.burst_total = clampi(int(state.get("turret_burst_total", turret.burst_remaining)), turret.burst_remaining, GameConfig.get_max_pending_count())
-    turret.burst_index = clampi(int(state.get("turret_burst_index", 0)), 0, GameConfig.get_max_pending_count())
-    turret.burst_timer = clampf(float(state.get("turret_burst_timer", 0.0)), 0.0, 1.0)
-
-    var should_lock: bool = bool(state.get("turret_burst_locked", false)) and turret.burst_remaining > 0 and not turret.is_destroyed
-    turret._set_burst_locked(should_lock)
-
-    if turret.is_destroyed:
-        turret.burst_remaining = 0
-        turret.burst_total = 0
-        turret.burst_index = 0
-        turret.burst_timer = 0.0
-        turret._set_burst_locked(false)
-
-    turret.queue_redraw()

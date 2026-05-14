@@ -130,6 +130,36 @@ func cancel_burst() -> int:
     _set_burst_locked(false)
     return remaining
 
+func restore_from_state(state: Dictionary) -> void:
+    health = clampi(int(state.get("turret_health", GameConfig.TURRET_MAX_HEALTH)), 0, max_health)
+    is_destroyed = bool(state.get("turret_destroyed", false))
+    damage_flash = 0.0
+    destroy_anim_time = 0.0 if is_destroyed else -1.0
+
+    sweep_phase = float(state.get("turret_sweep_phase", sweep_phase))
+    rotation = float(state.get("turret_rotation", rotation))
+    burst_origin_angle = rotation
+    burst_remaining = clampi(int(state.get("turret_burst_remaining", 0)), 0, GameConfig.get_max_pending_count())
+    burst_total = clampi(int(state.get("turret_burst_total", burst_remaining)), burst_remaining, GameConfig.get_max_pending_count())
+    burst_index = clampi(int(state.get("turret_burst_index", 0)), 0, GameConfig.get_max_pending_count())
+    burst_timer = clampf(float(state.get("turret_burst_timer", 0.0)), 0.0, 1.0)
+    burst_progress_emit_timer = 0.0
+    burst_last_reported_remaining = burst_remaining
+
+    var should_lock: bool = bool(state.get("turret_burst_locked", false)) and burst_remaining > 0 and not is_destroyed
+    _set_burst_locked(should_lock)
+
+    if is_destroyed:
+        burst_remaining = 0
+        burst_total = 0
+        burst_index = 0
+        burst_timer = 0.0
+        burst_last_reported_remaining = 0
+        _set_burst_locked(false)
+
+    burst_progress.emit(faction_id, burst_remaining)
+    queue_redraw()
+
 func _next_burst_interval() -> float:
     # v1.9.29：高倍率发射队列优化。
     # 基础节拍保留 v1.9.28 的回调值；实际间隔会根据 FPS 和剩余队列自动放慢。

@@ -1,5 +1,91 @@
 # AI Handoff Current
 
+Last updated: 2026-05-06 (v2.1.2 SaveFlowController first cut, local baseline green)
+
+## Current Headline
+
+The current safe split is now:
+
+- `GameStateCoordinator`
+  - low-risk state-flow helper layer
+- `SaveFlowController`
+  - low-risk save/load orchestration layer
+- `Main.gd`
+  - still owns scene start and deep restore sequencing
+- `SaveStateApplier`
+  - still owns the current object-restore boundary
+
+## v2.1.2 SaveFlowController First Cut
+
+Recent work after the earlier `GameStateCoordinator` phase:
+
+Boundary of `v2.1.2`:
+
+- save-side split
+- continue-game pre-start preparation
+- does **not** enter restore-chain application
+
+- added `scripts/SaveFlowController.gd`
+  - current covered scope:
+    - save path generation
+    - slot normalization
+    - save existence check
+    - save slot summaries
+    - slot selection status text
+    - menu slot button refresh
+    - save write orchestration
+    - raw load / JSON parse / legacy slot-1 fallback
+    - continue payload preparation
+    - continue runtime normalization
+    - continue `GameConfig` apply helper
+    - continue start values helper
+    - continue selection-state helper
+    - continue banner config helper
+    - continue start plan
+
+- added `scripts/tests/SaveFlowControllerTestRunner.gd`
+  - focused save/load orchestration helper verification
+
+- added `README_SAVE_LOAD_FLOW_AUDIT.md`
+  - audits the current read/load chain
+
+- added `README_v2_1_2_save_flow_controller.md`
+  - phase summary for the first SaveFlowController split
+
+- effective continue flow is now:
+  - `_continue_saved_game()`
+  - `SaveFlowController.prepare_continue_payload(...)`
+  - `_continue_from_prepared_payload(prepared)`
+  - `SaveFlowController.prepare_continue_start_plan(...)`
+  - `SaveFlowController.apply_continue_selection_state(...)`
+  - `_start_game(...)`
+  - `_apply_saved_state(...)`
+  - `_show_center_banner(...)`
+
+- local user-verified baseline is green:
+  - `SaveFlowControllerTestRunner.gd` PASS
+  - `GameStateCoordinatorTestRunner.gd` PASS
+  - `SmokeTestRunner.gd` PASS
+  - `IntegrationTestRunner.gd` PASS
+  - `LayoutSanityTestRunner.gd` PASS
+  - `StartMenuSceneTestRunner.gd` PASS
+  - `GameHUDSceneTestRunner.gd` PASS
+  - `EventRouletteSceneTestRunner.gd` PASS
+  - `SettingsPanelSceneTestRunner.gd` PASS
+
+- still intentionally NOT split in this phase:
+  - `_apply_saved_state()`
+  - `_restore_bullet_states()`
+  - `_process_pending_bullet_restore()`
+  - `_apply_chamber_state()`
+  - `_apply_turret_state()`
+  - `SaveStateApplier` deep restore sequencing
+  - `SaveGameCodec` compatibility policy
+
+- recommended next step:
+  - freeze the pre-start orchestration split
+  - next phase should target restore-chain audit/split, not more slot UI work
+
 Last updated: 2026-05-06 (v2.1.2 — GameStateCoordinator phase, local test baseline green)
 
 ## v2.1.1 / v2.1.2 Update
