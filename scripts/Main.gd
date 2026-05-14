@@ -40,8 +40,8 @@ var event_roulette_view = null
 var menu_layer
 var game_layer
 var selected_grid_size: int = 40
-var selected_palette_name: String = "榛樿闅忔満"
-var selected_quality_name: String = "涓?
+var selected_palette_name: String = "默认随机"
+var selected_quality_name: String = GameConfig.QUALITY_MEDIUM
 var selected_game_mode_name: String = GameConfig.GAME_MODE_BASIC
 var selected_time_limit_minutes: int = GameConfig.DEFAULT_TIMED_MODE_MINUTES
 var selected_save_slot: int = 1
@@ -177,7 +177,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
     GameConfig.set_game_mode_by_name(selected_game_mode_name)
     GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
 
-    if selected_palette_name == "榛樿闅忔満":
+    if selected_palette_name == "默认随机":
         GameConfig.set_random_palette()
     else:
         GameConfig.set_palette_by_name(selected_palette_name)
