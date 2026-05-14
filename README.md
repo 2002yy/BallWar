@@ -27,6 +27,20 @@ This repository preserves the reconstructed local development history from `v1.7
 - 子弹命中异色格会占领地块，命中炮台会造成伤害
 - 支持多种胜利模式：`basic`、`occupation`、`timed`、`wild`
 
+## 游戏截图 / Screenshots
+
+| 开始界面 | 游戏初始 |
+|:--:|:--:|
+| ![](screenshots/%E5%BC%80%E5%A7%8B%E7%95%8C%E9%9D%A2.png) | ![](screenshots/%E6%B8%B8%E6%88%8F%E5%88%9D%E5%A7%8B.png) |
+
+| 游戏中场 | 事件画面 |
+|:--:|:--:|
+| ![](screenshots/%E6%B8%B8%E6%88%8F%E4%B8%AD%E5%9C%BA.png) | ![](screenshots/%E4%BA%8B%E4%BB%B6%E7%94%BB%E9%9D%A2.png) |
+
+| 胜利结果 |
+|:--:|
+| ![](screenshots/%E4%B8%80%E6%96%B9%E8%83%9C%E5%88%A9%E7%BB%93%E6%9E%9C.png) |
+
 ## 运行方式 / Running The Project
 
 推荐使用 Godot 4.6 打开仓库根目录下的 `project.godot`。

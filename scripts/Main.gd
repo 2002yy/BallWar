@@ -1,4 +1,4 @@
-﻿extends Node2D
+extends Node2D
 
 const VIEW_W: float = 1120.0
 const VIEW_H: float = 720.0
@@ -125,7 +125,7 @@ func _toggle_settings_panel() -> void:
         return
 
     if settings_panel.has_method("show_content"):
-        settings_panel.show_content(GameConfig.get_quality_name(), "鎵嬫満妯睆" if is_mobile_layout else "鐢佃剳")
+        settings_panel.show_content(GameConfig.get_quality_name(), "手机横屏" if is_mobile_layout else "电脑")
     else:
         settings_panel.visible = true
 
@@ -196,8 +196,8 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 
     game_layer = Node2D.new()
     game_layer.name = "GameLayer"
-    # Main 涓?ALWAYS 浠ヤ究鏆傚仠鑿滃崟鍙偣鍑伙紝浣嗘父鎴忓眰蹇呴』鏄惧紡璁句负 PAUSABLE銆?
-    # 鍚﹀垯瀛愯妭鐐圭户鎵?Main 鐨?ALWAYS锛屾殏鍋滃悗瀛愬脊/鐐/鎺у埗浠撲粛浼氱户缁繍琛屻€?
+    # Main 是 ALWAYS 以便暂停菜单可点击，但游戏层必须显式设为 PAUSABLE。
+    # 否则子节点继承 Main 的 ALWAYS，暂停后子弹/炮塔/控制仓仍会继续运行。
     game_layer.process_mode = Node.PROCESS_MODE_PAUSABLE
     add_child(game_layer)
 
@@ -208,7 +208,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
     _create_event_roulette_system()
     _create_control_buttons()
     if not suppress_banner:
-        _show_center_banner("棰嗗湡鎴樹簤", "寮€鎴橈紒", Color(1.0, 0.94, 0.48), true)
+        _show_center_banner("领土战争", "开战！", Color(1.0, 0.94, 0.48), true)
 
 func _create_battlefield(grid_size: int) -> void:
     var scene_nodes: Dictionary = GameSceneBuilder.create_battlefield(self, game_layer, grid_size, current_layout, Vector2(VIEW_W, VIEW_H))
@@ -628,7 +628,7 @@ func _continue_saved_game() -> void:
         true
     )
     if not bool(prepared.get("ok", false)):
-        _show_menu_status(str(prepared.get("error_message", "鐎涙ɑ銆傜拠璇插絿婢惰精瑙﹂幋鏍х摠濡楋絽鍑￠幑鐔锋綎")))
+        _show_menu_status(str(prepared.get("error_message", "存档读取失败或存档已损坏")))
         var warning_message: String = str(prepared.get("warning_message", ""))
         if warning_message != "":
             push_warning(warning_message)
@@ -675,8 +675,8 @@ func _apply_continue_start_plan(execution_plan: Dictionary, restore_plan: Restor
     _sync_chamber_game_elapsed_time()
     _apply_saved_state(restore_plan)
     _show_center_banner(
-        str(execution_banner.get("title", "棰嗗湡鎴樹簤")),
-        str(execution_banner.get("subtitle", "缁х画浣滄垬")),
+        str(execution_banner.get("title", "领土战争")),
+        str(execution_banner.get("subtitle", "继续作战")),
         execution_banner.get("accent", Color(0.84, 0.96, 1.0)),
         bool(execution_banner.get("auto_hide", true))
     )
