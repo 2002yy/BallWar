@@ -1,175 +1,264 @@
-# Test Matrix
+# Test Matrix / 测试矩阵
 
-Date: 2026-05-06
+Date / 日期: 2026-05-15
+Role / 作用: test-only document / 只负责测试
 
-## Goal
+This file answers:
 
-This document classifies the active test scripts by responsibility so future
-refactors do not drift into "run whatever seems related".
+- what tests exist
+- which tests are the correctness baseline
+- which tests are performance probes
+- what to run after a given kind of change
 
-## A. Scene Wiring Tests
+这份文档只回答：
 
-Purpose:
+- 现在有哪些测试
+- 哪些属于 correctness baseline
+- 哪些属于 performance probe
+- 不同类型改动后应该跑哪些测试
+
+Development progress belongs in `ROADMAP.md`.  
+开发进度请看 `ROADMAP.md`。
+
+Session takeover belongs in `AI_HANDOFF_CURRENT.md`.  
+交接卡片请看 `AI_HANDOFF_CURRENT.md`。
+
+## 1. Scene Wiring Tests / 场景接线测试
+
+Purpose / 目的:
+
 - verify `.tscn` scenes load
 - verify required node paths stay stable
-- verify scene scripts do not accidentally stomp intended layout/state on setup
+- verify setup code does not break intended layout/state
 
-Files:
+- 验证 `.tscn` 场景能正常加载
+- 验证关键 node path 没被改坏
+- 验证初始化逻辑不会破坏预期布局或状态
+
+Files / 文件:
+
 - `scripts/tests/StartMenuSceneTestRunner.gd`
 - `scripts/tests/GameHUDSceneTestRunner.gd`
 - `scripts/tests/EventRouletteSceneTestRunner.gd`
 - `scripts/tests/SettingsPanelSceneTestRunner.gd`
 
-Run these when:
+Run these when / 适用时机:
+
 - editing `.tscn`
 - changing scene scripts
-- changing node paths / exported references
+- changing node paths or exported scene references
 
-## B. Coordinator / Helper Unit Tests
+- 修改 `.tscn`
+- 修改场景脚本
+- 修改 node path 或导出的场景引用
 
-Purpose:
-- verify new extracted helper/coordinator logic without needing full runtime scene boot
+## 2. Coordinator And Restore Helper Tests / 协调器与恢复辅助测试
 
-Files:
+Purpose / 目的:
+
+- verify extracted helper logic without full runtime boot
+- keep `Main.gd` responsibility splits honest
+- guard restore planning seams before scene-level restore runs
+
+- 在不启动完整运行时的前提下验证 helper 逻辑
+- 约束 `Main.gd` 的职责拆分不要回退
+- 在场景级 restore 之前先守住 restore plan 边界
+
+Files / 文件:
+
 - `scripts/tests/GameStateCoordinatorTestRunner.gd`
 - `scripts/tests/SaveFlowControllerTestRunner.gd`
+- `scripts/tests/RestorePlanTestRunner.gd`
 
-Run these when:
-- splitting responsibilities out of `Main.gd`
-- changing state-flow helpers
-- changing save/load orchestration helpers
+Run these when / 适用时机:
 
-## C. Smoke Test
+- splitting more logic out of `Main.gd`
+- changing save/load orchestration
+- changing `RestorePlan.gd`
+- changing restore sequencing boundaries
 
-Purpose:
+- 继续从 `Main.gd` 往外拆逻辑
+- 修改 save/load 编排
+- 修改 `RestorePlan.gd`
+- 修改 restore sequencing 边界
+
+## 3. Smoke Test / 冒烟测试
+
+Purpose / 目的:
+
 - fast regression guard
-- confirms the most important systems still behave correctly at a high level
+- confirms major systems still behave correctly at a high level
 
-Files:
+- 快速回归守门
+- 用较轻成本确认核心系统还在高层面正常工作
+
+Files / 文件:
+
 - `scripts/tests/SmokeTestRunner.gd`
 
-Run this when:
-- almost any medium-sized gameplay/system change lands
+Run this when / 适用时机:
 
-## D. Integration Test
+- almost any medium-sized gameplay or system change lands
 
-Purpose:
+- 几乎所有中等规模的玩法或系统改动之后都应该跑
+
+## 4. Integration Test / 集成测试
+
+Purpose / 目的:
+
 - medium-weight cross-system correctness
 - especially save/load, battlefield rules, and win conditions
 
-Files:
+- 中等重量的跨系统正确性验证
+- 重点覆盖 save/load、battlefield 规则、win condition
+
+Files / 文件:
+
 - `scripts/tests/IntegrationTestRunner.gd`
 
-Run this when:
+Run this when / 适用时机:
+
 - touching save/load
 - touching battlefield rules
 - touching win-condition logic
 
-## E. Layout Boundary Test
+- 修改 save/load
+- 修改 battlefield 规则
+- 修改 win-condition 逻辑
 
-Purpose:
+## 5. Layout Boundary Test / 布局边界测试
+
+Purpose / 目的:
+
 - verify layout profile boundaries
-- catch overflow / placement regressions across supported grid sizes
+- catch overflow and placement regressions across supported grid sizes
 
-Files:
+- 验证 layout profile 边界
+- 捕捉不同 grid size 下的越界和摆位回归
+
+Files / 文件:
+
 - `scripts/tests/LayoutSanityTestRunner.gd`
 
-Run this when:
+Run this when / 适用时机:
+
 - changing layout profiles
-- changing HUD/chamber/map placement logic
+- changing HUD, chamber, or map placement logic
 
-## F. Performance Probe
+- 修改 layout profile
+- 修改 HUD、chamber 或地图摆位逻辑
 
-Purpose:
+## 6. Performance Probes / 性能探针
+
+Purpose / 目的:
+
 - measure performance and pressure behavior
+- record release evidence when needed
 - not a correctness test
 
-Files:
+- 观察性能与压力退化行为
+- 在需要时为版本说明补性能证据
+- 不属于 correctness 测试
+
+Files / 文件:
+
 - `scripts/tests/PerfBurstBenchmark.gd`
+  - full suite
+- `scripts/tests/PerfBurstBenchmarkSingleTurret.gd`
+  - split single-turret half
+- `scripts/tests/PerfBurstBenchmarkMultiTurret.gd`
+  - split multi-turret half
 
-Run this when:
-- tuning firing/perf policies
-- checking trail-pressure / pool-pressure changes
+Run these when / 适用时机:
 
-## G. Test Infrastructure
+- tuning firing or performance policies
+- checking trail-pressure or pool-pressure changes
+- collecting benchmark evidence for a version note
 
-Purpose:
-- shared assertion and fixture utilities
+- 调整 firing 或 performance 策略
+- 检查 trail-pressure 或 pool-pressure 改动
+- 需要给版本文档补 benchmark 证据时
 
-Files:
+## 7. Test Infrastructure / 测试基础设施
+
+Files / 文件:
+
 - `scripts/tests/TestAssert.gd`
 - `scripts/tests/TestFixtures.gd`
 
-## Recommended Run Order
+## 8. Active Correctness Baseline / 当前 Correctness 基线
 
-### If editing `.tscn` / UI wiring
+These ten scripts are the active baseline and should normally stay green:
+
+- `StartMenuSceneTestRunner.gd`
+- `GameHUDSceneTestRunner.gd`
+- `EventRouletteSceneTestRunner.gd`
+- `SettingsPanelSceneTestRunner.gd`
+- `GameStateCoordinatorTestRunner.gd`
+- `SaveFlowControllerTestRunner.gd`
+- `RestorePlanTestRunner.gd`
+- `SmokeTestRunner.gd`
+- `IntegrationTestRunner.gd`
+- `LayoutSanityTestRunner.gd`
+
+Performance probes are useful, but they are not part of the strict correctness baseline.  
+性能探针很有价值，但它们不属于严格的 correctness baseline。
+
+## 9. Latest Local Headless Baseline / 最近一次本地 Headless 基线
+
+Recorded on `2026-05-15`:
+
+- `StartMenuSceneTestRunner.gd` PASS `35`
+- `GameHUDSceneTestRunner.gd` PASS `27`
+- `EventRouletteSceneTestRunner.gd` PASS `14`
+- `SettingsPanelSceneTestRunner.gd` PASS `9`
+- `GameStateCoordinatorTestRunner.gd` PASS `50`
+- `SaveFlowControllerTestRunner.gd` PASS `75`
+- `RestorePlanTestRunner.gd` PASS `11`
+- `SmokeTestRunner.gd` PASS `60`
+- `IntegrationTestRunner.gd` PASS `133`
+- `LayoutSanityTestRunner.gd` PASS `330`
+
+## 10. What To Run / 改动后跑什么
+
+### If editing `.tscn` or UI wiring / 如果修改 `.tscn` 或 UI 接线
 
 1. scene wiring tests
 2. layout boundary test
 3. smoke test
 
-### If editing coordinator/helper logic
-
-1. relevant helper test
-2. smoke test
-3. related scene tests if UI/state is involved
-
-### If editing save/load orchestration
+### If editing save/load or continue orchestration / 如果修改 save/load 或 continue 编排
 
 1. `SaveFlowControllerTestRunner.gd`
-2. `IntegrationTestRunner.gd`
-3. `SmokeTestRunner.gd`
+2. `RestorePlanTestRunner.gd`
+3. `IntegrationTestRunner.gd`
+4. `SmokeTestRunner.gd`
 
-### If editing gameplay state flow
+### If editing restore ownership or restore sequencing / 如果修改 restore 归属或 restore 顺序
+
+1. `RestorePlanTestRunner.gd`
+2. `SaveFlowControllerTestRunner.gd`
+3. `SmokeTestRunner.gd`
+4. `IntegrationTestRunner.gd`
+
+### If editing gameplay state flow / 如果修改 gameplay state flow
 
 1. `GameStateCoordinatorTestRunner.gd`
 2. `SmokeTestRunner.gd`
-3. `IntegrationTestRunner.gd` if save/win flow is touched
+3. `IntegrationTestRunner.gd` if save or win flow is involved
 
-## Active Correctness Baseline
+### If adding a new gameplay feature / 如果新增玩法功能
 
-These should normally stay green:
+1. the most relevant helper/scene tests
+2. `SmokeTestRunner.gd`
+3. `IntegrationTestRunner.gd` if rules/save/win flow changed
+4. a performance probe only if the feature changes runtime pressure or rendering cost
 
-- `StartMenuSceneTestRunner.gd`
-- `GameHUDSceneTestRunner.gd`
-- `EventRouletteSceneTestRunner.gd`
-- `SettingsPanelSceneTestRunner.gd`
-- `GameStateCoordinatorTestRunner.gd`
-- `SaveFlowControllerTestRunner.gd`
-- `SmokeTestRunner.gd`
-- `IntegrationTestRunner.gd`
-- `LayoutSanityTestRunner.gd`
-
-`PerfBurstBenchmark.gd` is useful, but not part of the strict correctness baseline.
-
-## PASS Labels
-
-Use these consistently:
+## 11. PASS Labels / 结果标签
 
 - `PASS`
-  - assertions passed and test exits cleanly
+  - assertions passed and the test exits cleanly
 - `PASS with cleanup warnings`
-  - assertions passed, but there are resource/object cleanup warnings on exit
+  - assertions passed, but resource/object cleanup warnings exist on exit
 - `FAIL`
   - assertion failure, script error, parse error, or incomplete run
-
-## 2026-05-06 Local Baseline
-
-User-verified local Godot runs passed:
-
-- `StartMenuSceneTestRunner.gd`
-- `GameHUDSceneTestRunner.gd`
-- `EventRouletteSceneTestRunner.gd`
-- `SettingsPanelSceneTestRunner.gd`
-- `GameStateCoordinatorTestRunner.gd`
-- `SaveFlowControllerTestRunner.gd`
-- `SmokeTestRunner.gd`
-- `IntegrationTestRunner.gd`
-- `LayoutSanityTestRunner.gd`
-
-## Current Recommendation
-
-- treat the nine scripts above as the active correctness baseline
-- run `GameStateCoordinatorTestRunner.gd` first for state-flow refactors
-- run `SaveFlowControllerTestRunner.gd` first for save/load orchestration refactors
-- run scene tests first for `.tscn` and UI-node changes

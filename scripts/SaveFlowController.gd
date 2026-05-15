@@ -1,58 +1,175 @@
 extends RefCounted
 class_name SaveFlowController
 
+const StartMenuUi = preload("res://scripts/StartMenu.gd")
+
 static func normalize_slot(slot_index: int, selected_save_slot: int, save_slot_count: int) -> int:
 	return selected_save_slot if slot_index < 1 else clampi(slot_index, 1, save_slot_count)
 
 static func get_save_path(slot_index: int, save_path_template: String, save_slot_count: int) -> String:
 	return save_path_template % clampi(slot_index, 1, save_slot_count)
 
-static func has_save_file(slot_index: int, selected_save_slot: int, save_slot_count: int, save_path_template: String, legacy_save_path: String) -> bool:
-	var slot: int = normalize_slot(slot_index, selected_save_slot, save_slot_count)
-	if FileAccess.file_exists(get_save_path(slot, save_path_template, save_slot_count)):
-		return true
-	return slot == 1 and FileAccess.file_exists(legacy_save_path)
+static func get_backup_path(save_path: String) -> String:
+	return "%s.bak" % save_path
 
-static func load_saved_data(slot_index: int, selected_save_slot: int, save_slot_count: int, save_path_template: String, legacy_save_path: String, allow_legacy: bool = true) -> Dictionary:
+static func get_temp_path(save_path: String) -> String:
+	return "%s.tmp" % save_path
+
+static func has_save_file(
+	slot_index: int,
+	selected_save_slot: int,
+	save_slot_count: int,
+	save_path_template: String,
+	legacy_save_path: String,
+	legacy_slot_path_template: String = ""
+) -> bool:
 	var slot: int = normalize_slot(slot_index, selected_save_slot, save_slot_count)
 	var path: String = get_save_path(slot, save_path_template, save_slot_count)
+	if FileAccess.file_exists(path) or FileAccess.file_exists(get_backup_path(path)):
+		return true
+	if legacy_slot_path_template != "":
+		var legacy_slot_path: String = get_save_path(slot, legacy_slot_path_template, save_slot_count)
+		if FileAccess.file_exists(legacy_slot_path):
+			return true
+	return slot == 1 and FileAccess.file_exists(legacy_save_path)
 
-	if not FileAccess.file_exists(path):
-		if allow_legacy and slot == 1 and FileAccess.file_exists(legacy_save_path):
-			path = legacy_save_path
-		else:
-			return {}
-
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		return {}
-
-	var parsed = JSON.parse_string(file.get_as_text())
-	if parsed is Dictionary:
-		return parsed
-	return {}
-
-static func prepare_continue_payload(slot_index: int, selected_save_slot: int, save_slot_count: int, save_path_template: String, legacy_save_path: String, allow_legacy: bool = true) -> Dictionary:
-	var raw_data: Dictionary = load_saved_data(
+static func load_saved_data(
+	slot_index: int,
+	selected_save_slot: int,
+	save_slot_count: int,
+	save_path_template: String,
+	legacy_save_path: String,
+	allow_legacy: bool = true,
+	legacy_slot_path_template: String = ""
+) -> Dictionary:
+	return load_saved_data_result(
 		slot_index,
 		selected_save_slot,
 		save_slot_count,
 		save_path_template,
 		legacy_save_path,
-		allow_legacy
-	)
-	if raw_data.is_empty():
+		allow_legacy,
+		legacy_slot_path_template
+	).get("data", {})
+
+static func load_saved_data_result(
+	slot_index: int,
+	selected_save_slot: int,
+	save_slot_count: int,
+	save_path_template: String,
+	legacy_save_path: String,
+	allow_legacy: bool = true,
+	legacy_slot_path_template: String = ""
+) -> Dictionary:
+	var slot: int = normalize_slot(slot_index, selected_save_slot, save_slot_count)
+	var path: String = get_save_path(slot, save_path_template, save_slot_count)
+	var backup_path: String = get_backup_path(path)
+
+	if FileAccess.file_exists(path):
+		var primary_result: Dictionary = _read_save_dictionary(path)
+		if bool(primary_result.get("ok", false)):
+			return {
+				"ok": true,
+				"data": primary_result.get("data", {}),
+				"source_path": path,
+				"source_kind": "primary",
+			}
+
+		if FileAccess.file_exists(backup_path):
+			var backup_result: Dictionary = _read_save_dictionary(backup_path)
+			if bool(backup_result.get("ok", false)):
+				var restore_ok: bool = _copy_file(backup_path, path)
+				return {
+					"ok": true,
+					"data": backup_result.get("data", {}),
+					"source_path": backup_path,
+					"source_kind": "backup",
+					"recovered_from_backup": true,
+					"status_message": "存档损坏，已尝试恢复备份",
+					"warning_message": "正式存档损坏，已改用备份继续读取",
+					"restore_succeeded": restore_ok,
+				}
+
 		return {
 			"ok": false,
-			"error_message": "\u5b58\u6863\u8bfb\u53d6\u5931\u8d25\u6216\u5b58\u6863\u5df2\u635f\u574f",
+			"error_message": "存档读取失败或存档已损坏",
+			"warning_message": "正式存档损坏，且没有可用备份",
+		}
+
+	if FileAccess.file_exists(backup_path):
+		var backup_only_result: Dictionary = _read_save_dictionary(backup_path)
+		if bool(backup_only_result.get("ok", false)):
+			var restore_from_backup_ok: bool = _copy_file(backup_path, path)
+			return {
+				"ok": true,
+				"data": backup_only_result.get("data", {}),
+				"source_path": backup_path,
+				"source_kind": "backup_only",
+				"recovered_from_backup": true,
+				"status_message": "正式存档缺失，已尝试恢复备份",
+				"warning_message": "正式存档缺失，已改用备份继续读取",
+				"restore_succeeded": restore_from_backup_ok,
+			}
+
+	if allow_legacy and legacy_slot_path_template != "":
+		var legacy_slot_path: String = get_save_path(slot, legacy_slot_path_template, save_slot_count)
+		if FileAccess.file_exists(legacy_slot_path):
+			var legacy_slot_result: Dictionary = _read_save_dictionary(legacy_slot_path)
+			if bool(legacy_slot_result.get("ok", false)):
+				return {
+					"ok": true,
+					"data": legacy_slot_result.get("data", {}),
+					"source_path": legacy_slot_path,
+					"source_kind": "legacy_slot",
+				}
+
+	if allow_legacy and slot == 1 and FileAccess.file_exists(legacy_save_path):
+		var legacy_result: Dictionary = _read_save_dictionary(legacy_save_path)
+		if bool(legacy_result.get("ok", false)):
+			return {
+				"ok": true,
+				"data": legacy_result.get("data", {}),
+				"source_path": legacy_save_path,
+				"source_kind": "legacy_single",
+			}
+
+	return {
+		"ok": false,
+		"error_message": "存档读取失败或存档已损坏",
+	}
+
+static func prepare_continue_payload(
+	slot_index: int,
+	selected_save_slot: int,
+	save_slot_count: int,
+	save_path_template: String,
+	legacy_save_path: String,
+	allow_legacy: bool = true,
+	legacy_slot_path_template: String = ""
+) -> Dictionary:
+	var load_result: Dictionary = load_saved_data_result(
+		slot_index,
+		selected_save_slot,
+		save_slot_count,
+		save_path_template,
+		legacy_save_path,
+		allow_legacy,
+		legacy_slot_path_template
+	)
+	var raw_data: Dictionary = load_result.get("data", {})
+	if not bool(load_result.get("ok", false)) or raw_data.is_empty():
+		return {
+			"ok": false,
+			"error_message": str(load_result.get("error_message", "存档读取失败或存档已损坏")),
+			"warning_message": str(load_result.get("warning_message", "")),
 		}
 
 	var save_version: String = str(raw_data.get("save_version", ""))
 	if not SaveGameCodec.is_supported_save_version(save_version):
 		return {
 			"ok": false,
-			"error_message": "\u5b58\u6863\u7248\u672c\u4e0d\u517c\u5bb9\uFF1A%s" % save_version,
-			"warning_message": "\u5b58\u6863\u7248\u672c\u4e0d\u517c\u5bb9\uFF0C\u5df2\u62d2\u7edd\u8bfb\u53d6\uFF1A%s" % save_version,
+			"error_message": "存档版本不兼容：%s" % save_version,
+			"warning_message": "存档版本不兼容，已拒绝读取：%s" % save_version,
 			"save_version": save_version,
 		}
 
@@ -62,25 +179,30 @@ static func prepare_continue_payload(slot_index: int, selected_save_slot: int, s
 			"ok": false,
 			"error_message": str(clean_data["_invalid_reason"]),
 			"save_version": save_version,
+			"warning_message": str(load_result.get("warning_message", "")),
 		}
 
 	if not clean_data.has("grid_size"):
 		return {
 			"ok": false,
-			"error_message": "\u5b58\u6863\u7ed3\u6784\u4e0d\u5b8c\u6574\uFF0C\u65e0\u6cd5\u7ee7\u7eed",
+			"error_message": "存档结构不完整，无法继续",
 			"save_version": save_version,
+			"warning_message": str(load_result.get("warning_message", "")),
 		}
 
 	return {
 		"ok": true,
 		"data": clean_data,
 		"save_version": save_version,
+		"status_message": str(load_result.get("status_message", "")),
+		"warning_message": str(load_result.get("warning_message", "")),
+		"source_kind": str(load_result.get("source_kind", "primary")),
 	}
 
 static func build_continue_runtime_state(data: Dictionary, fallback_time_limit_minutes: int) -> Dictionary:
 	var normalized: Dictionary = data.duplicate(true)
-	normalized["palette_name"] = str(normalized.get("palette_name", "\u7ecf\u5178"))
-	normalized["quality_name"] = str(normalized.get("quality_name", "\u4e2d"))
+	normalized["palette_name"] = str(normalized.get("palette_name", "经典"))
+	normalized["quality_name"] = str(normalized.get("quality_name", GameConfig.QUALITY_MEDIUM))
 	normalized["game_mode_name"] = str(normalized.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
 	normalized["time_limit_minutes"] = clampi(
 		int(normalized.get("time_limit_minutes", fallback_time_limit_minutes)),
@@ -93,15 +215,15 @@ static func build_continue_runtime_state(data: Dictionary, fallback_time_limit_m
 
 static func build_continue_game_config_state(data: Dictionary) -> Dictionary:
 	return {
-		"palette_name": str(data.get("palette_name", "\u7ecf\u5178")),
-		"quality_name": str(data.get("quality_name", "\u4e2d")),
+		"palette_name": str(data.get("palette_name", "经典")),
+		"quality_name": str(data.get("quality_name", GameConfig.QUALITY_MEDIUM)),
 		"game_mode_name": str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC)),
 		"time_limit_minutes": int(data.get("time_limit_minutes", GameConfig.DEFAULT_TIMED_MODE_MINUTES)),
 	}
 
 static func apply_continue_game_config(config_state: Dictionary) -> Dictionary:
-	var palette_name: String = str(config_state.get("palette_name", "\u7ecf\u5178"))
-	var quality_name: String = str(config_state.get("quality_name", "\u4e2d"))
+	var palette_name: String = str(config_state.get("palette_name", "经典"))
+	var quality_name: String = str(config_state.get("quality_name", GameConfig.QUALITY_MEDIUM))
 	var game_mode_name: String = str(config_state.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
 	var time_limit_minutes: int = int(config_state.get("time_limit_minutes", GameConfig.DEFAULT_TIMED_MODE_MINUTES))
 	GameConfig.set_palette_by_name(palette_name)
@@ -123,8 +245,8 @@ static func build_continue_start_values(data: Dictionary) -> Dictionary:
 
 static func build_continue_selection_state(data: Dictionary, fallback_time_limit_minutes: int) -> Dictionary:
 	return {
-		"selected_palette_name": str(data.get("palette_name", "\u7ecf\u5178")),
-		"selected_quality_name": str(data.get("quality_name", "\u4e2d")),
+		"selected_palette_name": str(data.get("palette_name", "经典")),
+		"selected_quality_name": str(data.get("quality_name", GameConfig.QUALITY_MEDIUM)),
 		"selected_game_mode_name": str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC)),
 		"selected_time_limit_minutes": int(data.get("time_limit_minutes", fallback_time_limit_minutes)),
 	}
@@ -141,8 +263,8 @@ static func apply_continue_selection_state(selection_state: Dictionary, controll
 
 static func build_continue_banner_config() -> Dictionary:
 	return {
-		"title": "\u9886\u571f\u6218\u4e89",
-		"subtitle": "\u7ee7\u7eed\u4f5c\u6218",
+		"title": "领土战争",
+		"subtitle": "继续作战",
 		"accent": Color(0.84, 0.96, 1.0),
 		"auto_hide": true,
 	}
@@ -165,36 +287,101 @@ static func apply_continue_start_plan(plan: Dictionary, controller_ref = null) -
 		"game_config": apply_continue_game_config(game_config_state),
 	}
 
-static func build_save_slot_summaries(save_slot_count: int, load_saved_data: Callable) -> Array:
+static func build_save_slot_summaries(save_slot_count: int, loader: Callable) -> Array:
 	var result: Array = []
 	for slot in range(1, save_slot_count + 1):
 		var data: Dictionary = {}
-		if load_saved_data.is_valid():
-			data = load_saved_data.call(slot, true)
+		if loader.is_valid():
+			data = loader.call(slot, true)
 
-		var has_data: bool = not data.is_empty()
-		var title: String = "\u7a7a\u5b58\u6863"
-		var detail: String = "\u70b9\u51fb\u9009\u62e9\u6b64\u69fd"
-		if has_data:
-			var grid_size: int = LayoutProfiles.sanitize_grid_size(data.get("grid_size", 40))
-			var mode_name: String = str(data.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
-			var quality_name: String = str(data.get("quality_name", "\u4e2d"))
-			var elapsed: float = maxf(0.0, float(data.get("game_elapsed_time", 0.0)))
+		var state: String = "empty"
+		var title: String = "空存档"
+		var detail: String = "点击选择此槽"
+
+		if not data.is_empty():
 			var version: String = str(data.get("save_version", ""))
-			title = "%s\uFF5C%d\u00D7%d\uFF5C%s" % [mode_name, grid_size, grid_size, quality_name]
-			detail = "\u8fdb\u5ea6 %s\uFF5C\u7248\u672c %s" % [RuntimeHudController.format_time_text(elapsed), version]
+			var clean: Dictionary = SaveGameCodec.validate_save_data(data)
+			if not SaveGameCodec.is_supported_save_version(version):
+				state = "incompatible"
+				title = "版本不兼容"
+				detail = "存档版本 %s 不被当前版本支持" % version
+			elif clean.has("_invalid_reason") or not clean.has("grid_size"):
+				state = "damaged"
+				title = "存档损坏"
+				detail = str(clean.get("_invalid_reason", "结构不完整"))
+			else:
+				var finished: bool = bool(clean.get("match_finished", false))
+				if finished:
+					state = "finished"
+					var grid_size: int = LayoutProfiles.sanitize_grid_size(clean.get("grid_size", 40))
+					var mode_name: String = str(clean.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
+					title = "%s｜%d×%d｜已结束" % [mode_name, grid_size, grid_size]
+					detail = str(clean.get("winner_text", "对局已结束"))
+				else:
+					state = "valid"
+					var grid_size: int = LayoutProfiles.sanitize_grid_size(clean.get("grid_size", 40))
+					var mode_name: String = str(clean.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
+					var quality_name: String = str(clean.get("quality_name", GameConfig.QUALITY_MEDIUM))
+					var elapsed: float = maxf(0.0, float(clean.get("game_elapsed_time", 0.0)))
+					var ver_display: String = version if version != "" else "?"
+					title = "%s｜%d×%d｜%s" % [mode_name, grid_size, grid_size, quality_name]
+					detail = "进度 %s｜版本 %s" % [RuntimeHudController.format_time_text(elapsed), ver_display]
 
 		result.append({
 			"slot": slot,
-			"has_data": has_data,
+			"state": state,
+			"has_data": state != "empty",
+			"is_playable": state == "valid",
 			"title": title,
 			"detail": detail,
 		})
 	return result
 
-static func write_game_progress(selected_save_slot: int, save_path_template: String, save_slot_count: int, chambers: Dictionary, turrets: Dictionary, battlefield, bullet_container, event_roulette_controller, game_elapsed_time: float, is_game_over: bool, winner_label) -> bool:
+static func write_game_progress(
+	selected_save_slot: int,
+	save_path_template: String,
+	save_slot_count: int,
+	chambers: Dictionary,
+	turrets: Dictionary,
+	battlefield,
+	bullet_container,
+	event_roulette_controller,
+	game_elapsed_time: float,
+	is_game_over: bool,
+	winner_label
+) -> bool:
+	return bool(write_game_progress_result(
+		selected_save_slot,
+		save_path_template,
+		save_slot_count,
+		chambers,
+		turrets,
+		battlefield,
+		bullet_container,
+		event_roulette_controller,
+		game_elapsed_time,
+		is_game_over,
+		winner_label
+	).get("ok", false))
+
+static func write_game_progress_result(
+	selected_save_slot: int,
+	save_path_template: String,
+	save_slot_count: int,
+	chambers: Dictionary,
+	turrets: Dictionary,
+	battlefield,
+	bullet_container,
+	event_roulette_controller,
+	game_elapsed_time: float,
+	is_game_over: bool,
+	winner_label
+) -> Dictionary:
 	if battlefield == null:
-		return false
+		return {
+			"ok": false,
+			"error_message": "保存失败：战场状态不存在",
+		}
 
 	var save_path: String = get_save_path(selected_save_slot, save_path_template, save_slot_count)
 	var data: Dictionary = SaveStateBuilder.build_save_payload(
@@ -208,17 +395,12 @@ static func write_game_progress(selected_save_slot: int, save_path_template: Str
 		selected_save_slot,
 		winner_label
 	)
-
-	var file = FileAccess.open(save_path, FileAccess.WRITE)
-	if file == null:
-		return false
-	file.store_string(JSON.stringify(data))
-	return true
+	return _write_json_atomically(save_path, data)
 
 static func build_slot_selection_status(selected_save_slot: int, has_save_data: bool) -> String:
 	if has_save_data:
-		return "\u5df2\u9009\u62e9\u5b58\u6863\u69fd %d\uff0c\u53ef\u7ee7\u7eed\u6216\u8986\u76d6\u5f00\u59cb" % selected_save_slot
-	return "\u5df2\u9009\u62e9\u7a7a\u5b58\u6863\u69fd %d\uff0c\u65b0\u6e38\u620f\u4f1a\u4fdd\u5b58\u5728\u8fd9\u91cc" % selected_save_slot
+		return "已选择存档槽 %d，可继续或覆盖开始" % selected_save_slot
+	return "已选择空存档槽 %d，新游戏会保存在这里" % selected_save_slot
 
 static func refresh_menu_slot_ui(menu_save_slot_buttons: Dictionary, selected_save_slot: int, summaries: Array, menu_continue_button, has_selected_save: bool) -> void:
 	if menu_save_slot_buttons.is_empty():
@@ -231,11 +413,111 @@ static func refresh_menu_slot_ui(menu_save_slot_buttons: Dictionary, selected_sa
 		if not menu_save_slot_buttons.has(slot):
 			continue
 		var button: Button = menu_save_slot_buttons[slot] as Button
-		var marker: String = "\u25cf " if slot == selected_save_slot else ""
-		var title: String = str(summary.get("title", "\u7a7a\u5b58\u6863"))
-		button.text = "%s\u69fd%d  %s" % [marker, slot, title]
+		button.text = StartMenuUi.build_slot_label(slot, summary, selected_save_slot)
 		button.self_modulate = Color(0.28, 0.54, 0.88) if slot == selected_save_slot else Color(0.16, 0.22, 0.32)
 
 	if menu_continue_button != null and is_instance_valid(menu_continue_button):
 		menu_continue_button.disabled = not has_selected_save
-		menu_continue_button.text = "\u8bfb\u53d6\u69fd%d" % selected_save_slot
+		menu_continue_button.text = StartMenuUi.build_continue_button_text(selected_save_slot)
+
+static func _read_save_dictionary(path: String) -> Dictionary:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {
+			"ok": false,
+			"error_message": "无法打开存档文件：%s" % path,
+		}
+
+	var json := JSON.new()
+	var parse_result: Error = json.parse(file.get_as_text())
+	if parse_result == OK and json.data is Dictionary:
+		return {
+			"ok": true,
+			"data": json.data,
+		}
+	return {
+		"ok": false,
+		"error_message": "存档 JSON 已损坏：%s" % path,
+	}
+
+static func _write_json_atomically(save_path: String, data: Dictionary) -> Dictionary:
+	var temp_path: String = get_temp_path(save_path)
+	var backup_path: String = get_backup_path(save_path)
+	var json_text: String = JSON.stringify(data)
+	var had_existing: bool = FileAccess.file_exists(save_path)
+
+	_remove_if_exists(temp_path)
+
+	if not _write_text_file(temp_path, json_text):
+		return {
+			"ok": false,
+			"error_message": "保存失败：临时文件写入失败",
+			"temp_path": temp_path,
+		}
+
+	var verify_result: Dictionary = _read_save_dictionary(temp_path)
+	if not bool(verify_result.get("ok", false)):
+		_remove_if_exists(temp_path)
+		return {
+			"ok": false,
+			"error_message": "保存失败：临时文件校验失败",
+			"temp_path": temp_path,
+		}
+
+	if had_existing and not _copy_file(save_path, backup_path):
+		_remove_if_exists(temp_path)
+		return {
+			"ok": false,
+			"error_message": "保存失败：旧存档备份失败",
+			"save_path": save_path,
+			"backup_path": backup_path,
+		}
+
+	if had_existing and not _remove_if_exists(save_path):
+		_remove_if_exists(temp_path)
+		return {
+			"ok": false,
+			"error_message": "保存失败：无法替换旧存档",
+			"save_path": save_path,
+		}
+
+	if not _rename_file(temp_path, save_path):
+		if had_existing and FileAccess.file_exists(backup_path):
+			_copy_file(backup_path, save_path)
+		_remove_if_exists(temp_path)
+		return {
+			"ok": false,
+			"error_message": "保存失败：正式存档写入失败",
+			"save_path": save_path,
+			"backup_path": backup_path,
+		}
+
+	return {
+		"ok": true,
+		"save_path": save_path,
+		"backup_path": backup_path,
+		"temp_path": temp_path,
+		"had_existing_save": had_existing,
+	}
+
+static func _write_text_file(path: String, text: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(text)
+	file.flush()
+	return file.get_error() == OK
+
+static func _copy_file(source_path: String, target_path: String) -> bool:
+	if not FileAccess.file_exists(source_path):
+		return false
+	_remove_if_exists(target_path)
+	return DirAccess.copy_absolute(ProjectSettings.globalize_path(source_path), ProjectSettings.globalize_path(target_path)) == OK
+
+static func _rename_file(source_path: String, target_path: String) -> bool:
+	return DirAccess.rename_absolute(ProjectSettings.globalize_path(source_path), ProjectSettings.globalize_path(target_path)) == OK
+
+static func _remove_if_exists(path: String) -> bool:
+	if not FileAccess.file_exists(path):
+		return true
+	return DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) == OK

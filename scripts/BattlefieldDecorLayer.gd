@@ -6,18 +6,42 @@ var cell_size: int = GameConfig.CELL_SIZE
 var grid_alpha: float = 0.0
 var emblem_alpha_mul: float = 0.0
 
+var _decor_dirty: bool = true
+var _cached_grid_line_alpha: float = -1.0
+var _cached_emblem_alpha_mul: float = -1.0
+
+
+func mark_dirty() -> void:
+	_decor_dirty = true
+	queue_redraw()
+
+
+func apply_visual_settings() -> void:
+	var new_grid_alpha := GameConfig.get_grid_line_alpha()
+	var new_emblem_alpha := GameConfig.get_emblem_alpha_mul()
+
+	if (
+		is_equal_approx(new_grid_alpha, _cached_grid_line_alpha)
+		and is_equal_approx(new_emblem_alpha, _cached_emblem_alpha_mul)
+		and not _decor_dirty
+	):
+		return
+
+	_cached_grid_line_alpha = new_grid_alpha
+	_cached_emblem_alpha_mul = new_emblem_alpha
+	_decor_dirty = false
+
+	grid_alpha = new_grid_alpha
+	emblem_alpha_mul = new_emblem_alpha
+	queue_redraw()
+
+
 func configure(new_grid_size: int, new_cell_size: int) -> void:
-	if grid_size == new_grid_size and cell_size == new_cell_size:
+	if grid_size == new_grid_size and cell_size == new_cell_size and not _decor_dirty:
 		return
 	grid_size = new_grid_size
 	cell_size = new_cell_size
-	queue_redraw()
-
-func update_style(new_grid_alpha: float, new_emblem_alpha_mul: float) -> void:
-	if is_equal_approx(grid_alpha, new_grid_alpha) and is_equal_approx(emblem_alpha_mul, new_emblem_alpha_mul):
-		return
-	grid_alpha = new_grid_alpha
-	emblem_alpha_mul = new_emblem_alpha_mul
+	_decor_dirty = false
 	queue_redraw()
 
 func _draw() -> void:

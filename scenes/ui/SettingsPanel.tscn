@@ -1,29 +1,70 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scripts/SettingsPanel.gd" id="1_741xb"]
+[ext_resource type="Script" path="res://scripts/SettingsPanel.gd" id="1_script"]
 
-[node name="SettingsPanel" type="Panel" unique_id=26256766]
+[node name="SettingsPanel" type="Control" unique_id=26256766]
 process_mode = 3
 visible = false
-self_modulate = Color(0.94, 0.97, 1, 0.96)
 offset_right = 286.0
-offset_bottom = 96.0
-script = ExtResource("1_741xb")
+offset_bottom = 168.0
+script = ExtResource("1_script")
 
-[node name="Bg" type="ColorRect" parent="." unique_id=1809665041]
-layout_mode = 0
-offset_left = 4.0
-offset_top = 4.0
-offset_right = 282.0
-offset_bottom = 92.0
+[node name="Bg" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 color = Color(0.06, 0.09, 0.15, 0.96)
 
-[node name="ContentLabel" type="Label" parent="." unique_id=142976368]
-layout_mode = 0
-offset_left = 12.0
-offset_top = 10.0
-offset_right = 274.0
-offset_bottom = 86.0
+[node name="PanelMargin" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="MainVBox" type="VBoxContainer" parent="PanelMargin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TitleLabel" type="Label" parent="PanelMargin/MainVBox"]
+text = "设置"
+theme_override_colors/font_color = Color(1, 0.95, 0.72, 1)
+theme_override_font_sizes/font_size = 18
+custom_minimum_size = Vector2(0, 26)
+
+[node name="PerformanceCheck" type="CheckButton" parent="PanelMargin/MainVBox"]
+text = "显示性能信息"
 theme_override_colors/font_color = Color(0.88, 0.92, 1, 1)
-theme_override_font_sizes/font_size = 15
-autowrap_mode = 3
+theme_override_font_sizes/font_size = 14
+button_pressed = true
+
+[node name="LowEffectCheck" type="CheckButton" parent="PanelMargin/MainVBox"]
+text = "低特效模式"
+theme_override_colors/font_color = Color(0.88, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 14
+button_pressed = false
+
+[node name="EventLogCheck" type="CheckButton" parent="PanelMargin/MainVBox"]
+text = "显示事件日志"
+theme_override_colors/font_color = Color(0.88, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 14
+button_pressed = true
+
+[node name="HintLabel" type="Label" parent="PanelMargin/MainVBox"]
+text = "部分设置重启后生效"
+theme_override_colors/font_color = Color(0.62, 0.68, 0.82, 1)
+theme_override_font_sizes/font_size = 11
+custom_minimum_size = Vector2(0, 18)
+
+[node name="CloseButton" type="Button" parent="PanelMargin/MainVBox"]
+text = "关闭"
+custom_minimum_size = Vector2(0, 28)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 14
+self_modulate = Color(0.22, 0.22, 0.32, 0.85)

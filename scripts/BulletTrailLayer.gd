@@ -59,10 +59,10 @@ func _draw() -> void:
 	_update_pressure_cache()
 	redraw_calls_this_second += 1
 	var severity: int = _get_pressure_severity()
-	var bullet_step: int = 1
 	if severity >= 3:
-		bullet_step = 999999
-	elif severity >= 2:
+		return
+	var bullet_step: int = 1
+	if severity >= 2:
 		bullet_step = 3
 	elif severity >= 1:
 		bullet_step = 2

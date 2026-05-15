@@ -3,6 +3,7 @@ class_name BulletPool
 
 var inactive_bullets: Array = []
 var active_bullets: Array = []
+var peak_active_count: int = 0
 var visual_pressure_update_timer: float = 0.0
 var trail_layer
 var tracked_turrets: Dictionary = {}
@@ -123,8 +124,20 @@ func get_active_bullets() -> Array:
 			result.append(bullet)
 	return result
 
+func prune_invalid_bullets() -> void:
+	for i in range(active_bullets.size() - 1, -1, -1):
+		var b = active_bullets[i]
+		if b == null or not is_instance_valid(b) or not b.is_active:
+			active_bullets.remove_at(i)
+
 func get_active_count() -> int:
 	return active_bullets.size()
+
+func get_peak_active_count() -> int:
+	return peak_active_count
+
+func reset_stats() -> void:
+	peak_active_count = 0
 
 func get_tracked_queue_total() -> int:
 	return tracked_queue_total
@@ -341,6 +354,7 @@ func _obtain_bullet_with_visual_profile():
 
 func _finalize_spawned_bullet(bullet):
 	active_bullets.append(bullet)
+	peak_active_count = maxi(peak_active_count, active_bullets.size())
 	_register_active_bullet(bullet)
 	spawned_bullets_this_second += 1
 	if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):

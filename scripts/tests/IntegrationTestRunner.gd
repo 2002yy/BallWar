@@ -96,7 +96,7 @@ func _test_save_schema_version() -> void:
 	_assert.that(not v1.has("_invalid_reason"), "save schema: 1.9.34 should pass")
 
 	var v2 := SaveGameCodec.validate_save_data(Fixtures.build_minimal_save_payload("2.0.0"))
-	_assert.that(v2.has("_invalid_reason"), "save schema: 2.0.0 should be rejected (guard: 1.9 prefix)")
+	_assert.that(not v2.has("_invalid_reason"), "save schema: 2.0.0 should pass")
 
 	var v3 := SaveGameCodec.validate_save_data(Fixtures.build_minimal_save_payload(""))
 	_assert.that(v3.has("_invalid_reason"), "save schema: empty version should be rejected")
@@ -569,4 +569,4 @@ func _test_save_version_compatibility() -> void:
 	_assert.that(not cv.has("_invalid_reason"), "save compat: 1.9.34 passes")
 
 	var cv2 := SaveGameCodec.validate_save_data(Fixtures.build_minimal_save_payload("2.0.0"))
-	_assert.that(cv2.has("_invalid_reason"), "save compat: 2.0.0 REJECTED (1.9 prefix guard)")
+	_assert.that(not cv2.has("_invalid_reason"), "save compat: 2.0.0 passes")

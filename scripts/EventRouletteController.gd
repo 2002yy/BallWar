@@ -15,6 +15,60 @@ const JAM_DURATION: float = 5.0
 const JAM_REFUND_RATIO: float = 0.25
 const OCCUPATION_SPEEDUP_PERCENT: int = 65
 const MAX_REROLL_COUNT: int = 2
+const MAX_EVENT_HISTORY: int = 24
+const EVENT_LABEL_UPDATE_INTERVAL: float = 0.20
+
+static func effect_description(effect_name: String) -> String:
+	match effect_name:
+		EFFECT_BONUS_10:
+			return "待发射球数 +10"
+		EFFECT_X2:
+			return "待发射球数 ×2（翻倍）"
+		EFFECT_X3:
+			return "待发射球数 ×3（三倍）"
+		EFFECT_ADD_BALL:
+			return "控制仓增加 1 个控制球"
+		EFFECT_JAM:
+			return "控制仓短路 5 秒，无法发射"
+		EFFECT_REROLL:
+			return "重新抽取事件效果"
+		_:
+			return effect_name
+
+static func mode_description(mode_name: String) -> String:
+	match mode_name:
+		GameConfig.GAME_MODE_BASIC:
+			return "基础模式：消灭所有对手炮台即获胜"
+		GameConfig.GAME_MODE_OCCUPATION:
+			return "占领模式：控制 75% 以上领土即获胜"
+		GameConfig.GAME_MODE_TIMED:
+			return "限时模式：倒计时结束后领地最多方获胜"
+		GameConfig.GAME_MODE_WILD:
+			return "狂野模式：全局 ×3 倍率，事件更频繁"
+		_:
+			return ""
+
+static func generate_log_text(payload: Dictionary, game_time_seconds: float) -> String:
+	var total_seconds: int = int(maxf(0.0, game_time_seconds))
+	var minutes: int = total_seconds / 60
+	var seconds: int = total_seconds % 60
+	var time_prefix: String = "%02d:%02d" % [minutes, seconds]
+	var result_text: String = str(payload.get("result_text", ""))
+	return "[%s] %s" % [time_prefix, result_text]
+
+static func mode_header_text() -> String:
+	var mode_name: String = GameConfig.get_game_mode_name()
+	match mode_name:
+		GameConfig.GAME_MODE_BASIC:
+			return "模式：基础（消灭对手）"
+		GameConfig.GAME_MODE_OCCUPATION:
+			return "模式：占领（75% 获胜）"
+		GameConfig.GAME_MODE_TIMED:
+			return "模式：限时（倒计时结算）"
+		GameConfig.GAME_MODE_WILD:
+			return "模式：狂野（×3 倍率）"
+		_:
+			return "模式：%s" % mode_name
 
 var main_ref = null
 var battlefield = null
@@ -30,8 +84,20 @@ var last_event_faction: int = -1
 var last_event_effect: String = ""
 var reroll_count: int = 0
 var is_presenting_event: bool = false
+var event_history: Array[Dictionary] = []
+var event_label_update_timer: float = 0.0
+var event_label_dirty: bool = true
+var event_log_visible: bool = true
+var event_count: int = 0
 
 var _pending_payload: Dictionary = {}
+
+
+func set_event_log_visible(value: bool) -> void:
+	event_log_visible = value
+
+func get_event_count() -> int:
+	return event_count
 
 func setup(new_main_ref, new_battlefield, new_chambers: Dictionary, new_turrets: Dictionary, new_event_label, new_view_ref) -> void:
 	main_ref = new_main_ref
@@ -57,26 +123,40 @@ func reset_for_new_game() -> void:
 	last_event_effect = ""
 	reroll_count = 0
 	is_presenting_event = false
+	event_count = 0
 	_pending_payload.clear()
-	_update_event_label()
+	event_history.clear()
+	event_history.append({
+		"log_text": mode_header_text(),
+		"is_mode_header": true,
+		"game_time": 0.0,
+	})
+	_force_event_label_refresh()
 
 func _process(delta: float) -> void:
 	if not event_roulette_enabled:
-		_update_event_label()
+		_update_event_label_if_dirty()
 		return
 	if main_ref == null or battlefield == null or main_ref.is_game_over:
-		_update_event_label()
+		_update_event_label_if_dirty()
 		return
 	if is_presenting_event:
-		_update_event_label()
+		_update_event_label_if_dirty()
 		return
 
 	next_event_time_left = maxf(0.0, next_event_time_left - delta)
 	if next_event_time_left <= 0.0:
 		_start_event_round()
-	_update_event_label()
+	_update_event_label_on_interval(delta)
 
 func export_save_state() -> Dictionary:
+	var history_export: Array = []
+	for entry in event_history:
+		if not entry.get("is_mode_header", false):
+			history_export.append({
+				"log_text": str(entry.get("log_text", "")),
+				"game_time": float(entry.get("game_time", 0.0)),
+			})
 	return {
 		"event_roulette_enabled": event_roulette_enabled,
 		"next_event_time_left": next_event_time_left,
@@ -84,6 +164,7 @@ func export_save_state() -> Dictionary:
 		"last_event_faction": last_event_faction,
 		"last_event_effect": last_event_effect,
 		"reroll_count": reroll_count,
+		"event_history": history_export,
 	}
 
 func import_save_state(data: Dictionary) -> void:
@@ -95,7 +176,22 @@ func import_save_state(data: Dictionary) -> void:
 	reroll_count = clampi(int(data.get("reroll_count", 0)), 0, MAX_REROLL_COUNT)
 	is_presenting_event = false
 	_pending_payload.clear()
-	_update_event_label()
+	event_history.clear()
+	event_history.append({
+		"log_text": mode_header_text(),
+		"is_mode_header": true,
+		"game_time": 0.0,
+	})
+	var saved_history: Array = data.get("event_history", [])
+	if saved_history is Array:
+		for entry in saved_history:
+			if entry is Dictionary and not entry.get("is_mode_header", false):
+				if event_history.size() < MAX_EVENT_HISTORY:
+					event_history.append({
+						"log_text": str(entry.get("log_text", "")),
+						"game_time": float(entry.get("game_time", 0.0)),
+					})
+	_force_event_label_refresh()
 
 func _start_event_round() -> void:
 	var resolved: Dictionary = _resolve_event_result()
@@ -105,6 +201,7 @@ func _start_event_round() -> void:
 
 	_pending_payload = resolved
 	is_presenting_event = true
+	_force_event_label_refresh()
 	event_round_started.emit(resolved)
 
 	if view_ref != null and is_instance_valid(view_ref):
@@ -126,7 +223,7 @@ func _resolve_event_result() -> Dictionary:
 	return {
 		"faction_id": faction_id,
 		"faction_name": _faction_display_name(faction_id),
-		"faction_items": ["蓝方", "红方", "绿方", "黄方"],
+		"faction_items": _faction_item_names(),
 		"faction_color": GameConfig.faction_color(faction_id),
 		"effect_sequence": effect_sequence,
 		"effect_items": ["重转", "本次 +10", "本次 x2", "本次 x3", "加 1 球", "控制仓短路"],
@@ -209,9 +306,24 @@ func _apply_positive_modifier(chamber, modifier: Dictionary) -> void:
 func _finish_event_round(payload: Dictionary) -> void:
 	is_presenting_event = false
 	_pending_payload.clear()
+	event_count += 1
+	var game_time: float = _elapsed_time()
+	var log_text: String = generate_log_text(payload, game_time)
+	event_history.append({
+		"log_text": log_text,
+		"game_time": game_time,
+		"faction_id": int(payload.get("faction_id", -1)),
+		"final_effect": str(payload.get("final_effect", "")),
+	})
+	if event_history.size() > MAX_EVENT_HISTORY + 1:
+		while event_history.size() > MAX_EVENT_HISTORY + 1:
+			if event_history.size() > 1 and event_history[0].get("is_mode_header", false):
+				event_history.remove_at(1)
+			else:
+				event_history.pop_front()
 	_schedule_next_event()
 	event_round_finished.emit(payload)
-	_update_event_label()
+	_force_event_label_refresh()
 
 func _schedule_next_event() -> void:
 	current_event_interval = _compute_current_interval()
@@ -367,17 +479,13 @@ func _effect_item_index(effect_name: String) -> int:
 			return 1
 
 func _faction_display_name(faction_id: int) -> String:
-	match faction_id:
-		GameConfig.Faction.BLUE:
-			return "蓝方"
-		GameConfig.Faction.RED:
-			return "红方"
-		GameConfig.Faction.GREEN:
-			return "绿方"
-		GameConfig.Faction.YELLOW:
-			return "黄方"
-		_:
-			return "未知"
+	return GameConfig.faction_name(faction_id)
+
+func _faction_item_names() -> Array:
+	var names: Array = []
+	for fid in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+		names.append(GameConfig.faction_name(fid))
+	return names
 
 func _random_effect() -> String:
 	var effects: Array = [
@@ -409,20 +517,64 @@ func _current_leader_percent() -> int:
 func _update_event_label() -> void:
 	if event_label == null or not is_instance_valid(event_label):
 		return
+	event_label_dirty = false
+	event_label.text = _build_event_status_text()
 
-	var event_text: String = "无"
-	if is_presenting_event and not _pending_payload.is_empty():
-		event_text = "转盘中"
-	elif last_event_faction != -1 and last_event_effect != "":
-		event_text = "%s %s" % [_faction_display_name(last_event_faction), _effect_hud_short_text(last_event_effect)]
 
-	event_label.text = "事件：%s | 下次 %s" % [
-		event_text,
-		"--:--" if is_presenting_event else RuntimeHudController.format_time_text(next_event_time_left),
-	]
+func _update_event_label_on_interval(delta: float) -> void:
+	event_label_update_timer -= delta
+	if event_label_update_timer > 0.0:
+		return
+	event_label_update_timer = EVENT_LABEL_UPDATE_INTERVAL
+	_update_event_label()
+
+
+func _update_event_label_if_dirty() -> void:
+	if not event_label_dirty:
+		return
+	_force_event_label_refresh()
+
+
+func _force_event_label_refresh() -> void:
+	event_label_dirty = true
+	event_label_update_timer = EVENT_LABEL_UPDATE_INTERVAL
+	_update_event_label()
+
+
+func _build_event_status_text() -> String:
+	var next_text: String = "--:--" if is_presenting_event else RuntimeHudController.format_time_text(next_event_time_left)
+
+	if is_presenting_event:
+		return "事件：转盘中｜下次事件 %s" % next_text
+
+	if last_event_faction != -1 and last_event_effect != "":
+		return "事件：%s｜下次事件 %s" % [_build_last_event_status_text(), next_text]
+
+	return "事件：待命｜下次事件 %s" % next_text
+
+
+func _build_last_event_status_text() -> String:
+	var faction_name: String = _faction_display_name(last_event_faction)
+	var effect_text: String = _effect_hud_short_text(last_event_effect)
+	match last_event_effect:
+		EFFECT_JAM, EFFECT_REROLL:
+			return "%s触发 %s" % [faction_name, effect_text]
+		_:
+			return "%s获得 %s" % [faction_name, effect_text]
 
 func _on_view_presentation_finished(_payload_from_view: Dictionary) -> void:
 	if _pending_payload.is_empty():
 		return
 	_apply_resolved_event(_pending_payload)
 	_finish_event_round(_pending_payload)
+
+func get_event_log_text(max_entries: int = 8) -> String:
+	var lines: PackedStringArray = []
+	var start_idx: int = maxi(0, event_history.size() - max_entries)
+	for i in range(start_idx, event_history.size()):
+		var entry: Dictionary = event_history[i]
+		var line: String = str(entry.get("log_text", ""))
+		if entry.get("is_mode_header", false):
+			line = "[color=#cccccc][i]%s[/i][/color]" % line
+		lines.append(line)
+	return "\n".join(lines)

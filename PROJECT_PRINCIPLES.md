@@ -1,90 +1,64 @@
-# 工程原则 / Project Principles
+# Project Principles / 工程原则
 
-## 原则 1: 每次优化减低耦合度，提高安全性，保证向后兼容
+## 原则 1：每次重构都要降低耦合、提高安全性、保持向后兼容
 
-这个代码库经过 v1.7 → v2.0.3 多轮迭代，每次改动都遵循以下模式：
+这个项目从 `v1.7` 到 `v2.1.x` 的一条稳定趋势，是把高风险的大函数和深层状态写回，逐步拆成更明确的边界与入口。  
+When refactoring, prefer smaller responsibilities, clearer seams, and compatibility-friendly transitions.
 
-- 新代码比旧代码耦合更松（例如 TestFixtures 不再依赖 static GameConfig 当前模式）
-- 新增安全层/守卫（例如 `set_owner_cell_raw` 行级写回，`simulate_check_winner` 显式参数）
-- 旧接口不消失，只是包装或被替换，保证已有测试和调用点不受影响
-- 趋势是代码质量在上升，不是在积累技术债
+实践准则：
 
-### 实践准则
+- 新接口比旧接口更安全，但不要无理由打断已有调用链
+- 优先把隐式全局依赖改成显式参数或更清楚的职责边界
+- 让新增结构降低未来维护成本，而不是只是换个文件名继续堆逻辑
 
-- 改代码时优先考虑：能否把依赖从全局状态（static var）改为显式参数？
-- 新增抽象层时：旧接口仍可用，新接口更安全
-- 不因为"暂时能用"就跳过显式类型注解、边界检查和清理
+## 原则 2：新代码出问题，优先检查新边界与新接线
 
----
+历史上很多回归并不是老系统突然失效，而是新引入的测试脚手架、协调层或恢复路径接线不完整。  
+When regressions appear after a change, inspect the new seam first.
 
-## 原则 2: 新代码出问题，优先从新代码入手
+实践准则：
 
-这个项目的旧代码（Main.gd, Battlefield.gd, GameConfig.gd, SaveGameCodec.gd, Turret.gd 等）已经过多轮回归测试和桌面验证。当加入新代码后出现故障：
+- 先查新加文件、新增测试、新增 helper、新增入口
+- 再查新旧系统之间的参数、类型、时序、所有权边界
+- 不要因为老代码“看起来可疑”就先动已稳定主路径
 
-1. **首先检查新代码** — 新测试、新工具类、新的调用路径
-2. **再检查新旧交界** — 新代码传给旧接口的参数、类型、语义
-3. **最后怀疑旧代码** — 如果确实走到这一步，通常是边界条件或未覆盖路径
+## 原则 3：可见 UI 优先 `.tscn`，脚本负责逻辑与连接
 
-v2.0.3 修复链路就是最好的例子：7 个问题全部出在新增的测试基础设施（TestAssert、TestFixtures、IntegrationTestRunner），没有一个需要改 Battlefield.gd 或 Main.gd。
+对人类需要频繁调整的可见界面，优先交给可编辑场景。  
+Visible UI that benefits from editor tuning should stay scene-first.
 
-### 实践准则
+实践准则：
 
-- 加新功能后首次运行失败 → 先查新增文件，再看调用链
-- 用 git/blame 或文件修改时间判断"哪部分是新来的"
-- 旧代码有覆盖测试（SmokeTestRunner 33 项），如果旧代码坏了，smoke 也会红
-- 不要因为"旧代码看起来可疑"就贸然改生产代码
+- 新增或迁移 UI 时，优先建立 `.tscn`
+- 脚本优先负责 `@onready` 绑定、信号连接、数据刷新和轻量协调
+- 不要把大块可见 UI 节点树重新塞回 `_ready()` 动态创建
+- 可编辑入口和协作边界要同步写进 `TECHNICAL_GUIDE.md`
 
----
+## 原则 4：验证结论以真实证据为准，不靠猜测补救
 
-## 原则 3: 新 UI 必须 .tscn 优先，不以纯代码动态生成
+逻辑正确性、性能表现和编辑器可加载性必须分开看。  
+Validation should be evidence-driven, not speculation-driven.
 
-从 v2.0.7 起，所有新增/重构的 UI 面板必须优先做成 `.tscn` 可视化场景。
+实践准则：
 
-### 规则
+- correctness baseline 以 `README_TEST_MATRIX.md` 为准
+- performance probe 不等于 correctness proof
+- 若 Codex 运行环境崩溃，但没有明确 parse/script 错误，且桌面本地不复现，不要继续靠猜测改生产代码
+- 手工验证、headless 验证和静态检查都要如实分开记录
 
-1. 所有可视化 UI 面板必须有对应 `.tscn`。
-2. 脚本只负责逻辑和信号连接，不负责创建节点树。
-3. 不允许把复杂 UI 全部写在 `_ready()` 里 `new` 出来。
-4. 如果必须动态创建，README 里必须说明原因和入口脚本。
-5. 新增 UI 后必须写 Editor Handoff 说明（或更新 `README_EDITOR_HANDOFF.md`），告诉人类在哪个 `.tscn` 里可以编辑。
+## 原则 5：常驻文档要少，但职责必须清晰
 
-### 理由
+版本历史可以长，常驻真相文档必须短而明确。  
+Detailed historical notes are fine; live operational docs should stay few and clear.
 
-纯代码动态生成的 UI 对 Agent 方便，但对人类极难接手。`.tscn` 场景可以在 Godot 编辑器中直接拖拽、调整、预览，减少试错成本。
+实践准则：
 
-### 组件分类（哪些迁 .tscn，哪些保持代码）
-
-| 分类 | 策略 | 组件 |
-|---|---|---|
-| **人类调外观** → `.tscn` | 迁移为可视化场景 | 开始菜单、设置面板、游戏 HUD、事件转盘 |
-| **Agent 跑逻辑** → `.gd` | 脚本只负责信号和逻辑 | Main.gd、StartMenu.gd、GameHUD.gd 等 |
-| **数量巨大** → 代码/对象池 | 保持代码生成 | 战场 Battlefield（draw_rect 绘制）、子弹 Bullet/BulletPool、控制仓内球 |
-| **后续评估** → 暂不急迁 | 功能稳定后再考虑 | 控制仓 ControlChamber、炮塔 Turret |
-
-判断标准：人需要频繁调外观 → `.tscn`；动态数量巨大 → 代码；纯逻辑 → `.gd`。
-
-### Agent + 人类 .tscn 协作模式
-
-最佳实践为三阶段：
-
-1. **Agent 生成初版** — 用 Godot 脚本（PackedScene.pack）生成第一版 .tscn，确保脚本能 compile、测试能 pass
-2. **人工在编辑器中整理** — 人类打开 .tscn，调整节点位置、颜色、字体、层级关系、设唯一名称
-3. **Agent 不再覆盖** — 后续只改 .gd 脚本逻辑，永远不重新运行生成器覆盖已人工调整的 .tscn
-
-关键约束：
-- 生成器脚本顶部必须有 `TOOL-ONLY — DO NOT RUN AFTER MANUAL EDITS` 警告
-- README 明确记录：哪些 .tscn 已人工编辑、不可覆盖
-- 如果必须改节点结构，先在文档说明改什么、再更新对应测试
-
-### 实践准则
-
-- 新建 UI 面板 → 先建 `.tscn` 场景，挂脚本，在编辑器中验证
-- 修改现有 UI → 优先迁移到 `.tscn`（参考 `StartMenu.tscn` 迁移模式：Godot 脚本生成 + fallback 旧代码）
-- 已存在 `.tscn` → 编辑器中改布局、改颜色、改字体，不碰脚本
-- 必须动态创建的节点（如子弹、控制仓内的球）→ README 注明 `scripts/` 入口，说明为何不能进 .tscn
-
----
-
-## 适用版本
-
-v2.0.7 及以上。如在后续版本中新增指导原则，请追记于此。
+- 历史阶段记录保留在 `README_v*.md`
+- 当前真相优先收敛到：
+  - `README.md`
+  - `ROADMAP.md`
+  - `README_TEST_MATRIX.md`
+  - `TECHNICAL_GUIDE.md`
+  - `AI_HANDOFF_CURRENT.md`
+  - `CHANGELOG.md`
+- 临时过程稿不要长期堆在根目录

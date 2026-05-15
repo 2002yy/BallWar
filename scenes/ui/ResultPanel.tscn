@@ -1,0 +1,103 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ResultPanel.gd" id="1_script"]
+
+[node name="ResultPanel" type="CanvasLayer"]
+process_mode = 3
+visible = false
+script = ExtResource("1_script")
+
+[node name="Shade" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.03, 0.05, 0.88)
+
+[node name="Panel" type="Panel" parent="."]
+self_modulate = Color(0.98, 0.99, 1, 0.96)
+offset_left = 210.0
+offset_top = 80.0
+offset_right = 910.0
+offset_bottom = 640.0
+
+[node name="PanelBg" type="ColorRect" parent="Panel"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 692.0
+offset_bottom = 552.0
+color = Color(0.08, 0.12, 0.18, 0.97)
+
+[node name="MainVBox" type="VBoxContainer" parent="Panel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+offset_left = 24.0
+offset_top = 18.0
+offset_right = -24.0
+offset_bottom = -18.0
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="Panel/MainVBox"]
+text = ""
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(1, 0.95, 0.72, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.03, 0.06, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 40
+custom_minimum_size = Vector2(0, 52)
+
+[node name="ReasonLabel" type="Label" parent="Panel/MainVBox"]
+text = ""
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.88, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 20
+custom_minimum_size = Vector2(0, 28)
+
+[node name="DurationLabel" type="Label" parent="Panel/MainVBox"]
+text = ""
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.84, 0.90, 1, 1)
+theme_override_font_sizes/font_size = 18
+custom_minimum_size = Vector2(0, 26)
+
+[node name="Spacer1" type="Control" parent="Panel/MainVBox"]
+custom_minimum_size = Vector2(0, 8)
+
+[node name="OccupationLabel" type="Label" parent="Panel/MainVBox"]
+text = ""
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.82, 0.90, 1, 1)
+theme_override_font_sizes/font_size = 17
+custom_minimum_size = Vector2(0, 100)
+
+[node name="StatsLabel" type="Label" parent="Panel/MainVBox"]
+text = ""
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.82, 0.90, 1, 1)
+theme_override_font_sizes/font_size = 17
+custom_minimum_size = Vector2(0, 56)
+
+[node name="Spacer2" type="Control" parent="Panel/MainVBox"]
+size_flags_vertical = 3
+
+[node name="ButtonRow" type="HBoxContainer" parent="Panel/MainVBox"]
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="ReplayButton" type="Button" parent="Panel/MainVBox/ButtonRow"]
+text = "再来一局"
+custom_minimum_size = Vector2(140, 40)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 18
+self_modulate = Color(0.24, 0.52, 0.92, 1)
+
+[node name="ReturnMenuButton" type="Button" parent="Panel/MainVBox/ButtonRow"]
+text = "返回菜单"
+custom_minimum_size = Vector2(140, 40)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 18
+self_modulate = Color(0.62, 0.24, 0.22, 1)

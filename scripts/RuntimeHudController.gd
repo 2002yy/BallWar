@@ -1,6 +1,11 @@
 extends RefCounted
 class_name RuntimeHudController
 
+static var performance_visible: bool = true
+
+static func set_performance_visible(value: bool) -> void:
+	performance_visible = value
+
 static func format_time_text(seconds: float) -> String:
 	var total_seconds: int = maxi(0, int(floor(seconds)))
 	var mm: int = floori(float(total_seconds) / 60.0)
@@ -54,6 +59,8 @@ static func get_pressure_label(active_count: int, burst_queue: int) -> String:
 	return "低"
 
 static func get_perf_debug_text(bullet_container, battlefield, selected_grid_size: int, turrets: Dictionary = {}) -> String:
+	if not performance_visible:
+		return ""
 	var active_count: int = get_active_bullet_count(bullet_container)
 	var max_active: int = GameConfig.get_max_active_bullets()
 	var burst_queue: int = get_burst_queue_count(turrets)
@@ -82,7 +89,7 @@ static func get_perf_debug_text(bullet_container, battlefield, selected_grid_siz
 		trail_pressure_level = str(bullet_metrics.get("trail_pressure_level", "none"))
 		trail_degrade_reason = str(bullet_metrics.get("trail_degrade_reason", "none"))
 
-	return "FPS %d | 子弹 %d/%d | 队列 %d | spawn %d/s | cap %d/s | trail %d | draw %d | canvas %d | 地图 %dx%d | 战场 %s | 压力 %s/%s" % [
+	return "FPS %d | 子弹 %d/%d | 队列 %d | 生成 %d/s | 占领 %d/s | 轨迹 %d | 绘制 %d | 画布 %d | 地图 %dx%d | 战场 %s | 压力 %s/%s" % [
 		floori(Engine.get_frames_per_second()),
 		active_count,
 		max_active,
@@ -106,19 +113,28 @@ static func update_meta(timer_label, stage_label, leader_label, current_score_co
 		stage_label.text = current_stage_name(game_elapsed_time)
 	if leader_label != null and is_instance_valid(leader_label):
 		var total: int = 0
-		var best_id: int = 0
 		var best_count: int = -1
 		for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
 			var c: int = int(current_score_counts.get(faction_id, 0))
 			total += c
-			if c > best_count:
-				best_count = c
-				best_id = faction_id
+			best_count = maxi(best_count, c)
+
+		var leaders: Array = []
+		for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+			if int(current_score_counts.get(faction_id, 0)) == best_count:
+				leaders.append(faction_id)
+
 		var percent: int = 0
 		if total > 0:
 			percent = int(round(float(best_count) * 100.0 / float(total)))
-		leader_label.text = "领先：%s %d%%" % [GameConfig.faction_name(best_id), percent]
-		leader_label.add_theme_color_override("font_color", GameConfig.faction_color(best_id).lightened(0.42))
+
+		if leaders.size() == 1:
+			var leader_id: int = int(leaders[0])
+			leader_label.text = "领先：%s %d%%" % [GameConfig.faction_name(leader_id), percent]
+			leader_label.add_theme_color_override("font_color", GameConfig.faction_color(leader_id).lightened(0.42))
+		else:
+			leader_label.text = "并列：%d%%" % percent
+			leader_label.add_theme_color_override("font_color", Color(0.92, 0.88, 0.72))
 
 static func update_top_bar(counts: Dictionary, top_bar_segments: Dictionary, top_bar_labels: Dictionary, top_bar_name_labels: Dictionary, top_bar_total_width: float, is_mobile_layout: bool) -> void:
 	if top_bar_segments.size() == 0:

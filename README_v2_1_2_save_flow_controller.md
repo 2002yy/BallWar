@@ -28,7 +28,7 @@ in place.
 
 - `scripts/SaveFlowController.gd`
 - `scripts/tests/SaveFlowControllerTestRunner.gd`
-- `README_SAVE_LOAD_FLOW_AUDIT.md`
+- `TECHNICAL_GUIDE.md`
 
 ## What SaveFlowController Owns Now
 

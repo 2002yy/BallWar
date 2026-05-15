@@ -4,8 +4,6 @@ const WARMUP_SECONDS: float = 2.0
 const DISCARD_SECONDS: float = 0.5
 const MEASURED_SECONDS: float = 10.0
 const REPEATS_PER_GROUP: int = 3
-const JSON_REPORT_PATH: String = "user://test_reports/perf_burst_benchmark.json"
-const CSV_REPORT_PATH: String = "user://test_reports/perf_burst_benchmark.csv"
 
 const FORWARD_ORDER: String = "forward"
 const REVERSE_ORDER: String = "reverse"
@@ -14,10 +12,11 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	print("[PerfBurstBenchmark] Starting benchmark v2.0.2")
+	print("[%s] Starting benchmark %s" % [_benchmark_label(), _benchmark_version()])
 
 	var report: Dictionary = {
-		"version": "2.0.2",
+		"version": _benchmark_version(),
+		"label": _benchmark_label(),
 		"engine": Engine.get_version_info(),
 		"warmup_seconds": WARMUP_SECONDS,
 		"discard_seconds": DISCARD_SECONDS,
@@ -42,11 +41,25 @@ func _run() -> void:
 				all_summaries.append(summary)
 				_print_summary_line(summary)
 
-	_write_json_report(report)
-	_write_csv_report(all_summaries)
-	print("[PerfBurstBenchmark] JSON report: %s" % JSON_REPORT_PATH)
-	print("[PerfBurstBenchmark] CSV report: %s" % CSV_REPORT_PATH)
+	var json_report_path: String = _json_report_path()
+	var csv_report_path: String = _csv_report_path()
+	_write_json_report(report, json_report_path)
+	_write_csv_report(all_summaries, csv_report_path)
+	print("[%s] JSON report: %s" % [_benchmark_label(), json_report_path])
+	print("[%s] CSV report: %s" % [_benchmark_label(), csv_report_path])
 	quit(0)
+
+func _benchmark_label() -> String:
+	return "PerfBurstBenchmark"
+
+func _benchmark_version() -> String:
+	return "2.1.4-full"
+
+func _json_report_path() -> String:
+	return "user://test_reports/perf_burst_benchmark.json"
+
+func _csv_report_path() -> String:
+	return "user://test_reports/perf_burst_benchmark.csv"
 
 func _build_case_defs() -> Array:
 	return [
@@ -116,6 +129,7 @@ func _run_single_case(case_def: Dictionary, pending_per_turret: int, order_name:
 	var case_name: String = str(case_def.get("case_name", "unknown"))
 	var grid_size: int = int(case_def.get("grid_size", 40))
 	var quality_name: String = str(case_def.get("quality_name", GameConfig.QUALITY_MEDIUM))
+	var quality_key: String = _quality_key(quality_name)
 	var turret_ids: Array = case_def.get("turret_ids", [])
 	var dominant_faction: int = int(case_def.get("dominant_faction", -1))
 	var dominant_ratio: float = float(case_def.get("dominant_ratio", 0.0))
@@ -250,7 +264,7 @@ func _run_single_case(case_def: Dictionary, pending_per_turret: int, order_name:
 	var run_metrics: Dictionary = {
 		"case_name": case_name,
 		"grid_size": grid_size,
-		"quality": quality_name,
+		"quality": quality_key,
 		"turret_count": active_turrets.size(),
 		"pending_per_turret": pending_per_turret,
 		"total_pending_start": pending_per_turret * active_turrets.size(),
@@ -385,7 +399,7 @@ func _summarize_group(case_def: Dictionary, order_name: String, pending_per_turr
 	return {
 		"case_name": str(case_def.get("case_name", "unknown")),
 		"grid_size": int(case_def.get("grid_size", 40)),
-		"quality": str(case_def.get("quality_name", GameConfig.QUALITY_MEDIUM)),
+		"quality": _quality_key(str(case_def.get("quality_name", GameConfig.QUALITY_MEDIUM))),
 		"turret_count": (case_def.get("turret_ids", []) as Array).size(),
 		"pending_per_turret": pending_per_turret,
 		"total_pending_start": pending_per_turret * (case_def.get("turret_ids", []) as Array).size(),
@@ -442,17 +456,17 @@ func _print_summary_line(summary: Dictionary) -> void:
 		]
 	)
 
-func _write_json_report(report: Dictionary) -> void:
+func _write_json_report(report: Dictionary, report_path: String) -> void:
 	var report_dir: String = ProjectSettings.globalize_path("user://test_reports")
 	DirAccess.make_dir_recursive_absolute(report_dir)
-	var file: FileAccess = FileAccess.open(JSON_REPORT_PATH, FileAccess.WRITE)
+	var file: FileAccess = FileAccess.open(report_path, FileAccess.WRITE)
 	if file == null:
-		push_error("[PerfBurstBenchmark] Failed to open JSON report path: %s" % JSON_REPORT_PATH)
+		push_error("[%s] Failed to open JSON report path: %s" % [_benchmark_label(), report_path])
 		return
 	file.store_string(JSON.stringify(report, "\t"))
 	file.close()
 
-func _write_csv_report(summaries: Array) -> void:
+func _write_csv_report(summaries: Array, report_path: String) -> void:
 	var lines: Array[String] = []
 	var headers: Array[String] = [
 		"case_name",
@@ -499,9 +513,9 @@ func _write_csv_report(summaries: Array) -> void:
 
 	var report_dir: String = ProjectSettings.globalize_path("user://test_reports")
 	DirAccess.make_dir_recursive_absolute(report_dir)
-	var file: FileAccess = FileAccess.open(CSV_REPORT_PATH, FileAccess.WRITE)
+	var file: FileAccess = FileAccess.open(report_path, FileAccess.WRITE)
 	if file == null:
-		push_error("[PerfBurstBenchmark] Failed to open CSV report path: %s" % CSV_REPORT_PATH)
+		push_error("[%s] Failed to open CSV report path: %s" % [_benchmark_label(), report_path])
 		return
 	file.store_string("\n".join(lines))
 	file.close()
@@ -510,6 +524,15 @@ func _csv_escape(value: String) -> String:
 	if value.contains(",") or value.contains("\"") or value.contains("\n"):
 		return "\"%s\"" % value.replace("\"", "\"\"")
 	return value
+
+func _quality_key(quality_name: String) -> String:
+	match quality_name:
+		GameConfig.QUALITY_LOW:
+			return "low"
+		GameConfig.QUALITY_HIGH:
+			return "high"
+		_:
+			return "medium"
 
 func _cleanup_benchmark_root(bench_root: Node) -> void:
 	if bench_root == null or not is_instance_valid(bench_root):

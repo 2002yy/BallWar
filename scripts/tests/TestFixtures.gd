@@ -21,7 +21,7 @@ static func build_realistic_save_payload() -> Dictionary:
 	owners[0][0] = GameConfig.Faction.RED
 
 	return {
-		"save_version": "1.9.34",
+		"save_version": "2.0.0",
 		"save_slot": 1,
 		"grid_size": 10,
 		"palette_name": "经典",
@@ -83,7 +83,7 @@ static func build_invalid_save_payload() -> Dictionary:
 		"factions": [],
 	}
 
-static func build_minimal_save_payload(version: String = "1.9.34") -> Dictionary:
+static func build_minimal_save_payload(version: String = "2.0.0") -> Dictionary:
 	return {
 		"save_version": version,
 		"grid_size": 40,

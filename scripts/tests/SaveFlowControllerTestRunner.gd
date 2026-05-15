@@ -28,21 +28,63 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var t: TestAssert = TestAssert.new()
-	print("[SaveFlowControllerTest] v2.1.2 save-path and write-flow verification")
+	print("[SaveFlowControllerTest] v2.1.10 save-path + invalid-slot verification")
 
+	_reset_and_assert_runtime_defaults(t, "before get_save_path")
 	_test_get_save_path(t)
+	_reset_and_assert_runtime_defaults(t, "after get_save_path")
+
+	_reset_and_assert_runtime_defaults(t, "before has_save_file")
 	_test_has_save_file(t)
+	_reset_and_assert_runtime_defaults(t, "after has_save_file")
+
+	_reset_and_assert_runtime_defaults(t, "before load_saved_data")
 	_test_load_saved_data(t)
+	_reset_and_assert_runtime_defaults(t, "after load_saved_data")
+
+	_reset_and_assert_runtime_defaults(t, "before prepare_continue_payload")
 	_test_prepare_continue_payload(t)
+	_reset_and_assert_runtime_defaults(t, "after prepare_continue_payload")
+
+	_reset_and_assert_runtime_defaults(t, "before build_continue_runtime_state")
 	_test_build_continue_runtime_state(t)
+	_reset_and_assert_runtime_defaults(t, "after build_continue_runtime_state")
+
+	_reset_and_assert_runtime_defaults(t, "before apply_continue_selection_state")
 	_test_apply_continue_selection_state(t)
+	_reset_and_assert_runtime_defaults(t, "after apply_continue_selection_state")
+
+	_reset_and_assert_runtime_defaults(t, "before apply_continue_game_config")
 	_test_apply_continue_game_config(t)
+	_reset_and_assert_runtime_defaults(t, "after apply_continue_game_config")
+
+	_reset_and_assert_runtime_defaults(t, "before build_continue_start_values")
 	_test_build_continue_start_values(t)
+	_reset_and_assert_runtime_defaults(t, "after build_continue_start_values")
+
+	_reset_and_assert_runtime_defaults(t, "before prepare_continue_start_plan")
 	_test_prepare_continue_start_plan(t)
+	_reset_and_assert_runtime_defaults(t, "after prepare_continue_start_plan")
+
+	_reset_and_assert_runtime_defaults(t, "before apply_continue_start_plan")
 	_test_apply_continue_start_plan(t)
+	_reset_and_assert_runtime_defaults(t, "after apply_continue_start_plan")
+
+	_reset_and_assert_runtime_defaults(t, "before build_save_slot_summaries")
 	_test_build_save_slot_summaries(t)
+	_reset_and_assert_runtime_defaults(t, "after build_save_slot_summaries")
+
+	_reset_and_assert_runtime_defaults(t, "before invalid_save_slot_summaries")
+	_test_invalid_save_slot_summaries(t)
+	_reset_and_assert_runtime_defaults(t, "after invalid_save_slot_summaries")
+
+	_reset_and_assert_runtime_defaults(t, "before slot_selection_status_and_ui")
 	await _test_slot_selection_status_and_ui(t)
+	_reset_and_assert_runtime_defaults(t, "after slot_selection_status_and_ui")
+
+	_reset_and_assert_runtime_defaults(t, "before write_game_progress")
 	_test_write_game_progress(t)
+	_reset_and_assert_runtime_defaults(t, "after write_game_progress")
 
 	t.report("[SaveFlowControllerTest]")
 	quit(0 if t.failures.is_empty() else 1)
@@ -59,28 +101,42 @@ func _test_has_save_file(t: TestAssert) -> void:
 	var path_template: String = "user://saveflow_has_file_slot_%d.json"
 	var slot2_path: String = SaveFlowController.get_save_path(2, path_template, 5)
 	var slot2_abs: String = ProjectSettings.globalize_path(slot2_path)
+	var slot2_backup_abs: String = ProjectSettings.globalize_path(SaveFlowController.get_backup_path(slot2_path))
 	if FileAccess.file_exists(slot2_path):
 		DirAccess.remove_absolute(slot2_abs)
+	if FileAccess.file_exists(SaveFlowController.get_backup_path(slot2_path)):
+		DirAccess.remove_absolute(slot2_backup_abs)
 
 	var file := FileAccess.open(slot2_path, FileAccess.WRITE)
 	if file != null:
 		file.store_string("{}")
 
 	t.that(SaveFlowController.has_save_file(2, 1, 5, path_template, "user://legacy_missing.json"), "has_save_file detects explicit slot file")
+	DirAccess.remove_absolute(slot2_abs)
+	var backup_file := FileAccess.open(SaveFlowController.get_backup_path(slot2_path), FileAccess.WRITE)
+	if backup_file != null:
+		backup_file.store_string("{}")
+	t.that(SaveFlowController.has_save_file(2, 1, 5, path_template, "user://legacy_missing.json"), "has_save_file detects backup file")
 	t.that(not SaveFlowController.has_save_file(3, 1, 5, path_template, "user://legacy_missing.json"), "has_save_file false when slot missing")
 
 	if FileAccess.file_exists(slot2_path):
 		DirAccess.remove_absolute(slot2_abs)
+	if FileAccess.file_exists(SaveFlowController.get_backup_path(slot2_path)):
+		DirAccess.remove_absolute(slot2_backup_abs)
 
 func _test_load_saved_data(t: TestAssert) -> void:
 	var path_template: String = "user://saveflow_load_slot_%d.json"
 	var slot1_path: String = SaveFlowController.get_save_path(1, path_template, 5)
 	var slot1_abs: String = ProjectSettings.globalize_path(slot1_path)
+	var slot1_backup_path: String = SaveFlowController.get_backup_path(slot1_path)
+	var slot1_backup_abs: String = ProjectSettings.globalize_path(slot1_backup_path)
 	var legacy_path: String = "user://saveflow_legacy.json"
 	var legacy_abs: String = ProjectSettings.globalize_path(legacy_path)
 
 	if FileAccess.file_exists(slot1_path):
 		DirAccess.remove_absolute(slot1_abs)
+	if FileAccess.file_exists(slot1_backup_path):
+		DirAccess.remove_absolute(slot1_backup_abs)
 	if FileAccess.file_exists(legacy_path):
 		DirAccess.remove_absolute(legacy_abs)
 
@@ -93,7 +149,24 @@ func _test_load_saved_data(t: TestAssert) -> void:
 	var parsed: Dictionary = SaveFlowController.load_saved_data(1, 1, 5, path_template, legacy_path, true)
 	t.eq(parsed.get("grid_size", -1), 40, "load_saved_data reads slot file")
 
+	var corrupt_file := FileAccess.open(slot1_path, FileAccess.WRITE)
+	if corrupt_file != null:
+		corrupt_file.store_string("{not-json")
+		corrupt_file.flush()
+		corrupt_file = null
+	var backup_file := FileAccess.open(slot1_backup_path, FileAccess.WRITE)
+	if backup_file != null:
+		backup_file.store_string("{\"save_version\":\"2.0.0\",\"grid_size\":50}")
+		backup_file.flush()
+		backup_file = null
+
+	var recovered: Dictionary = SaveFlowController.load_saved_data_result(1, 1, 5, path_template, legacy_path, true)
+	t.that(bool(recovered.get("ok", false)), "load_saved_data_result recovers from backup")
+	t.eq(int(recovered.get("data", {}).get("grid_size", -1)), 50, "load_saved_data_result uses backup payload")
+	t.eq(str(recovered.get("source_kind", "")), "backup", "load_saved_data_result marks backup source")
+
 	DirAccess.remove_absolute(slot1_abs)
+	DirAccess.remove_absolute(slot1_backup_abs)
 	var legacy_file := FileAccess.open(legacy_path, FileAccess.WRITE)
 	if legacy_file != null:
 		legacy_file.store_string("{\"save_version\":\"1.9.88\",\"grid_size\":30}")
@@ -108,6 +181,8 @@ func _test_load_saved_data(t: TestAssert) -> void:
 
 	if FileAccess.file_exists(slot1_path):
 		DirAccess.remove_absolute(slot1_abs)
+	if FileAccess.file_exists(slot1_backup_path):
+		DirAccess.remove_absolute(slot1_backup_abs)
 	if FileAccess.file_exists(legacy_path):
 		DirAccess.remove_absolute(legacy_abs)
 
@@ -115,11 +190,15 @@ func _test_prepare_continue_payload(t: TestAssert) -> void:
 	var path_template: String = "user://saveflow_prepare_slot_%d.json"
 	var slot1_path: String = SaveFlowController.get_save_path(1, path_template, 5)
 	var slot1_abs: String = ProjectSettings.globalize_path(slot1_path)
+	var slot1_backup_path: String = SaveFlowController.get_backup_path(slot1_path)
+	var slot1_backup_abs: String = ProjectSettings.globalize_path(slot1_backup_path)
 	var legacy_path: String = "user://saveflow_prepare_legacy.json"
 	var legacy_abs: String = ProjectSettings.globalize_path(legacy_path)
 
 	if FileAccess.file_exists(slot1_path):
 		DirAccess.remove_absolute(slot1_abs)
+	if FileAccess.file_exists(slot1_backup_path):
+		DirAccess.remove_absolute(slot1_backup_abs)
 	if FileAccess.file_exists(legacy_path):
 		DirAccess.remove_absolute(legacy_abs)
 
@@ -129,18 +208,18 @@ func _test_prepare_continue_payload(t: TestAssert) -> void:
 
 	var invalid_file := FileAccess.open(slot1_path, FileAccess.WRITE)
 	if invalid_file != null:
-		invalid_file.store_string("{\"save_version\":\"2.0.0\",\"grid_size\":40}")
+		invalid_file.store_string("{\"save_version\":\"9.9.9\",\"grid_size\":40}")
 		invalid_file.flush()
 		invalid_file = null
 
 	var invalid: Dictionary = SaveFlowController.prepare_continue_payload(1, 1, 5, path_template, legacy_path, true)
 	t.that(not bool(invalid.get("ok", false)), "prepare_continue_payload rejects incompatible version")
-	t.that(str(invalid.get("warning_message", "")).contains("2.0.0"), "incompatible version warning kept")
+	t.that(str(invalid.get("warning_message", "")).contains("9.9.9"), "incompatible version warning kept")
 	DirAccess.remove_absolute(slot1_abs)
 
 	var valid_file := FileAccess.open(slot1_path, FileAccess.WRITE)
 	if valid_file != null:
-		valid_file.store_string("{\"save_version\":\"1.9.34\",\"grid_size\":40,\"quality_name\":\"\u4e2d\"}")
+		valid_file.store_string("{\"save_version\":\"2.0.0\",\"grid_size\":40,\"quality_name\":\"\u4e2d\"}")
 		valid_file.flush()
 		valid_file = null
 
@@ -148,8 +227,24 @@ func _test_prepare_continue_payload(t: TestAssert) -> void:
 	t.that(bool(prepared.get("ok", false)), "prepare_continue_payload accepts valid save")
 	t.eq(int(prepared.get("data", {}).get("grid_size", -1)), 40, "prepared payload returns clean data")
 
+	var broken_primary := FileAccess.open(slot1_path, FileAccess.WRITE)
+	if broken_primary != null:
+		broken_primary.store_string("{bad-json")
+		broken_primary.flush()
+		broken_primary = null
+	var backup_valid := FileAccess.open(slot1_backup_path, FileAccess.WRITE)
+	if backup_valid != null:
+		backup_valid.store_string("{\"save_version\":\"2.0.0\",\"grid_size\":30,\"quality_name\":\"\u4e2d\"}")
+		backup_valid.flush()
+		backup_valid = null
+	var recovered_prepare: Dictionary = SaveFlowController.prepare_continue_payload(1, 1, 5, path_template, legacy_path, true)
+	t.that(bool(recovered_prepare.get("ok", false)), "prepare_continue_payload accepts recovered backup save")
+	t.eq(str(recovered_prepare.get("status_message", "")), "存档损坏，已尝试恢复备份", "prepare_continue_payload exposes backup recovery status")
+
 	if FileAccess.file_exists(slot1_path):
 		DirAccess.remove_absolute(slot1_abs)
+	if FileAccess.file_exists(slot1_backup_path):
+		DirAccess.remove_absolute(slot1_backup_abs)
 	if FileAccess.file_exists(legacy_path):
 		DirAccess.remove_absolute(legacy_abs)
 
@@ -266,26 +361,88 @@ func _test_apply_continue_start_plan(t: TestAssert) -> void:
 
 func _test_build_save_slot_summaries(t: TestAssert) -> void:
 	var summaries: Array = SaveFlowController.build_save_slot_summaries(
-		3,
+		4,
 		func(slot: int, _allow_legacy: bool) -> Dictionary:
 			if slot == 2:
+				return {
+					"save_version": "9.9.9",
+					"grid_size": 60,
+					"game_mode_name": GameConfig.GAME_MODE_TIMED,
+					"quality_name": "\u9ad8",
+					"game_elapsed_time": 125.0,
+				}
+			if slot == 3:
+				return {
+					"save_version": "2.0.0",
+					"_invalid_reason": "\u575f\u6863",
+				}
+			if slot == 4:
 				return {
 					"grid_size": 60,
 					"game_mode_name": GameConfig.GAME_MODE_TIMED,
 					"quality_name": "\u9ad8",
 					"game_elapsed_time": 125.0,
-					"save_version": "1.9.99",
+					"save_version": "2.0.0",
 				}
 			return {}
 	)
 
-	t.eq(summaries.size(), 3, "summary count matches slot count")
+	t.eq(summaries.size(), 4, "summary count matches slot count")
 	t.that(not summaries[0]["has_data"], "empty slot marked empty")
 	t.eq(summaries[0]["title"], "\u7a7a\u5b58\u6863", "empty slot title")
-	t.that(summaries[1]["has_data"], "filled slot marked filled")
-	t.eq(summaries[1]["title"], "%s\uFF5C%d\u00D7%d\uFF5C%s" % [GameConfig.GAME_MODE_TIMED, 60, 60, "\u9ad8"], "filled slot title format")
-	t.that(str(summaries[1]["detail"]).contains("02:05"), "filled slot detail includes formatted time")
-	t.that(str(summaries[1]["detail"]).contains("1.9.99"), "filled slot detail includes version")
+	t.eq(str(summaries[1]["state"]), "incompatible", "unsupported save version marked incompatible")
+	t.eq(summaries[1]["title"], "\u7248\u672c\u4e0d\u517c\u5bb9", "incompatible slot title")
+	t.that(not bool(summaries[1]["is_playable"]), "incompatible slot not playable")
+	t.eq(str(summaries[2]["state"]), "damaged", "missing grid size marked damaged")
+	t.eq(summaries[2]["title"], "\u5b58\u6863\u635f\u574f", "damaged slot title")
+	t.that(not bool(summaries[2]["is_playable"]), "damaged slot not playable")
+	t.that(bool(summaries[3]["has_data"]), "filled slot marked filled")
+	t.eq(summaries[3]["title"], "%s\uFF5C%d\u00D7%d\uFF5C%s" % [GameConfig.GAME_MODE_TIMED, 60, 60, "\u9ad8"], "filled slot title format")
+	t.that(str(summaries[3]["detail"]).contains("02:05"), "filled slot detail includes formatted time")
+	t.that(str(summaries[3]["detail"]).contains("2.0.0"), "filled slot detail includes version")
+
+
+func _test_invalid_save_slot_summaries(t: TestAssert) -> void:
+	var path_template: String = "user://saveflow_invalid_slot_%d.json"
+	var legacy_path: String = "user://saveflow_invalid_legacy.json"
+	for slot in [1, 2]:
+		var slot_path: String = SaveFlowController.get_save_path(slot, path_template, 5)
+		var slot_abs: String = ProjectSettings.globalize_path(slot_path)
+		if FileAccess.file_exists(slot_path):
+			DirAccess.remove_absolute(slot_abs)
+	if FileAccess.file_exists(legacy_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(legacy_path))
+
+	var damaged_file := FileAccess.open(SaveFlowController.get_save_path(1, path_template, 5), FileAccess.WRITE)
+	if damaged_file != null:
+		damaged_file.store_string("{bad-json")
+		damaged_file.flush()
+		damaged_file = null
+
+	var incompatible_file := FileAccess.open(SaveFlowController.get_save_path(2, path_template, 5), FileAccess.WRITE)
+	if incompatible_file != null:
+		incompatible_file.store_string("{\"save_version\":\"9.9.9\",\"grid_size\":40,\"quality_name\":\"中\"}")
+		incompatible_file.flush()
+		incompatible_file = null
+
+	var summaries: Array = SaveFlowController.build_save_slot_summaries(
+		2,
+		func(slot: int, allow_legacy: bool) -> Dictionary:
+			return SaveFlowController.load_saved_data(slot, 1, 5, path_template, legacy_path, allow_legacy)
+	)
+
+	t.eq(str(summaries[0]["state"]), "empty", "damaged json without recovery should not appear readable")
+	t.that(not bool(summaries[0]["is_playable"]), "damaged json slot not playable")
+	t.eq(str(summaries[1]["state"]), "incompatible", "unsupported version slot stays incompatible")
+	t.eq(summaries[1]["title"], "\u7248\u672c\u4e0d\u517c\u5bb9", "unsupported version title remains incompatible")
+	t.that(not bool(summaries[1]["is_playable"]), "unsupported version slot not playable")
+
+	for slot in [1, 2]:
+		var slot_path: String = SaveFlowController.get_save_path(slot, path_template, 5)
+		if FileAccess.file_exists(slot_path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(slot_path))
+	if FileAccess.file_exists(legacy_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(legacy_path))
 
 func _test_slot_selection_status_and_ui(t: TestAssert) -> void:
 	t.eq(
@@ -312,15 +469,15 @@ func _test_slot_selection_status_and_ui(t: TestAssert) -> void:
 		{1: button1, 2: button2},
 		2,
 		[
-			{"slot": 1, "title": "\u7a7a\u5b58\u6863"},
-			{"slot": 2, "title": "\u57fa\u7840\u6a21\u5f0f\uFF5C40\u00D740\uFF5C\u4e2d"},
+			{"slot": 1, "state": "empty", "title": "\u7a7a\u5b58\u6863"},
+			{"slot": 2, "state": "valid", "title": "\u57fa\u7840\u6a21\u5f0f\uFF5C40\u00D740\uFF5C\u4e2d"},
 		],
 		continue_button,
 		true
 	)
 
-	t.eq(button1.text, "\u69fd1  \u7a7a\u5b58\u6863", "slot 1 text format")
-	t.eq(button2.text, "\u25cf \u69fd2  \u57fa\u7840\u6a21\u5f0f\uFF5C40\u00D740\uFF5C\u4e2d", "slot 2 selected text format")
+	t.eq(button1.text, "\u69fd1\uFF5C\u7a7a", "slot 1 text format")
+	t.eq(button2.text, "\u25cf \u69fd2\uFF5C\u57fa\u7840\uFF5C40\u00D740\uFF5C\u4e2d", "slot 2 selected text format")
 	t.that(not continue_button.disabled, "continue button enabled when selected slot has save")
 	t.eq(continue_button.text, "\u8bfb\u53d6\u69fd2", "continue button text format")
 
@@ -330,8 +487,16 @@ func _test_slot_selection_status_and_ui(t: TestAssert) -> void:
 func _test_write_game_progress(t: TestAssert) -> void:
 	var save_path: String = "user://saveflow_controller_test_slot_2.json"
 	var absolute_path: String = ProjectSettings.globalize_path(save_path)
+	var backup_path: String = SaveFlowController.get_backup_path(save_path)
+	var backup_abs: String = ProjectSettings.globalize_path(backup_path)
+	var temp_path: String = SaveFlowController.get_temp_path(save_path)
+	var temp_abs: String = ProjectSettings.globalize_path(temp_path)
 	if FileAccess.file_exists(save_path):
 		DirAccess.remove_absolute(absolute_path)
+	if FileAccess.file_exists(backup_path):
+		DirAccess.remove_absolute(backup_abs)
+	if FileAccess.file_exists(temp_path):
+		DirAccess.remove_absolute(temp_abs)
 
 	var winner_label := MockLabel.new()
 	winner_label.text = "winner"
@@ -360,6 +525,35 @@ func _test_write_game_progress(t: TestAssert) -> void:
 			t.eq(parsed.get("save_slot", -1), 2, "save payload keeps selected slot")
 			t.eq(parsed.get("grid_size", -1), 40, "save payload keeps battlefield grid")
 			t.eq(parsed.get("winner_text", ""), "winner", "save payload keeps winner text")
+		file = null
+
+	var second_result: Dictionary = SaveFlowController.write_game_progress_result(
+		2,
+		"user://saveflow_controller_test_slot_%d.json",
+		5,
+		{},
+		{},
+		MockBattlefield.new(),
+		null,
+		MockEventController.new(),
+		99.0,
+		false,
+		winner_label
+	)
+	t.that(bool(second_result.get("ok", false)), "atomic save result returns ok")
+	t.that(FileAccess.file_exists(backup_path), "backup file created on overwrite")
+	t.that(not FileAccess.file_exists(temp_path), "temp file cleaned after atomic save")
 
 	if FileAccess.file_exists(save_path):
 		DirAccess.remove_absolute(absolute_path)
+	if FileAccess.file_exists(backup_path):
+		DirAccess.remove_absolute(backup_abs)
+	if FileAccess.file_exists(temp_path):
+		DirAccess.remove_absolute(temp_abs)
+
+
+func _reset_and_assert_runtime_defaults(t: TestAssert, context: String) -> void:
+	GameConfig.reset_runtime_defaults()
+	t.eq(GameConfig.get_game_mode_name(), GameConfig.GAME_MODE_BASIC, "%s mode reset" % context)
+	t.eq(GameConfig.get_quality_name(), GameConfig.QUALITY_MEDIUM, "%s quality reset" % context)
+	t.eq(GameConfig.get_palette_name(), "经典", "%s palette reset" % context)

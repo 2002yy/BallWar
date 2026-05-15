@@ -150,22 +150,12 @@ func _bind_scene_nodes() -> void:
 	right_pointer = stage_panel.get_node_or_null("RightPointer") as ColorRect
 
 func _layout_stage() -> void:
-	var grid_size: int = int(_payload.get("grid_size", 40))
-	var compact: bool = grid_size >= 40
-	var stage_size: Vector2 = Vector2(500.0, 182.0)
-	if compact:
-		stage_size = Vector2(448.0, 168.0)
-	elif grid_size <= 20:
-		stage_size = Vector2(540.0, 194.0)
-
-	if mobile_mode:
-		stage_size = Vector2(minf(stage_size.x, 430.0), stage_size.y + 10.0)
-
+	var stage_rect: Rect2 = current_layout.get("roulette_stage_rect", Rect2(Vector2((size.x - 448.0) * 0.5, 96.0), Vector2(448.0, 168.0)))
+	var stage_size: Vector2 = stage_rect.size
 	stage_panel.size = stage_size
-	stage_panel.position = Vector2((size.x - stage_size.x) * 0.5, _stage_hidden_y)
-	_stage_shown_y = current_layout.get("map_y", 96.0) - stage_size.y - 10.0
-	_stage_shown_y = clampf(_stage_shown_y, 92.0, 126.0)
+	_stage_shown_y = stage_rect.position.y
 	_stage_hidden_y = -stage_size.y - 20.0
+	stage_panel.position = Vector2(stage_rect.position.x, _stage_hidden_y)
 
 	var bg: ColorRect = stage_panel.get_node("Bg") as ColorRect
 	bg.position = Vector2(4.0, 4.0)

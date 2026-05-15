@@ -21,7 +21,7 @@ Added project-root `tests/` directory:
 - `tests/TestSaveGameCodec.gd`
 - `tests/TestBattlefield.gd`
 - `tests/PerfBurstBenchmark.gd`
-- `tests/README_tests.md`
+- `README_TEST_MATRIX.md`
 
 Older `scripts/tests/SmokeTestRunner.gd` was left in place as an earlier smoke script, but the new canonical entry point is now `tests/TestRunner.gd`.
 

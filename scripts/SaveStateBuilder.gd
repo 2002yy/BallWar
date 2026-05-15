@@ -5,7 +5,11 @@ static func build_faction_states(chambers: Dictionary, turrets: Dictionary) -> A
 	var factions: Array = []
 	for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
 		var chamber = chambers.get(faction_id)
+		if chamber == null or not is_instance_valid(chamber):
+			chamber = null
 		var turret = turrets.get(faction_id)
+		if turret == null or not is_instance_valid(turret):
+			turret = null
 		factions.append({
 			"faction_id": faction_id,
 			"chamber_pending_count": chamber.pending_count if chamber != null else 1,
@@ -41,6 +45,7 @@ static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battle
 		"owners": battlefield.owners,
 		"game_elapsed_time": game_elapsed_time,
 		"is_game_over": is_game_over,
+		"match_finished": is_game_over || winner_label != null and is_instance_valid(winner_label) and winner_label.text != "",
 		"factions": build_faction_states(chambers, turrets),
 		"bullets": SaveGameCodec.collect_bullet_states(bullet_container),
 		"winner_text": winner_label.text if winner_label != null else "",

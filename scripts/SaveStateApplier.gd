@@ -38,8 +38,10 @@ static func apply_factions(chambers: Dictionary, turrets: Dictionary, factions: 
 				turrets[faction_id].restore_from_state(faction_state)
 
 			if chambers.has(faction_id) and turrets.has(faction_id):
-				if chambers[faction_id].is_locked and turrets[faction_id].burst_remaining <= 0:
-					on_chamber_unlock.call(chambers[faction_id])
+				var chamber = chambers[faction_id]
+				var turret = turrets[faction_id]
+				if chamber.is_locked and chamber.locked_remaining > 0 and turret.burst_remaining <= 0:
+					on_chamber_unlock.call(chamber)
 
 			if on_button_refresh.is_valid():
 				on_button_refresh.call(faction_id)

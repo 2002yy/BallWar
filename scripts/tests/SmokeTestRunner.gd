@@ -36,13 +36,41 @@ func _run() -> void:
 	print("[SmokeTest] Starting BallWar smoke tests")
 	await process_frame
 
+	_reset_and_assert_runtime_defaults("before save codec defaults")
 	_test_save_game_codec_defaults()
+	_reset_and_assert_runtime_defaults("after save codec defaults")
+
+	_reset_and_assert_runtime_defaults("before event roulette intervals")
 	_test_event_roulette_intervals_and_weights()
+	_reset_and_assert_runtime_defaults("after event roulette intervals")
+
+	_reset_and_assert_runtime_defaults("before event label format")
+	_test_event_label_format()
+	_reset_and_assert_runtime_defaults("after event label format")
+
+	_reset_and_assert_runtime_defaults("before control chamber event rules")
 	await _test_control_chamber_event_rules()
+	_reset_and_assert_runtime_defaults("after control chamber event rules")
+
+	_reset_and_assert_runtime_defaults("before restore_from_state interfaces")
 	await _test_restore_from_state_interfaces()
+	_reset_and_assert_runtime_defaults("after restore_from_state interfaces")
+
+	_reset_and_assert_runtime_defaults("before turret cancel burst")
 	_test_turret_cancel_burst()
+	_reset_and_assert_runtime_defaults("after turret cancel burst")
+
+	_reset_and_assert_runtime_defaults("before bullet lifecycle")
+	_test_bullet_lifecycle()
+	_reset_and_assert_runtime_defaults("after bullet lifecycle")
+
+	_reset_and_assert_runtime_defaults("before bullet restore")
 	_test_bullet_restore_from_state()
+	_reset_and_assert_runtime_defaults("after bullet restore")
+
+	_reset_and_assert_runtime_defaults("before bullet pool incremental metrics")
 	_test_bullet_pool_incremental_metrics()
+	_reset_and_assert_runtime_defaults("after bullet pool incremental metrics")
 	await _flush_test_cleanup()
 
 	if _failures.is_empty():
@@ -91,6 +119,13 @@ func _assert_eq(actual, expected, message: String) -> void:
 		_passes += 1
 		return
 	_failures.append("%s | expected=%s actual=%s" % [message, str(expected), str(actual)])
+
+
+func _reset_and_assert_runtime_defaults(context: String) -> void:
+	GameConfig.reset_runtime_defaults()
+	_assert_eq(GameConfig.get_game_mode_name(), GameConfig.GAME_MODE_BASIC, "%s mode reset" % context)
+	_assert_eq(GameConfig.get_quality_name(), GameConfig.QUALITY_MEDIUM, "%s quality reset" % context)
+	_assert_eq(GameConfig.get_palette_name(), "经典", "%s palette reset" % context)
 
 func _test_save_game_codec_defaults() -> void:
 	GameConfig.set_game_mode_by_name(GameConfig.GAME_MODE_BASIC)
@@ -192,12 +227,43 @@ func _test_event_roulette_intervals_and_weights() -> void:
 	_cleanup_node(dummy_battlefield)
 	_cleanup_node(controller)
 
+
+func _test_event_label_format() -> void:
+	var controller: EventRouletteController = EventRouletteController.new()
+
+	controller.is_presenting_event = false
+	controller.last_event_faction = -1
+	controller.last_event_effect = ""
+	controller.next_event_time_left = 25.0
+	_assert_eq(controller._build_event_status_text(), "事件：待命｜下次事件 00:25", "event label idle format")
+
+	GameConfig.set_palette_by_name("薄荷")
+	controller.last_event_faction = GameConfig.Faction.BLUE
+	controller.last_event_effect = EventRouletteController.EFFECT_X2
+	controller.next_event_time_left = 20.0
+	_assert_eq(controller._build_event_status_text(), "事件：海方获得 x2｜下次事件 00:20", "event label resolved format")
+
+	controller.is_presenting_event = true
+	_assert_eq(controller._build_event_status_text(), "事件：转盘中｜下次事件 --:--", "event label presenting format")
+
+	_cleanup_node(controller)
+
 func _test_control_chamber_event_rules() -> void:
 	GameConfig.set_game_mode_by_name(GameConfig.GAME_MODE_BASIC)
 
 	var chamber: ControlChamber = ControlChamber.new()
+	var init_signal_state: Dictionary = {"count": 0}
+	chamber.ball_count_changed.connect(func(_faction_id: int, _count: int) -> void:
+		init_signal_state["count"] = int(init_signal_state.get("count", 0)) + 1
+	)
 	get_root().add_child(chamber)
 	await process_frame
+
+	_assert_eq(chamber.balls.size(), 1, "control chamber should create exactly one silent initial ball")
+	_assert_eq(int(init_signal_state.get("count", 0)), 0, "control chamber initial ready path should not emit ball_count_changed")
+
+	chamber.add_control_ball()
+	_assert_eq(int(init_signal_state.get("count", 0)), 1, "public add_control_ball should still emit ball_count_changed")
 
 	chamber.pending_count = 10
 	chamber.apply_pending_bonus(10)
@@ -305,6 +371,25 @@ func _test_turret_cancel_burst() -> void:
 	_assert_eq(turret.burst_total, 0, "cancel_burst should clear total shots")
 	_assert_true(not turret.burst_locked, "cancel_burst should unlock the turret")
 	_cleanup_node(turret)
+
+
+func _test_bullet_lifecycle() -> void:
+	var pool: BulletPool = BulletPool.new()
+	var fresh_bullet: Bullet = Bullet.new()
+	_assert_true(not fresh_bullet.is_active, "new bullet should start inactive")
+
+	var spawned: Bullet = pool.spawn_bullet(GameConfig.Faction.BLUE, Vector2(8.0, 12.0), Vector2.RIGHT, null, {})
+	_assert_true(spawned.is_active, "spawned bullet should be active")
+	_assert_eq(pool.active_bullets.size(), 1, "spawn should register active bullet")
+	_assert_eq(pool.inactive_bullets.size(), 0, "spawn should not increase inactive bullet list yet")
+
+	pool.recycle_bullet(spawned)
+	_assert_true(not spawned.is_active, "recycled bullet should become inactive")
+	_assert_eq(pool.active_bullets.size(), 0, "recycle should remove active bullet")
+	_assert_eq(pool.inactive_bullets.size(), 1, "recycle should return bullet to inactive pool")
+
+	_cleanup_node(fresh_bullet)
+	_cleanup_node(pool)
 
 func _test_bullet_restore_from_state() -> void:
 	var bullet: Bullet = Bullet.new()

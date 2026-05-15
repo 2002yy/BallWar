@@ -36,7 +36,7 @@ New focused test:
 - `scripts/tests/GameStateCoordinatorTestRunner.gd`
 
 Supporting docs:
-- `README_MAIN_GD_AUDIT.md`
+- `TECHNICAL_GUIDE.md`
 - `README_TEST_MATRIX.md`
 
 ## Main.gd Integration Pattern
