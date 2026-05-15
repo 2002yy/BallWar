@@ -8,9 +8,7 @@ const SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.save"
 const SAVE_SLOT_COUNT: int = 5
 const MENU_PREF_PATH: String = "user://menu_preferences.json"
 const GameRuntimeContextScript = preload("res://scripts/GameRuntimeContext.gd")
-const PlayerSettingsStore = preload("res://scripts/PlayerSettingsStore.gd")
 const StartMenuUi = preload("res://scripts/StartMenu.gd")
-const ResultPanelScene = preload("res://scenes/ui/ResultPanel.tscn")
 
 var runtime = GameRuntimeContextScript.new()
 var current_score_counts: Dictionary = {0: 0, 1: 0, 2: 0, 3: 0}
@@ -19,9 +17,6 @@ var is_mobile_layout: bool = false
 var menu_layer
 var game_layer
 var selected_grid_size: int = 40
-var result_panel
-var last_win_reason: String = ""
-var last_winner_id: int = -1
 var selected_palette_name: String = "默认随机"
 var selected_quality_name: String = GameConfig.QUALITY_MEDIUM
 var selected_game_mode_name: String = GameConfig.GAME_MODE_BASIC
@@ -76,13 +71,10 @@ func _sync_runtime_context(grid_size: int) -> void:
 		"save_slot": selected_save_slot,
 	})
 
-var player_settings: Dictionary = {}
-
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	randomize()
 	is_mobile_layout = _detect_mobile_layout()
-	player_settings = PlayerSettingsStore.load_settings()
 	_load_menu_preferences()
 	_create_background()
 	_create_start_menu()
@@ -148,50 +140,10 @@ func _toggle_settings_panel() -> void:
 			settings_panel.visible = false
 		return
 
-	if settings_panel.has_method("show_panel"):
-		settings_panel.show_panel()
-	elif settings_panel.has_method("show_content"):
+	if settings_panel.has_method("show_content"):
 		settings_panel.show_content(GameConfig.get_quality_name(), "手机横屏" if is_mobile_layout else "电脑")
 	else:
 		settings_panel.visible = true
-
-
-func _on_player_settings_changed(settings: Dictionary) -> void:
-	player_settings = settings.duplicate()
-	_apply_performance_setting()
-	_apply_event_log_setting()
-	_apply_low_effect_setting()
-
-
-func _apply_performance_setting() -> void:
-	var show_perf: bool = bool(player_settings.get("show_performance_info", OS.is_debug_build()))
-	RuntimeHudController.set_performance_visible(show_perf)
-	var perf_bg = _hud_ref("fps_bg")
-	var perf_label = _hud_ref("fps_label")
-	if perf_bg != null and is_instance_valid(perf_bg):
-		perf_bg.visible = show_perf
-	if perf_label != null and is_instance_valid(perf_label):
-		perf_label.visible = show_perf
-
-
-func _apply_event_log_setting() -> void:
-	var show_log: bool = bool(player_settings.get("show_event_log", true))
-	var event_log = _hud_ref("event_log_label")
-	if event_log != null and is_instance_valid(event_log):
-		event_log.visible = show_log
-	if runtime.event_controller != null and is_instance_valid(runtime.event_controller):
-		if runtime.event_controller.has_method("set_event_log_visible"):
-			runtime.event_controller.set_event_log_visible(show_log)
-	if show_log:
-		_refresh_event_log()
-
-
-func _apply_low_effect_setting() -> void:
-	var low_effect: bool = bool(player_settings.get("low_effect_mode", false))
-	GameConfig.set_low_effect_mode(low_effect)
-	if runtime.battlefield != null and is_instance_valid(runtime.battlefield):
-		if runtime.battlefield.has_method("apply_quality_style"):
-			runtime.battlefield.apply_quality_style()
 
 func _create_background() -> void:
 	var background = ColorRect.new()
@@ -271,8 +223,6 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	_create_ui()
 	_create_event_roulette_system()
 	_create_control_buttons()
-	if runtime.bullet_pool != null and is_instance_valid(runtime.bullet_pool) and runtime.bullet_pool.has_method("reset_stats"):
-		runtime.bullet_pool.reset_stats()
 	if not suppress_banner:
 		_show_center_banner("领土战争", "开战！", Color(1.0, 0.94, 0.48), true)
 
@@ -307,13 +257,6 @@ func _create_ui() -> void:
 		print("[GameHUD] Scene load failed, fallback to legacy GameHudView.gd")
 
 	runtime.set_hud_parts(hud_nodes)
-
-	var sp = hud_nodes.get("settings_panel")
-	if sp != null and is_instance_valid(sp) and sp.has_signal("settings_changed"):
-		if not sp.settings_changed.is_connected(_on_player_settings_changed):
-			sp.settings_changed.connect(_on_player_settings_changed)
-	_apply_event_log_setting()
-	_apply_performance_setting()
 	runtime.set_ui_runtime_parts({
 		"top_bar_segments": hud_nodes.get("top_bar_segments", {}),
 		"top_bar_labels": hud_nodes.get("top_bar_labels", {}),
@@ -420,113 +363,15 @@ func _check_winner() -> void:
 	if not result.ended:
 		return
 	if result.draw:
-		last_winner_id = -1
-		last_win_reason = "draw"
 		_finish_as_draw(result.sub_text)
 	else:
-		last_winner_id = int(result.winner)
-		last_win_reason = str(result.reason)
 		_finish_with_winner(result.winner, result.sub_text)
-
-	_show_match_result()
 
 func _finish_with_winner(faction_id: int, sub_text: String) -> void:
 	GameStateCoordinator.finish_with_winner(self, _hud_ref("winner_label"), faction_id, sub_text)
 
 func _finish_as_draw(sub_text: String) -> void:
 	GameStateCoordinator.finish_as_draw(self, _hud_ref("winner_label"), sub_text)
-
-
-func _show_match_result() -> void:
-	if result_panel == null or not is_instance_valid(result_panel):
-		_create_result_panel()
-	if result_panel == null or not is_instance_valid(result_panel):
-		return
-
-	var data: Dictionary = _build_match_result()
-	if last_winner_id >= 0:
-		data["winner_color"] = GameConfig.faction_color(last_winner_id).lightened(0.3)
-	else:
-		data["winner_color"] = Color(1.0, 1.0, 1.0)
-
-	result_panel.show_result(data)
-
-
-func _create_result_panel() -> void:
-	result_panel = ResultPanelScene.instantiate()
-	result_panel.name = "ResultPanel"
-	add_child(result_panel)
-	result_panel.replay_requested.connect(_on_result_replay_requested)
-	result_panel.return_menu_requested.connect(_on_result_return_menu_requested)
-
-
-func _on_result_replay_requested() -> void:
-	if result_panel != null and is_instance_valid(result_panel):
-		result_panel.hide()
-	is_game_over = false
-	_start_game(selected_grid_size, true, false)
-
-
-func _on_result_return_menu_requested() -> void:
-	if result_panel != null and is_instance_valid(result_panel):
-		result_panel.hide()
-	is_game_over = false
-	_cleanup_game_layer()
-	_create_start_menu()
-
-
-func _build_match_result() -> Dictionary:
-	var winner_name: String = "平局"
-	var reason_text: String = "达成胜利条件"
-
-	if last_winner_id >= 0:
-		winner_name = GameConfig.faction_name(last_winner_id)
-	match last_win_reason:
-		"elimination":
-			reason_text = "击败全部对手"
-		"occupation":
-			reason_text = "占领率达到 %d%%" % GameConfig.get_occupation_target_percent()
-		"timed":
-			reason_text = "限时结束，占领率最高"
-		"draw":
-			winner_name = "平局"
-			reason_text = "平局"
-
-	return {
-		"winner_name": winner_name,
-		"reason_text": reason_text,
-		"duration_seconds": game_elapsed_time,
-		"occupation_rates": _get_final_occupation_rates(),
-		"peak_active_bullets": _get_peak_active_bullets(),
-		"event_count": _get_event_count(),
-	}
-
-
-func _get_final_occupation_rates() -> Dictionary:
-	if runtime.battlefield == null or not is_instance_valid(runtime.battlefield):
-		return {}
-	var counts: Dictionary = runtime.battlefield.count_cells_by_team()
-	var total: int = 0
-	for v in counts.values():
-		total += int(v)
-	if total <= 0:
-		return {}
-	var rates: Dictionary = {}
-	for fid in counts.keys():
-		rates[fid] = float(counts[fid]) / float(total)
-	return rates
-
-
-func _get_peak_active_bullets() -> int:
-	if runtime.bullet_pool != null and is_instance_valid(runtime.bullet_pool) and runtime.bullet_pool.has_method("get_peak_active_count"):
-		return runtime.bullet_pool.get_peak_active_count()
-	return 0
-
-
-func _get_event_count() -> int:
-	if runtime.event_controller != null and is_instance_valid(runtime.event_controller) and runtime.event_controller.has_method("get_event_count"):
-		return runtime.event_controller.get_event_count()
-	return 0
 
 func _stop_all_actions_for_game_over() -> void:
 	GameStateCoordinator.stop_actions_for_game_over(
@@ -589,8 +434,6 @@ func _refresh_event_log() -> void:
 	if runtime.event_controller == null or not is_instance_valid(runtime.event_controller):
 		return
 	if not runtime.event_controller.has_method("get_event_log_text"):
-		return
-	if not runtime.event_controller.event_log_visible:
 		return
 	var log_text: String = runtime.event_controller.get_event_log_text(8)
 	if log_text.is_empty():

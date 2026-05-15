@@ -310,22 +310,14 @@ static func build_save_slot_summaries(save_slot_count: int, loader: Callable) ->
 				title = "存档损坏"
 				detail = str(clean.get("_invalid_reason", "结构不完整"))
 			else:
-				var finished: bool = bool(clean.get("match_finished", false))
-				if finished:
-					state = "finished"
-					var grid_size: int = LayoutProfiles.sanitize_grid_size(clean.get("grid_size", 40))
-					var mode_name: String = str(clean.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
-					title = "%s｜%d×%d｜已结束" % [mode_name, grid_size, grid_size]
-					detail = str(clean.get("winner_text", "对局已结束"))
-				else:
-					state = "valid"
-					var grid_size: int = LayoutProfiles.sanitize_grid_size(clean.get("grid_size", 40))
-					var mode_name: String = str(clean.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
-					var quality_name: String = str(clean.get("quality_name", GameConfig.QUALITY_MEDIUM))
-					var elapsed: float = maxf(0.0, float(clean.get("game_elapsed_time", 0.0)))
-					var ver_display: String = version if version != "" else "?"
-					title = "%s｜%d×%d｜%s" % [mode_name, grid_size, grid_size, quality_name]
-					detail = "进度 %s｜版本 %s" % [RuntimeHudController.format_time_text(elapsed), ver_display]
+				state = "valid"
+				var grid_size: int = LayoutProfiles.sanitize_grid_size(clean.get("grid_size", 40))
+				var mode_name: String = str(clean.get("game_mode_name", GameConfig.GAME_MODE_BASIC))
+				var quality_name: String = str(clean.get("quality_name", GameConfig.QUALITY_MEDIUM))
+				var elapsed: float = maxf(0.0, float(clean.get("game_elapsed_time", 0.0)))
+				var ver_display: String = version if version != "" else "?"
+				title = "%s｜%d×%d｜%s" % [mode_name, grid_size, grid_size, quality_name]
+				detail = "进度 %s｜版本 %s" % [RuntimeHudController.format_time_text(elapsed), ver_display]
 
 		result.append({
 			"slot": slot,

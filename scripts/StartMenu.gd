@@ -50,8 +50,6 @@ static func build_slot_label(slot: int, summary: Dictionary, selected_save_slot:
 		return "%s槽%d｜不兼容" % [marker, slot]
 	if state == "damaged":
 		return "%s槽%d｜损坏" % [marker, slot]
-	if state == "finished":
-		return "%s槽%d｜已结束" % [marker, slot]
 	var title_text: String = compact_slot_title(str(summary.get("title", "")))
 	if title_text == "":
 		return "%s槽%d｜空" % [marker, slot]

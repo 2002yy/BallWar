@@ -40,7 +40,6 @@ static var _game_mode_name: String = GAME_MODE_BASIC
 static var _timed_mode_minutes: int = DEFAULT_TIMED_MODE_MINUTES
 static var _quality_name: String = QUALITY_MEDIUM
 static var _palette_name: String = "经典"
-static var _low_effect_mode: bool = false
 static var _palette_colors: Array = [
 	Color(0.20, 0.49, 1.00),
 	Color(1.00, 0.30, 0.22),
@@ -371,12 +370,6 @@ static func reset_runtime_defaults() -> void:
 	_timed_mode_minutes = DEFAULT_TIMED_MODE_MINUTES
 	_quality_name = QUALITY_MEDIUM
 	set_palette_by_name("经典")
-
-static func is_low_effect_mode() -> bool:
-	return _low_effect_mode
-
-static func set_low_effect_mode(enabled: bool) -> void:
-	_low_effect_mode = enabled
 
 static func _normalize_palette_name(name: String) -> String:
 	match name:

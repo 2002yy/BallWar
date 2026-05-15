@@ -87,17 +87,8 @@ var is_presenting_event: bool = false
 var event_history: Array[Dictionary] = []
 var event_label_update_timer: float = 0.0
 var event_label_dirty: bool = true
-var event_log_visible: bool = true
-var event_count: int = 0
 
 var _pending_payload: Dictionary = {}
-
-
-func set_event_log_visible(value: bool) -> void:
-	event_log_visible = value
-
-func get_event_count() -> int:
-	return event_count
 
 func setup(new_main_ref, new_battlefield, new_chambers: Dictionary, new_turrets: Dictionary, new_event_label, new_view_ref) -> void:
 	main_ref = new_main_ref
@@ -123,7 +114,6 @@ func reset_for_new_game() -> void:
 	last_event_effect = ""
 	reroll_count = 0
 	is_presenting_event = false
-	event_count = 0
 	_pending_payload.clear()
 	event_history.clear()
 	event_history.append({
@@ -306,7 +296,6 @@ func _apply_positive_modifier(chamber, modifier: Dictionary) -> void:
 func _finish_event_round(payload: Dictionary) -> void:
 	is_presenting_event = false
 	_pending_payload.clear()
-	event_count += 1
 	var game_time: float = _elapsed_time()
 	var log_text: String = generate_log_text(payload, game_time)
 	event_history.append({
