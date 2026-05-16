@@ -153,13 +153,28 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
 
 			var queued_modifiers = fixed.get("queued_round_modifiers", [])
 			if queued_modifiers is Array:
-				fixed["queued_round_modifiers"] = queued_modifiers
+				var clean_modifiers: Array = []
+				for mod in queued_modifiers:
+					if mod is Dictionary:
+						var clean_mod: Dictionary = {}
+						for key in mod.keys():
+							clean_mod[str(key)] = mod.get(key, null)
+						clean_modifiers.append(clean_mod)
+				fixed["queued_round_modifiers"] = clean_modifiers
 			else:
 				fixed["queued_round_modifiers"] = []
-
 			var control_balls = fixed.get("control_balls", [])
 			if control_balls is Array:
-				fixed["control_balls"] = control_balls.slice(0, mini(control_balls.size(), MAX_RESTORE_CONTROL_BALLS))
+				var clean_balls: Array = []
+				for ball in control_balls:
+					if ball is Dictionary and ball.has("position") and ball.has("velocity"):
+						clean_balls.append({
+							"position": ball.get("position", []),
+							"velocity": ball.get("velocity", []),
+							"radius": maxf(0.0, float(ball.get("radius", 0.0))),
+							"stay_time": maxf(0.0, float(ball.get("stay_time", 0.0))),
+						})
+				fixed["control_balls"] = clean_balls.slice(0, mini(clean_balls.size(), MAX_RESTORE_CONTROL_BALLS))
 			else:
 				fixed["control_balls"] = []
 

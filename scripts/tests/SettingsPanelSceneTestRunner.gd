@@ -7,7 +7,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var t: TestAssert = TestAssert.new()
-	print("[SettingsPanelSceneTest] v2.0.8 — scene load verification")
+	print("[SettingsPanelSceneTest] v2.1.10 — scene load verification")
 
 	var scene_path: String = "res://scenes/ui/SettingsPanel.tscn"
 	var resource = load(scene_path)
@@ -18,7 +18,6 @@ func _run() -> void:
 
 	var instance = resource.instantiate()
 	t.that(instance != null, "instantiable")
-	t.that(instance is Panel, "root is Panel")
 	if instance == null:
 		quit(1)
 		return
@@ -26,13 +25,14 @@ func _run() -> void:
 	get_root().add_child(instance)
 	await process_frame
 
-	t.that(instance.has_node("ContentLabel"), "has ContentLabel")
-	t.that(instance.has_node("Bg"), "has Bg")
-	t.that(instance.has_method("show_content"), "has show_content method")
+	t.that(instance.has_node("PanelMargin/MainVBox/PerformanceCheck"), "has PerformanceCheck")
+	t.that(instance.has_node("PanelMargin/MainVBox/LowEffectCheck"), "has LowEffectCheck")
+	t.that(instance.has_node("PanelMargin/MainVBox/EventLogCheck"), "has EventLogCheck")
+	t.that(instance.has_method("show_panel"), "has show_panel method")
 	t.that(instance.has_method("hide_panel"), "has hide_panel method")
 
-	instance.show_content("中", "电脑")
-	t.that(instance.visible, "visible after show_content")
+	instance.show_panel()
+	t.that(instance.visible, "visible after show_panel")
 	instance.hide_panel()
 	t.that(not instance.visible, "hidden after hide_panel")
 

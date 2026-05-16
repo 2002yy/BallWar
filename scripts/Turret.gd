@@ -30,12 +30,14 @@ var burst_index: int = 0
 var burst_origin_angle: float = 0.0
 var burst_progress_emit_timer: float = 0.0
 var burst_last_reported_remaining: int = -1
+var _bullet_container_can_spawn: bool = false
 
 func setup(new_faction_id: int, new_position: Vector2, new_battlefield, new_bullet_container) -> void:
 	faction_id = new_faction_id
 	global_position = new_position
 	battlefield = new_battlefield
 	bullet_container = new_bullet_container
+	_bullet_container_can_spawn = bullet_container != null and bullet_container.has_method("spawn_bullet")
 	if battlefield != null:
 		max_health = GameConfig.get_turret_max_health(battlefield.grid_size)
 		health = max_health
@@ -253,7 +255,7 @@ func _spawn_bullet() -> void:
 	var muzzle_distance: float = GameConfig.TURRET_RADIUS + 17.0
 	var spawn_position: Vector2 = global_position + shot_direction * muzzle_distance
 
-	if bullet_container.has_method("spawn_bullet"):
+	if _bullet_container_can_spawn:
 		bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
 	else:
 		var bullet = Bullet.new()
@@ -268,6 +270,8 @@ func _current_burst_shot_angle() -> float:
 	return rotation
 
 func _current_total_queue() -> int:
+	if bullet_container != null and is_instance_valid(bullet_container) and bullet_container.has_method("get_tracked_queue_total"):
+		return bullet_container.get_tracked_queue_total()
 	var total: int = burst_remaining
 	for turret in all_turrets.values():
 		if turret == null or turret == self:

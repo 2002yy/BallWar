@@ -28,6 +28,14 @@ var last_visual_profile: Dictionary = {
 }
 
 const VISUAL_PRESSURE_UPDATE_INTERVAL: float = 0.35
+const PRIORITY: Dictionary = {
+	"none": 0,
+	"queue_high": 1,
+	"active_bullets_high": 2,
+	"trail_redraw_high": 3,
+	"trail_segments_high": 4,
+	"fps_low": 5,
+}
 
 func _process(delta: float) -> void:
 	visual_pressure_update_timer -= delta
@@ -99,12 +107,8 @@ func update_visual_pressure() -> void:
 func recycle_bullet(bullet) -> void:
 	if bullet == null:
 		return
-	var idx: int = active_bullets.find(bullet)
-	if idx >= 0:
-		active_bullets.remove_at(idx)
-		_unregister_active_bullet(bullet)
-	else:
-		_unregister_active_bullet(bullet)
+	active_bullets.erase(bullet)
+	_unregister_active_bullet(bullet)
 	if inactive_bullets.find(bullet) < 0:
 		inactive_bullets.append(bullet)
 	recycled_bullets_this_second += 1
@@ -364,15 +368,7 @@ func _finalize_spawned_bullet(bullet):
 func _prefer_reason(current_reason: String, candidate_reason: String, candidate_severity: int, new_severity: int) -> String:
 	if candidate_severity < new_severity and current_reason != "none":
 		return current_reason
-	var priority: Dictionary = {
-		"none": 0,
-		"queue_high": 1,
-		"active_bullets_high": 2,
-		"trail_redraw_high": 3,
-		"trail_segments_high": 4,
-		"fps_low": 5,
-	}
-	if candidate_severity > 0 and priority.get(candidate_reason, 0) >= int(priority.get(current_reason, 0)):
+	if candidate_severity > 0 and PRIORITY.get(candidate_reason, 0) >= int(PRIORITY.get(current_reason, 0)):
 		return candidate_reason
 	return current_reason
 

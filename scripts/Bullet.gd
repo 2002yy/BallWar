@@ -14,6 +14,7 @@ var trail_points = []
 var trail_max_points = 8
 var pool
 var trail_layer
+var _cached_map_size: float = 0.0
 var is_active: bool = false
 var simple_draw: bool = false
 var reduce_visual_effects: bool = false
@@ -32,6 +33,8 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
 	if direction.length() <= 0.001:
 		direction = Vector2.RIGHT
 	battlefield = new_battlefield
+	if battlefield != null:
+		_cached_map_size = float(battlefield.grid_size) * float(battlefield.cell_size)
 	target_turrets = new_target_turrets
 	speed = GameConfig.BULLET_SPEED
 	last_cell = Vector2i(-999, -999)
@@ -143,7 +146,9 @@ func _physics_process(delta: float) -> void:
 		_despawn()
 		return
 
-	var map_size = battlefield.grid_size * battlefield.cell_size
+	var map_size: float = _cached_map_size
+	if map_size <= 0.0 and battlefield != null:
+		map_size = float(battlefield.grid_size) * float(battlefield.cell_size)
 	var next_position = global_position + direction * speed * delta
 	var local_position = battlefield.to_local(next_position)
 	var bounced = false
@@ -279,7 +284,7 @@ func _update_visual_trace(delta: float) -> void:
 	_request_trail_redraw()
 
 func _try_hit_enemy_turret() -> bool:
-	for target_faction_id in target_turrets.keys():
+	for target_faction_id in target_turrets:
 		if target_faction_id == faction_id:
 			continue
 		var turret = target_turrets[target_faction_id]
