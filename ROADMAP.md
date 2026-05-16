@@ -70,7 +70,9 @@ This file is the single place for project direction and phase status.
 ### Chamber refactor phase 2 / 控制仓第二阶段拆分
 
 - 当前已完成状态外提
-- 下一步是继续拆出物理、几何、绘制和保存适配边界
+- 下一步优先完成 `ChamberBallPhysics.gd`
+- 配套补充 `ChamberBallPhysicsTestRunner.gd`
+- 后续再继续拆出几何、绘制和保存适配边界
 
 ### Public repo hygiene / 公开仓库整理
 
@@ -85,10 +87,11 @@ This file is the single place for project direction and phase status.
 ## 4. Next / 下一步
 
 1. 固化 Android APK 导出流程，并补一份更稳定的导出检查顺序。
-2. 继续拆分 `ControlChamber.gd`，优先物理与保存适配边界。
+2. 整理 Release 与 README 的版本对应关系。
 3. 归档一轮新的性能基线，覆盖常规模式与高压模式。
-4. 保持 `Main.gd` 作为顶层编排层，不把深层恢复写回逻辑重新塞回去。
-5. 继续整理公开仓库入口，让 README、CHANGELOG、Release 三者版本指向一致。
+4. 完成 `ControlChamber` 第二阶段拆分：`ChamberBallPhysics.gd`。
+5. 补充 `ChamberBallPhysicsTestRunner.gd`。
+6. 保持 `Main.gd` 作为顶层编排层，不把深层恢复写回逻辑重新塞回去。
 
 ## 5. Later / 中期候选
 
@@ -97,7 +100,7 @@ This file is the single place for project direction and phase status.
 - 更完整的结算统计
 - 音效系统
 - 移动端按钮布局
-- UI / 音效 / 素材统一美术方向
+- 美术资源替换与统一风格
 
 ## 6. Not Now / 暂不处理
 

@@ -318,7 +318,8 @@ textures/vram_compression/import_etc2_astc=true
 - 固化 Android APK 导出流程
 - 整理 Release 与 README 的版本对应关系
 - 补充性能基线记录
-- 继续拆分 `ControlChamber`
+- 完成 `ControlChamber` 第二阶段拆分：`ChamberBallPhysics.gd`
+- 补充 `ChamberBallPhysicsTestRunner.gd`
 - 保持 `Main.gd` 作为顶层编排层，而不是深层状态写回中心
 
 中期候选：
