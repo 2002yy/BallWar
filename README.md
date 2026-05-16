@@ -10,12 +10,15 @@ This repository preserves the reconstructed development history of the project, 
 
 ## 当前状态 / Current Status
 
-当前公开主线建议按 **`v2.1.9`** 理解：
+- Current line: `v2.1.x`
+- Latest documented milestone: `v2.1.9`
+- Last stable structural baseline: `v2.1.4`
 
-- 完整对局体验已形成稳定闭环
-- 设置系统、结算页、事件日志和统计链路已接线
-- `BattlefieldDecorLayer` 与 `ControlChamber` 正在继续去耦和收口
-- 主 README 负责“当前入口”，`README_v*.md` 保留为历史阶段记录
+这三个版本语义分别不同：
+
+- `v2.1.x` 表示当前公开主线仍在同一条迭代线上推进
+- `v2.1.9` 表示当前文档化最完整、最适合对外说明的最近节点
+- `v2.1.4` 表示恢复链路、职责边界和结构收口最明确的稳定结构基线
 
 当前阶段重点：
 
@@ -35,7 +38,7 @@ This repository preserves the reconstructed development history of the project, 
 - Android APK 导出流程固化
 - `ControlChamber` 后续拆分：物理、几何、绘制、保存适配
 - 性能基线归档，尤其是低端显卡和高压弹幕场景
-- 仓库入口文档与 Release 版本对应关系继续整理
+- 仓库入口文档、历史目录和 Release 版本对应关系继续整理
 
 ## 游戏核心玩法 / Gameplay
 
@@ -114,6 +117,8 @@ This repository preserves the reconstructed development history of the project, 
 ```text
 BallWar/
 ├─ assets/                     # 图片、UI、素材资源与授权记录
+├─ docs/
+│  └─ history/                # 历史阶段记录 README_v*.md
 ├─ scenes/                     # Godot 场景
 │  └─ ui/                      # StartMenu、HUD、Settings、ResultPanel 等
 ├─ screenshots/                # 仓库展示截图
@@ -136,7 +141,6 @@ BallWar/
 ├─ CHANGELOG.md                # 精简版本主线
 ├─ README.md                   # 项目入口
 ├─ README_TEST_MATRIX.md       # 测试矩阵
-├─ README_v*.md                # 历史阶段记录
 ├─ ROADMAP.md                  # 当前方向
 └─ TECHNICAL_GUIDE.md          # 技术与协作说明
 ```
@@ -161,7 +165,7 @@ BallWar/
 
 - 基础战场、炮台、控制仓规则逐步定型
 - 早期 UI、按钮和战场反馈持续打磨
-- 版本化 README 开始累积
+- 版本化阶段记录开始累积
 
 ### `v1.9.x`
 
@@ -207,7 +211,7 @@ DecorLayer 事件化、`ChamberState` 外提、开始菜单定型。
 - `ResultPanel` 提供胜利原因、时长、占领率和统计
 - `BulletPool` 与 `EventRouletteController` 增加对局统计
 
-更完整的阶段说明见 [CHANGELOG.md](CHANGELOG.md) 和对应的 `README_v*.md`。
+更完整的阶段说明见 [CHANGELOG.md](CHANGELOG.md) 和 [docs/history/README.md](docs/history/README.md)。
 
 ## 测试 / Testing
 
@@ -291,7 +295,7 @@ textures/vram_compression/import_etc2_astc=true
 | `README_TEST_MATRIX.md` | 测试矩阵与运行建议 |
 | `TECHNICAL_GUIDE.md` | 技术结构、编辑器协作边界、导出说明 |
 | `AI_HANDOFF_CURRENT.md` | AI / 协作交接摘要 |
-| `README_v*.md` | 历史阶段详细记录，不作为当前真相入口 |
+| `docs/history/` | 历史阶段详细记录，不作为当前真相入口 |
 
 ## 后续路线 / Roadmap
 

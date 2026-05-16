@@ -7,7 +7,9 @@ This file is the single place for project direction and phase status.
 
 ## 1. Current Line / 当前主线
 
-- Current stable line: `v2.1.9`
+- Current line: `v2.1.x`
+- Latest documented milestone: `v2.1.9`
+- Last stable structural baseline: `v2.1.4`
 - Current theme:
   - settings system + result panel + statistics
   - decor-layer event-driven cleanup
@@ -53,8 +55,8 @@ This file is the single place for project direction and phase status.
 ### Documentation cleanup / 文档收口
 
 - `README.md` 作为仓库入口
-- `CHANGELOG.md` 作为精简历史主线
-- `README_v*.md` 保留为历史阶段记录
+- `CHANGELOG.md` 作为精简版本脊柱
+- `docs/history/README_v*.md` 保留为历史阶段记录
 - `README_TEST_MATRIX.md` 作为测试矩阵
 - `TECHNICAL_GUIDE.md` 作为工程协作说明
 
@@ -73,7 +75,7 @@ This file is the single place for project direction and phase status.
 ### Public repo hygiene / 公开仓库整理
 
 - Release 与主 README 的版本叙事正在对齐
-- 目标是让仓库首页描述当前主线，而不是停留在旧稳定点
+- 根目录文档和历史阶段文档正在分层收敛
 
 ### Performance evidence capture / 性能证据归档
 
@@ -101,7 +103,7 @@ This file is the single place for project direction and phase status.
 
 - 在性能基线不稳定前继续扩大弹幕规模
 - 把 UI 重新塞回纯代码动态生成
-- 把 `README_v*.md` 当成当前真相入口
+- 把 `docs/history/README_v*.md` 当成当前真相入口
 - 在没有边界设计前大规模增加复杂特殊事件或特殊球
 
 ## 7. Canonical Doc Split / 文档分工
@@ -111,12 +113,12 @@ This file is the single place for project direction and phase status.
 - `ROADMAP.md`
   - 当前方向、已完成、下一步、暂缓项
 - `CHANGELOG.md`
-  - 精简版本主线
+  - 精简版本脊柱
 - `README_TEST_MATRIX.md`
   - 测试职责与运行建议
 - `TECHNICAL_GUIDE.md`
   - 工程边界、编辑器协作、导出与验证说明
 - `AI_HANDOFF_CURRENT.md`
   - 下一次 AI / Codex 接管卡片
-- `README_v*.md`
-  - 历史阶段详细记录
+- `docs/history/README.md`
+  - 历史阶段索引

@@ -1,17 +1,18 @@
 # Technical Guide / 技术指南
 
-Date / 日期: 2026-05-15  
+Date / 日期: 2026-05-16
 Role / 作用: live engineering guide / 当前工程协作与技术边界
 
 This file replaces scattered historical audit and handoff notes.  
-这份文件用于替代零散的历史审计稿、迁移稿和交接附页。  
+这份文档用于替代零散的历史审计、迁移说明和交接附页。
+
 Keep it current, short, and operational.  
 请把它维护成“当前有效”的短文档，而不是继续堆历史过程稿。
 
 ## 1. Canonical Docs / 主文档分工
 
 - `README.md`
-  - project overview, current status, and primary entry links
+  - project overview, current line, and entry links
 - `ROADMAP.md`
   - current progress, what is done, what is next, what is deferred
 - `README_TEST_MATRIX.md`
@@ -19,8 +20,10 @@ Keep it current, short, and operational.
 - `AI_HANDOFF_CURRENT.md`
   - fast session takeover card for the next AI / Codex run
 - `CHANGELOG.md`
-  - condensed history spine
-- `README_v*.md`
+  - condensed version spine
+- `docs/history/README.md`
+  - history index for stage documents
+- `docs/history/README_v*.md`
   - detailed historical stage notes, intentionally preserved
 - `assets/ASSET_SOURCES_AND_LICENSES.md`
   - asset provenance and redistribution notes
@@ -36,10 +39,12 @@ Keep it current, short, and operational.
   - `scenes/ui/GameHUD.tscn`
   - `scenes/ui/EventRouletteView.tscn`
   - `scenes/ui/SettingsPanel.tscn`
+  - `scenes/ui/ResultPanel.tscn`
   - `scenes/ui/PreviewScene.tscn`
 
 Use the editor for layout, fonts, spacing, colors, and scene wiring where a `.tscn` already exists.  
-凡是已经存在 `.tscn` 的可见 UI，优先在编辑器里改布局、字体、配色和节点连接。  
+凡是已经存在 `.tscn` 的可见 UI，优先在编辑器里改布局、字体、配色和节点连接。
+
 Do not recreate those surfaces in code unless there is a clear runtime-only reason.  
 除非有明确的运行时理由，否则不要把这些界面重新改回纯代码生成。
 
@@ -107,4 +112,5 @@ Before shipping or mirroring third-party material, check `assets/ASSET_SOURCES_A
 
 - if a doc is about the current truth, fold it into one of the live docs above
 - if a doc is only a temporary process log, do not let it become permanent root clutter
-- when a new version gets its own `README_v*.md`, keep the live docs aligned instead of copying status text into many places
+- detailed stage history belongs under `docs/history/`
+- when a new version gets its own stage note, keep the live docs aligned instead of copying status text into many places
