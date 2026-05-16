@@ -114,3 +114,11 @@ Before shipping or mirroring third-party material, check `assets/ASSET_SOURCES_A
 - if a doc is only a temporary process log, do not let it become permanent root clutter
 - detailed stage history belongs under `docs/history/`
 - when a new version gets its own stage note, keep the live docs aligned instead of copying status text into many places
+
+## 8. Android Export Boundary / Android 导出边界
+
+- public-facing export notes should stay summarized in `README.md`
+- operational export checklist and helper scripts can live in `README_ANDROID_EXPORT.md` and `tools/`
+- `project.godot` must keep:
+  - `[rendering]`
+  - `textures/vram_compression/import_etc2_astc=true`

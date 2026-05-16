@@ -266,22 +266,36 @@ DecorLayer 事件化、`ChamberState` 外提、开始菜单定型。
 
 Android 导出需要特别注意 Godot 项目设置中的 ETC2/ASTC 纹理压缩。
 
-`project.godot` 中需要存在：
+必须确保 `project.godot` 中存在：
 
 ```ini
 [rendering]
 textures/vram_compression/import_etc2_astc=true
 ```
 
+如果没有开启，Godot Android Export 面板会提示：
+
+```text
+目标平台需要 ETC2/ASTC 纹理压缩。
+请在项目设置中启用“导入 ETC2 ASTC”。
+```
+
 建议导出排错顺序：
 
 1. 先导出 Debug APK，不先处理 Release 签名
 2. preset 使用英文名，例如 `Android`
-3. 输出路径使用英文路径
+3. 输出路径使用英文路径，例如 `C:\Builds\BallWar_debug.apk`
 4. `package/signed=false`
 5. `script_export_mode=0`
 6. `gradle_build/use_gradle_build=false`
-7. 确认资源已重新导入后再导出
+7. 确认 `Import ETC2 ASTC` 已写入 `project.godot`
+8. 打开 Godot，等待资源重新导入后再导出
+
+仓库里还提供了补充检查脚本与说明：
+
+- [README_ANDROID_EXPORT.md](README_ANDROID_EXPORT.md)
+- `tools/check_android_export_config.ps1`
+- `tools/fix_android_export_config.ps1`
 
 更具体的工程协作边界见 [TECHNICAL_GUIDE.md](TECHNICAL_GUIDE.md)。
 
@@ -290,10 +304,10 @@ textures/vram_compression/import_etc2_astc=true
 | 文档 | 作用 |
 |---|---|
 | `README.md` | 项目入口，介绍玩法、当前状态、结构和版本脉络 |
-| `CHANGELOG.md` | 精简版本主线 |
+| `CHANGELOG.md` | 精简版本历史主线 / 版本脊柱 |
 | `ROADMAP.md` | 当前方向、已完成、下一步 |
-| `README_TEST_MATRIX.md` | 测试矩阵与运行建议 |
-| `TECHNICAL_GUIDE.md` | 技术结构、编辑器协作边界、导出说明 |
+| `README_TEST_MATRIX.md` | 测试矩阵和测试运行建议 |
+| `TECHNICAL_GUIDE.md` | 技术结构、开发边界、导出说明 |
 | `AI_HANDOFF_CURRENT.md` | AI / 协作交接摘要 |
 | `docs/history/` | 历史阶段详细记录，不作为当前真相入口 |
 
