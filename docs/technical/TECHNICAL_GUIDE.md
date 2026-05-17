@@ -12,11 +12,21 @@ Keep it current, short, and operational.
 ## 1. Canonical Docs / 主文档分工
 
 - `README.md`
-  - project overview, current line, and entry links / 项目概览、当前状态和入口链接
-- `ROADMAP.md`
+  - concise 9-section entry point, links to `docs/` / 精简 9 区块入口，链接到 `docs/`
+- `docs/ROADMAP.md`
   - current progress, what is done, what is next, what is deferred / 进度板、已完成、下一步、暂缓项
-- `docs/technical/README_TEST_MATRIX.md`
+- `docs/ARCHITECTURE.md`
+  - system layering, ownership rules, architecture guidelines / 系统分层、归属规则、架构原则
+- `docs/TESTING.md`
   - correctness baseline, performance probes, and when to run which tests / 正确性基线、性能探针、运行建议
+- `docs/SAVE_SYSTEM.md`
+  - save slots, backup recovery, version checks, input sanitization / 存档槽、备份恢复、版本校验、输入清洗
+- `docs/PERFORMANCE.md`
+  - performance probe overview and baseline summary / 性能探针概览与基线摘要
+- `docs/ANDROID_EXPORT.md`
+  - Android export troubleshooting checklist / Android 导出排错清单
+- `docs/RELEASE_PROCESS.md`
+  - packaging and release workflow / 打包与发布流程
 - `docs/technical/AI_HANDOFF_CURRENT.md`
   - fast session takeover card for the next AI / Codex run / 下一次 AI/Codex 接管卡
 - `CHANGELOG.md`

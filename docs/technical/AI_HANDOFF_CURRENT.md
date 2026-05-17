@@ -87,9 +87,9 @@ Performance probes are separate from correctness:
   - quick takeover card for the next AI / Codex session / 下一次 AI/Codex 快速接管卡
 - `README.md`
   - current project entrypoint / 项目入口
-- `ROADMAP.md`
+- `docs/ROADMAP.md`
   - main progress board and development direction / 进度板与开发方向
-- `docs/technical/README_TEST_MATRIX.md`
+- `docs/TESTING.md`
   - test ownership, baseline, and run guidance / 测试职责、基线和运行建议
 - `docs/technical/TECHNICAL_GUIDE.md`
   - current architecture, editor, validation, and repo-boundary rules / 架构、编辑器协作、验证规则

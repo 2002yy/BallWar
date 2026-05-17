@@ -17,8 +17,8 @@ This file answers:
 - 哪些属于 performance probe
 - 不同类型改动后应该跑哪些测试
 
-Development progress belongs in `ROADMAP.md`.  
-开发进度请看 `ROADMAP.md`。
+Development progress belongs in `docs/ROADMAP.md`.  
+开发进度请看 `docs/ROADMAP.md`。
 
 Session takeover belongs in `docs/technical/AI_HANDOFF_CURRENT.md`.  
 交接卡片请看 `docs/technical/AI_HANDOFF_CURRENT.md`。

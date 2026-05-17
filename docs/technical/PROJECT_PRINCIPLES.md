@@ -8,7 +8,6 @@
   - `ROADMAP.md`
   - `docs/technical/README_TEST_MATRIX.md`
   - `docs/technical/TECHNICAL_GUIDE.md`
-  - `docs/technical/AI_HANDOFF_CURRENT.md`
   - `CHANGELOG.md`
 - 临时过程稿不要长期堆在根目录
 - 历史阶段记录统一放在 `docs/history/README_v*.md`

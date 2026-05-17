@@ -8,11 +8,11 @@ This file is the single place for project direction and phase status.
 ## 1. Current Line / 当前主线
 
 - Current line: `v2.1.x`
-- Latest Stable release: `v2.1.11`
-- Previous stable milestone: `v2.1.10`
+- Latest Stable release: `v2.1.11.1`
+- Previous stable milestone: `v2.1.11`
 - Stable structural baseline: `v2.1.4`
 - Current theme:
-  - public repository hardening (complete)
+  - UI hotfix release (complete)
   - visual and audio polish (next)
   - mobile layout verification
   - performance baseline archiving
@@ -55,12 +55,11 @@ This file is the single place for project direction and phase status.
 
 ### Documentation cleanup / 文档收口
 
-- `README.md` 作为仓库入口
+- `README.md` 作为仓库入口（9 个精选区块，链接到 `docs/`）
 - `CHANGELOG.md` 作为精简版本脊柱
-- `docs/history/README_v*.md` 保留为历史阶段记录
-- `docs/technical/README_TEST_MATRIX.md` 作为测试矩阵
-- `docs/technical/TECHNICAL_GUIDE.md` 作为工程协作说明
-- `docs/design/` 和 `docs/performance/` 收纳设计、素材与性能附录
+- `docs/`: `ARCHITECTURE.md`, `TESTING.md`, `PERFORMANCE.md`, `SAVE_SYSTEM.md`, `ANDROID_EXPORT.md`, `RELEASE_PROCESS.md`, `ROADMAP.md`
+- `docs/history/` — 历史阶段记录
+- `docs/technical/`, `docs/design/`, `docs/performance/` — 工程、设计、性能附录
 
 ### Public repository hardening / 公开仓库收口
 
@@ -120,16 +119,24 @@ This file is the single place for project direction and phase status.
 ## 7. Canonical Doc Split / 文档分工
 
 - `README.md`
-  - 项目入口、当前状态、玩法和结构说明
-- `ROADMAP.md`
-  - 当前方向、已完成、下一步、暂缓项
+  - 项目入口，9 个区块链接到 `docs/`
 - `CHANGELOG.md`
   - 精简版本脊柱
-- `docs/technical/README_TEST_MATRIX.md`
-  - 测试职责与运行建议
-- `docs/technical/TECHNICAL_GUIDE.md`
-  - 工程边界、编辑器协作、导出与验证说明
-- `docs/technical/AI_HANDOFF_CURRENT.md`
-  - 下一次 AI / Codex 接管卡片
+- `docs/ARCHITECTURE.md`
+  - 系统分层、归属规则、架构原则
+- `docs/TESTING.md`
+  - 10 个测试 runner、分类说明、运行建议
+- `docs/PERFORMANCE.md`
+  - 性能探针概览与基线摘要
+- `docs/SAVE_SYSTEM.md`
+  - 存档槽、备份恢复、版本校验、输入清洗
+- `docs/ANDROID_EXPORT.md`
+  - Android 导出检查清单
+- `docs/RELEASE_PROCESS.md`
+  - 打包与发布流程
+- `docs/ROADMAP.md`
+  - 当前方向、已完成、下一步、暂缓项
 - `docs/history/README.md`
   - 历史阶段索引
+- `docs/technical/AI_HANDOFF_CURRENT.md`
+  - AI / Codex 接管卡片
