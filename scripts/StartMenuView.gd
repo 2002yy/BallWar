@@ -6,7 +6,7 @@ static func create(owner, view_size: Vector2, save_summaries: Array, current_lay
 	owner.selected_grid_size = LayoutProfiles.sanitize_grid_size(int(owner.selected_grid_size))
 
 	var menu_layout: Dictionary = current_layout.get("start_menu_layout", LayoutCoordinator.calculate_layout(40, view_size, false).get("start_menu_layout", {}))
-	var default_panel_size := Vector2(840.0, 650.0)
+	var default_panel_size := Vector2(840.0, 684.0)
 	var default_panel_pos := Vector2(
 		(view_size.x - default_panel_size.x) * 0.5,
 		(view_size.y - default_panel_size.y) * 0.5
@@ -117,6 +117,7 @@ static func create(owner, view_size: Vector2, save_summaries: Array, current_lay
 	mode_option.item_selected.connect(func(index: int) -> void:
 		owner.selected_game_mode_name = mode_option.get_item_text(index)
 		_update_fallback_mode_tip(mode_tip_label, owner)
+		mode_tip_label.text = StartMenu.build_mode_tip_text(owner.selected_game_mode_name, owner.selected_time_limit_minutes)
 		owner._save_menu_preferences()
 	)
 	config_row1.add_child(_make_option_row("游戏模式", mode_option))
@@ -143,6 +144,7 @@ static func create(owner, view_size: Vector2, save_summaries: Array, current_lay
 	time_spin.value_changed.connect(func(value: float) -> void:
 		owner.selected_time_limit_minutes = clampi(int(round(value)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)
 		_update_fallback_mode_tip(mode_tip_label, owner)
+		mode_tip_label.text = StartMenu.build_mode_tip_text(owner.selected_game_mode_name, owner.selected_time_limit_minutes)
 		owner._save_menu_preferences()
 	)
 	config_row1.add_child(_make_option_row("限时", time_spin))
@@ -166,7 +168,7 @@ static func create(owner, view_size: Vector2, save_summaries: Array, current_lay
 	config_row2.add_child(_make_option_row("配色方案", palette_option))
 
 	var start_button := Button.new()
-	start_button.text = "新局覆盖槽%d" % owner.selected_save_slot
+	start_button.text = StartMenu.build_start_button_label(owner.selected_save_slot, owner._has_save_file(owner.selected_save_slot))
 	start_button.custom_minimum_size = Vector2(140.0, 32.0)
 	start_button.add_theme_font_size_override("font_size", 15)
 	start_button.add_theme_color_override("font_color", Color.WHITE)
@@ -193,6 +195,7 @@ static func create(owner, view_size: Vector2, save_summaries: Array, current_lay
 	mode_tip_label.add_theme_font_size_override("font_size", 13)
 	mode_tip_label.add_theme_color_override("font_color", Color(0.82, 0.90, 1.0))
 	_update_fallback_mode_tip(mode_tip_label, owner)
+	mode_tip_label.text = StartMenu.build_mode_tip_text(owner.selected_game_mode_name, owner.selected_time_limit_minutes)
 	config_vbox.add_child(mode_tip_label)
 
 	var save_panel := Panel.new()
@@ -255,6 +258,7 @@ static func create(owner, view_size: Vector2, save_summaries: Array, current_lay
 	var menu_status_label := Label.new()
 	menu_status_label.text = "当前存档槽：%d" % owner.selected_save_slot
 	menu_status_label.custom_minimum_size = Vector2(0.0, 22.0)
+	menu_status_label.text = StartMenu.build_status_label(owner.selected_save_slot, owner._has_save_file(owner.selected_save_slot))
 	menu_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER as HorizontalAlignment
 	menu_status_label.add_theme_font_size_override("font_size", 15)
 	menu_status_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.44))

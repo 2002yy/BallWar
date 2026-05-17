@@ -4,6 +4,10 @@ class_name BulletTrailLayer
 var bullet_pool
 var redraw_timer: float = 0.0
 var force_redraw: bool = true
+var drawable_trail_bullets: Array = []
+var drawable_trail_indices: Dictionary = {}
+var dirty_trail_bullets: Array = []
+var dirty_trail_bullet_ids: Dictionary = {}
 var perf_elapsed: float = 0.0
 var redraw_calls_this_second: int = 0
 var redraw_calls_per_second: int = 0
@@ -15,7 +19,12 @@ const LOW_TRAIL_REDRAW_INTERVAL: float = 0.024
 
 func setup(new_bullet_pool) -> void:
 	bullet_pool = new_bullet_pool
+	drawable_trail_bullets.clear()
+	drawable_trail_indices.clear()
+	dirty_trail_bullets.clear()
+	dirty_trail_bullet_ids.clear()
 	force_redraw = true
+	_mark_all_active_bullets_dirty()
 	queue_redraw()
 
 func request_trail_redraw() -> void:
@@ -23,11 +32,22 @@ func request_trail_redraw() -> void:
 		return
 	force_redraw = true
 
+func mark_bullet_dirty(bullet) -> void:
+	if bullet == null or not is_instance_valid(bullet):
+		return
+	var bullet_id: int = bullet.get_instance_id()
+	if dirty_trail_bullet_ids.has(bullet_id):
+		return
+	dirty_trail_bullet_ids[bullet_id] = true
+	dirty_trail_bullets.append(bullet)
+	request_trail_redraw()
+
 func _process(delta: float) -> void:
 	if bullet_pool == null or not is_instance_valid(bullet_pool):
 		return
 
 	_update_pressure_cache()
+	_flush_dirty_trail_bullets()
 	redraw_timer -= delta
 	if force_redraw or redraw_timer <= 0.0:
 		redraw_timer = _current_redraw_interval()
@@ -57,6 +77,7 @@ func _draw() -> void:
 		return
 
 	_update_pressure_cache()
+	_flush_dirty_trail_bullets()
 	redraw_calls_this_second += 1
 	var severity: int = _get_pressure_severity()
 	if severity >= 3:
@@ -68,19 +89,13 @@ func _draw() -> void:
 		bullet_step = 2
 
 	var bullet_index: int = 0
-	for bullet in bullet_pool.active_bullets:
+	var stale_bullets: Array = []
+	for bullet in drawable_trail_bullets:
 		bullet_index += 1
-		if bullet == null or not is_instance_valid(bullet):
-			continue
-		if not bullet.is_active:
-			continue
-		if bullet.simple_draw or bullet.trail_max_points <= 0:
+		if not _should_draw_bullet_trail(bullet):
+			stale_bullets.append(bullet)
 			continue
 		if bullet_step > 1 and (bullet_index % bullet_step) != 0:
-			continue
-
-		var trail_count: int = bullet.trail_points.size()
-		if trail_count < 2:
 			continue
 
 		var base: Color = GameConfig.faction_color(bullet.faction_id)
@@ -90,6 +105,9 @@ func _draw() -> void:
 
 		var alpha_mul: float = 0.70 if bullet.reduce_visual_effects else 1.0
 		_draw_single_trail(bullet.trail_points, base, radius, alpha_mul, severity, bullet.reduce_visual_effects)
+	if not stale_bullets.is_empty():
+		for stale_bullet in stale_bullets:
+			_remove_drawable_trail_bullet(stale_bullet)
 
 func _draw_single_trail(points: Array, base: Color, radius: float, alpha_mul: float, severity: int, reduced: bool) -> void:
 	var trail_count: int = points.size()
@@ -137,6 +155,8 @@ func get_debug_metrics() -> Dictionary:
 		"trail_pressure_level": last_pressure_level,
 		"trail_budget_active": last_trail_budget,
 		"trail_degrade_reason": last_degrade_reason,
+		"drawable_trail_bullets": drawable_trail_bullets.size(),
+		"dirty_trail_bullets": dirty_trail_bullets.size(),
 	}
 
 func _update_pressure_cache() -> void:
@@ -161,3 +181,58 @@ func _get_pressure_severity() -> int:
 			return 1
 		_:
 			return 0
+
+func _mark_all_active_bullets_dirty() -> void:
+	if bullet_pool == null or not is_instance_valid(bullet_pool):
+		return
+	for bullet in bullet_pool.active_bullets:
+		mark_bullet_dirty(bullet)
+
+func _flush_dirty_trail_bullets() -> void:
+	if dirty_trail_bullets.is_empty():
+		return
+	for bullet in dirty_trail_bullets:
+		if _should_draw_bullet_trail(bullet):
+			_upsert_drawable_trail_bullet(bullet)
+		else:
+			_remove_drawable_trail_bullet(bullet)
+	dirty_trail_bullets.clear()
+	dirty_trail_bullet_ids.clear()
+
+func _should_draw_bullet_trail(bullet) -> bool:
+	if bullet == null or not is_instance_valid(bullet):
+		return false
+	if not bullet.is_active:
+		return false
+	if bullet.simple_draw or bullet.trail_max_points <= 0:
+		return false
+	return bullet.trail_points.size() >= 2
+
+func _upsert_drawable_trail_bullet(bullet) -> void:
+	var bullet_id: int = bullet.get_instance_id()
+	if drawable_trail_indices.has(bullet_id):
+		var idx: int = int(drawable_trail_indices[bullet_id])
+		if idx >= 0 and idx < drawable_trail_bullets.size():
+			drawable_trail_bullets[idx] = bullet
+			return
+	drawable_trail_indices[bullet_id] = drawable_trail_bullets.size()
+	drawable_trail_bullets.append(bullet)
+
+func _remove_drawable_trail_bullet(bullet) -> void:
+	if bullet == null or not is_instance_valid(bullet):
+		return
+	var bullet_id: int = bullet.get_instance_id()
+	if not drawable_trail_indices.has(bullet_id):
+		return
+	var idx: int = int(drawable_trail_indices[bullet_id])
+	var last_idx: int = drawable_trail_bullets.size() - 1
+	if idx < 0 or idx > last_idx:
+		drawable_trail_indices.erase(bullet_id)
+		return
+	if idx != last_idx:
+		var last_bullet = drawable_trail_bullets[last_idx]
+		drawable_trail_bullets[idx] = last_bullet
+		if last_bullet != null and is_instance_valid(last_bullet):
+			drawable_trail_indices[last_bullet.get_instance_id()] = idx
+	drawable_trail_bullets.pop_back()
+	drawable_trail_indices.erase(bullet_id)

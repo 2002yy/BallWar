@@ -3,6 +3,8 @@ class_name EventRouletteController
 
 signal event_round_started(payload)
 signal event_round_finished(payload)
+signal banner_requested(title_text, sub_text, accent, auto_hide)
+signal chamber_ui_refresh_requested(faction_id)
 
 const EFFECT_REROLL: String = "reroll"
 const EFFECT_BONUS_10: String = "bonus_10"
@@ -50,7 +52,7 @@ static func mode_description(mode_name: String) -> String:
 
 static func generate_log_text(payload: Dictionary, game_time_seconds: float) -> String:
 	var total_seconds: int = int(maxf(0.0, game_time_seconds))
-	var minutes: int = total_seconds / 60
+	var minutes: int = int(total_seconds / 60.0)
 	var seconds: int = total_seconds % 60
 	var time_prefix: String = "%02d:%02d" % [minutes, seconds]
 	var result_text: String = str(payload.get("result_text", ""))
@@ -267,16 +269,15 @@ func _apply_resolved_event(payload: Dictionary) -> void:
 	last_event_faction = faction_id
 	last_event_effect = final_effect
 
-	if main_ref != null:
-		var banner_title: String = "控制仓短路" if final_effect == EFFECT_JAM else "事件转盘"
-		main_ref._show_center_banner(
-			banner_title,
-			_result_display_text(faction_id, final_effect),
-			GameConfig.faction_color(faction_id).lightened(0.28),
-			true
-		)
-		for candidate_id in chambers.keys():
-			main_ref._refresh_add_ball_button(int(candidate_id))
+	var banner_title: String = "控制仓短路" if final_effect == EFFECT_JAM else "事件转盘"
+	banner_requested.emit(
+		banner_title,
+		_result_display_text(faction_id, final_effect),
+		GameConfig.faction_color(faction_id).lightened(0.28),
+		true
+	)
+	for candidate_id in chambers.keys():
+		chamber_ui_refresh_requested.emit(int(candidate_id))
 
 func _apply_positive_modifier(chamber, modifier: Dictionary) -> void:
 	if chamber == null:

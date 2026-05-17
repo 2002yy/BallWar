@@ -1,5 +1,10 @@
-﻿extends Node2D
+extends Node2D
 class_name ControlChamber
+
+const ChamberBallPhysicsScript = preload("res://scripts/ChamberBallPhysics.gd")
+const ChamberDrawModelScript = preload("res://scripts/ChamberDrawModel.gd")
+const ChamberRendererScript = preload("res://scripts/ChamberRenderer.gd")
+const ChamberSaveAdapterScript = preload("res://scripts/ChamberSaveAdapter.gd")
 
 signal release_requested(faction_id, bullet_count, chamber)
 signal ball_count_changed(faction_id, count)
@@ -170,7 +175,7 @@ func add_control_ball() -> bool:
 func _add_initial_control_ball_silent() -> void:
 	_add_control_ball_internal(false)
 
-func _add_control_ball_internal(emit_signal: bool) -> bool:
+func _add_control_ball_internal(should_emit_ball_count_signal: bool) -> bool:
 	if is_damaged or is_locked:
 		return false
 	if balls.size() >= GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER:
@@ -181,7 +186,7 @@ func _add_control_ball_internal(emit_signal: bool) -> bool:
 	add_child(ball)
 	balls.append(ball)
 	_relaunch_control_ball(ball)
-	if emit_signal:
+	if should_emit_ball_count_signal:
 		ball_count_changed.emit(faction_id, balls.size())
 		_update_label()
 	return true
@@ -247,6 +252,9 @@ func queue_next_round_modifier(modifier: Dictionary) -> void:
 
 func get_queued_round_modifiers() -> Array:
 	return chamber_state.queued_round_modifiers.duplicate(true)
+
+func collect_state() -> Dictionary:
+	return ChamberSaveAdapterScript.collect_state(self)
 
 func set_queued_round_modifiers(modifiers: Array) -> void:
 	chamber_state.queued_round_modifiers.clear()
@@ -342,18 +350,6 @@ func _effective_peg_radius(peg: Vector2) -> float:
 		return peg_radius * 0.50
 	return peg_radius
 
-func _clamp_ball_to_walls(ball) -> void:
-	if ball.position.x < ball.radius:
-		ball.position.x = ball.radius
-		ball.velocity.x = abs(ball.velocity.x) * 0.92
-	elif ball.position.x > chamber_size.x - ball.radius:
-		ball.position.x = chamber_size.x - ball.radius
-		ball.velocity.x = -abs(ball.velocity.x) * 0.92
-
-	if ball.position.y < ball.radius:
-		ball.position.y = ball.radius
-		ball.velocity.y = abs(ball.velocity.y) * 0.90
-
 func _reset_stuck_state(ball) -> void:
 	if ball == null:
 		return
@@ -381,72 +377,6 @@ func _reset_ball_stay_time(ball) -> void:
 		return
 	ball_stay_times[ball.get_instance_id()] = 0.0
 
-func _update_stuck_state(ball, delta: float) -> void:
-	if ball == null:
-		return
-
-	var id: int = ball.get_instance_id()
-	if not stuck_states.has(id):
-		_reset_stuck_state(ball)
-		return
-
-	var state: Dictionary = stuck_states[id]
-	var last_pos: Vector2 = state.get("pos", ball.position)
-	var last_y: float = float(state.get("y", ball.position.y))
-	var stuck_time: float = float(state.get("time", 0.0))
-	var moved: float = ball.position.distance_to(last_pos)
-	var y_progress: float = ball.position.y - last_y
-	var near_wall: bool = ball.position.x <= ball.radius + WALL_STUCK_MARGIN or ball.position.x >= chamber_size.x - ball.radius - WALL_STUCK_MARGIN
-
-	var low_speed_stuck: bool = moved < STUCK_MOVE_EPS and ball.velocity.length() < STUCK_SPEED_EPS
-	var wall_jitter_stuck: bool = near_wall and y_progress < WALL_STUCK_Y_EPS and ball.velocity.y < STUCK_SPEED_EPS * 1.8
-
-	if low_speed_stuck or wall_jitter_stuck:
-		stuck_time += delta
-	else:
-		stuck_time = 0.0
-		last_pos = ball.position
-		last_y = ball.position.y
-
-	if stuck_time >= STUCK_TIME_LIMIT:
-		ball.position.x = clampf(ball.position.x + randf_range(-7.0, 7.0), ball.radius, chamber_size.x - ball.radius)
-		ball.velocity = Vector2(randf_range(-105.0, 105.0), randf_range(-80.0, -18.0))
-		stuck_time = 0.0
-		last_pos = ball.position
-		last_y = ball.position.y
-
-	state["pos"] = last_pos
-	state["y"] = last_y
-	state["time"] = stuck_time
-	stuck_states[id] = state
-
-func _handle_gate_divider_collision(ball, x2_width: float) -> void:
-	var half_width: float = GATE_DIVIDER_WIDTH * 0.5
-	var top_y: float = chamber_size.y - gate_height - GATE_DIVIDER_RISE
-	var bottom_y: float = chamber_size.y
-
-	if ball.position.y + ball.radius < top_y or ball.position.y - ball.radius > bottom_y:
-		return
-
-	if absf(ball.position.x - x2_width) <= ball.radius + half_width:
-		if ball.position.x < x2_width:
-			ball.position.x = x2_width - half_width - ball.radius
-			ball.velocity.x = -abs(ball.velocity.x) * 0.82 - 20.0
-		else:
-			ball.position.x = x2_width + half_width + ball.radius
-			ball.velocity.x = abs(ball.velocity.x) * 0.82 + 20.0
-		ball.velocity.y *= 0.94
-
-func _update_ball_stay_time(ball, delta: float) -> void:
-	if ball == null:
-		return
-	var id: int = ball.get_instance_id()
-	var stay_time: float = float(ball_stay_times.get(id, 0.0)) + delta
-	if stay_time >= CONTROL_BALL_MAX_STAY_TIME:
-		_relaunch_control_ball(ball)
-		return
-	ball_stay_times[id] = stay_time
-
 func _clear_control_balls() -> void:
 	for ball in balls:
 		if ball != null and is_instance_valid(ball):
@@ -461,53 +391,54 @@ func restore_from_state(state: Dictionary) -> void:
 	is_damaged = false
 	damage_anim_t = 0.0
 
+	var restored_state: Dictionary = ChamberSaveAdapterScript.restore_state(state, {
+		"chamber_size": chamber_size,
+		"default_ball_radius": CONTROL_BALL_RADIUS,
+		"max_restore_control_balls": MAX_RESTORE_CONTROL_BALLS,
+		"max_control_balls": GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER,
+		"max_pending_count": GameConfig.get_max_pending_count(),
+	})
+
 	chamber_state.reset(1)
-	chamber_state.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
-	chamber_state.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
-	chamber_state.jammed_time_left = maxf(0.0, float(state.get("chamber_jammed_time_left", 0.0)))
+	chamber_state.pending_count = int(restored_state.get("chamber_pending_count", 1))
+	chamber_state.locked_remaining = int(restored_state.get("chamber_locked_remaining", 0))
+	chamber_state.jammed_time_left = float(restored_state.get("chamber_jammed_time_left", 0.0))
 	chamber_state.queued_round_modifiers.clear()
-	for modifier in state.get("queued_round_modifiers", []):
+	for modifier in restored_state.get("queued_round_modifiers", []):
 		if modifier is Dictionary:
 			chamber_state.queued_round_modifiers.append((modifier as Dictionary).duplicate(true))
 
-	if bool(state.get("chamber_is_damaged", false)):
+	if bool(restored_state.get("chamber_is_damaged", false)):
 		set_damaged()
 		return
 
 	_sync_shadow_fields()
 
-	var saved_balls = state.get("control_balls", [])
+	var saved_balls = restored_state.get("control_balls", [])
 	if saved_balls is Array and saved_balls.size() > 0:
-		var restore_ball_count: int = mini(saved_balls.size(), MAX_RESTORE_CONTROL_BALLS)
-		for i in range(restore_ball_count):
+		for i in range(saved_balls.size()):
 			var ball_state = saved_balls[i]
 			if not (ball_state is Dictionary):
 				continue
 			var ball = ControlBall.new()
-			ball.radius = clampf(float(ball_state.get("radius", CONTROL_BALL_RADIUS)), 3.0, 12.0)
-			var pos: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("position", [chamber_size.x * 0.5, 18.0]), Vector2(chamber_size.x * 0.5, 18.0))
-			pos.x = clampf(pos.x, ball.radius, chamber_size.x - ball.radius)
-			pos.y = clampf(pos.y, ball.radius, chamber_size.y - ball.radius)
-			var vel: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("velocity", [0, 0]), Vector2.ZERO)
-			vel = vel.limit_length(520.0)
+			ball.radius = float(ball_state.get("radius", CONTROL_BALL_RADIUS))
+			var pos: Vector2 = ball_state.get("position", Vector2(chamber_size.x * 0.5, 18.0))
+			var vel: Vector2 = ball_state.get("velocity", Vector2.ZERO)
 			ball.setup(faction_id, pos, vel)
 			add_child(ball)
 			balls.append(ball)
 			_reset_stuck_state(ball)
 			set_ball_stay_time(ball, float(ball_state.get("stay_time", 0.0)))
 	else:
-		var ball_count: int = clampi(int(state.get("chamber_ball_count", 0)), 0, GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER)
+		var ball_count: int = int(restored_state.get("chamber_ball_count", 0))
 		for i in range(ball_count):
 			add_control_ball()
 
-	chamber_state.pending_count = clampi(int(state.get("chamber_pending_count", 1)), 1, GameConfig.get_max_pending_count())
-	chamber_state.locked_remaining = clampi(int(state.get("chamber_locked_remaining", 0)), 0, GameConfig.get_max_pending_count())
-
-	var release_index: int = int(state.get("chamber_release_ball_index", -1))
+	var release_index: int = int(restored_state.get("chamber_release_ball_index", -1))
 	if release_index >= 0 and release_index < balls.size():
 		release_ball = balls[release_index]
 
-	chamber_state.is_locked = bool(state.get("chamber_is_locked", false))
+	chamber_state.is_locked = bool(restored_state.get("chamber_is_locked", false))
 	_sync_shadow_fields()
 	ball_count_changed.emit(faction_id, balls.size())
 	_update_label()
@@ -518,46 +449,54 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var x2_width: float = _current_x2_width()
+	var physics_input: Dictionary = {
+		"gravity": gravity,
+		"pegs": pegs,
+		"peg_collision_radii": peg_collision_radii,
+		"chamber_size": chamber_size,
+		"gate_x": x2_width,
+		"gate_divider_width": GATE_DIVIDER_WIDTH,
+		"gate_height": gate_height,
+		"gate_divider_rise": GATE_DIVIDER_RISE,
+		"jammed": jammed_time_left > 0.0,
+		"stuck_move_eps": STUCK_MOVE_EPS,
+		"stuck_speed_eps": STUCK_SPEED_EPS,
+		"stuck_time_limit": STUCK_TIME_LIMIT,
+		"wall_stuck_margin": WALL_STUCK_MARGIN,
+		"wall_stuck_y_eps": WALL_STUCK_Y_EPS,
+		"control_ball_max_stay_time": CONTROL_BALL_MAX_STAY_TIME,
+	}
 
 	for ball in balls:
 		if ball == null:
 			continue
+		var ball_id: int = ball.get_instance_id()
+		var step_result: Dictionary = ChamberBallPhysicsScript.step_ball(
+			ball,
+			delta,
+			physics_input,
+			stuck_states.get(ball_id, {}),
+			float(ball_stay_times.get(ball_id, 0.0))
+		)
+		var ball_state_update: Dictionary = step_result.get("ball_state_update", {})
+		ball.position = ball_state_update.get("position", ball.position)
+		ball.velocity = ball_state_update.get("velocity", ball.velocity)
+		stuck_states[ball_id] = ball_state_update.get("stuck_state", stuck_states.get(ball_id, {}))
+		ball_stay_times[ball_id] = float(ball_state_update.get("stay_time", ball_stay_times.get(ball_id, 0.0)))
 
-		ball.velocity.y += gravity * delta
-		ball.position += ball.velocity * delta
+		if bool(step_result.get("relaunch_request", false)):
+			_relaunch_control_ball(ball)
+			continue
 
-		_clamp_ball_to_walls(ball)
-
-		for peg_index in range(pegs.size()):
-			var peg: Vector2 = pegs[peg_index]
-			var peg_collision_radius: float = float(peg_collision_radii[peg_index]) if peg_index < peg_collision_radii.size() else _effective_peg_radius(peg)
-			var min_dist: float = peg_collision_radius + ball.radius
-			if absf(ball.position.x - peg.x) >= min_dist or absf(ball.position.y - peg.y) >= min_dist:
-				continue
-			var offset: Vector2 = ball.position - peg
-			var dist_sq: float = offset.length_squared()
-			var min_dist_sq: float = min_dist * min_dist
-			if dist_sq > 0.0001 and dist_sq < min_dist_sq:
-				var dist: float = sqrt(dist_sq)
-				var normal: Vector2 = offset / dist
-				ball.position = peg + normal * min_dist
-				ball.velocity = ball.velocity.bounce(normal) * 0.86
-				ball.velocity += Vector2(randf_range(-22.0, 22.0), randf_range(-10.0, 10.0))
-
-		_clamp_ball_to_walls(ball)
-		_handle_gate_divider_collision(ball, x2_width)
-		_clamp_ball_to_walls(ball)
-		_update_stuck_state(ball, delta)
-		_update_ball_stay_time(ball, delta)
-
-		if ball.position.y >= chamber_size.y - ball.radius:
-			if jammed_time_left > 0.0:
-				_on_jammed_floor(ball)
-			elif ball.position.x < x2_width:
+		var gate_result: String = str(step_result.get("gate_result", ChamberBallPhysicsScript.GATE_RESULT_NONE))
+		match gate_result:
+			ChamberBallPhysicsScript.GATE_RESULT_LEFT:
 				_on_left_gate(ball)
-			else:
+			ChamberBallPhysicsScript.GATE_RESULT_RIGHT:
 				_on_right_gate(ball)
 				break
+			_:
+				pass
 
 func _on_left_gate(ball) -> void:
 	pending_count = clampi(pending_count * GameConfig.get_gate_multiplier(), 1, GameConfig.get_max_pending_count())
@@ -574,11 +513,6 @@ func _on_right_gate(ball) -> void:
 	_update_label()
 	_force_visual_redraw()
 	release_requested.emit(faction_id, pending_count, self)
-
-func _on_jammed_floor(ball) -> void:
-	ball.position.y = chamber_size.y - ball.radius - 2.0
-	ball.velocity.y = -abs(ball.velocity.y) * 0.78 - 36.0
-	ball.velocity.x += randf_range(-36.0, 36.0)
 
 func start_locked(count: int) -> void:
 	locked_remaining = maxi(0, count)
@@ -638,20 +572,20 @@ func _update_label() -> void:
 
 	if is_damaged:
 		count_label.text = "X"
-		ball_label.text = "系统离线"
+		ball_label.text = "\u4ed3\u5ba4\u635f\u574f"
 		return
 
 	if jammed_time_left > 0.0:
 		count_label.text = str(pending_count)
-		ball_label.text = "短路 %ds" % ceili(jammed_time_left)
+		ball_label.text = "\u5361\u963b %ds" % ceili(jammed_time_left)
 		return
 
 	if is_locked:
 		count_label.text = str(locked_remaining)
-		ball_label.text = "能量输出"
+		ball_label.text = "\u9501\u5b9a\u4e2d"
 	else:
 		count_label.text = str(pending_count)
-		ball_label.text = "待命 · %d球" % balls.size()
+		ball_label.text = "\u5f85\u547d \u00b7 %d\u7403" % balls.size()
 
 func set_game_elapsed_time(value: float) -> void:
 	game_elapsed_time = maxf(0.0, value)
@@ -671,170 +605,25 @@ func _current_x2_width() -> float:
 	var x2_ratio: float = 1.0 - release_ratio
 	return chamber_size.x * x2_ratio
 
-func _left_gate_text() -> String:
-	if jammed_time_left > 0.0:
-		return "短路"
-	if is_damaged:
-		return "X"
-	return "x3" if GameConfig.get_gate_multiplier() == 3 else "x2"
-
-func _right_gate_text() -> String:
-	if jammed_time_left > 0.0:
-		return "短路"
-	if is_damaged:
-		return "X"
-	return "发射"
+func _build_draw_snapshot() -> Dictionary:
+	return ChamberDrawModelScript.build_snapshot({
+		"faction_color": GameConfig.faction_color(faction_id),
+		"chamber_size": chamber_size,
+		"gate_height": gate_height,
+		"peg_radius": peg_radius,
+		"pegs": pegs,
+		"is_damaged": is_damaged,
+		"is_locked": is_locked,
+		"jammed_time_left": jammed_time_left,
+		"status_anim_t": status_anim_t,
+		"game_elapsed_time": game_elapsed_time,
+		"gate_multiplier": GameConfig.get_gate_multiplier(),
+		"scale_x": scale.x,
+		"gate_ramp_seconds": GATE_RAMP_SECONDS,
+		"gate_start_release_ratio": GATE_START_RELEASE_RATIO,
+		"gate_end_release_ratio": GATE_END_RELEASE_RATIO,
+		"gate_min_ratio": GATE_MIN_RATIO,
+	})
 
 func _draw() -> void:
-	var faction_color: Color = GameConfig.faction_color(faction_id)
-	var shell_color: Color = Color(0.11, 0.13, 0.17, 0.98)
-	var border_color: Color = faction_color.lightened(0.12)
-	var inner_color: Color = Color(0.17, 0.19, 0.24, 0.98)
-	var top_h: float = 30.0
-	var blink: float = 0.5 + 0.5 * sin(status_anim_t * 6.0)
-
-	if is_damaged:
-		shell_color = Color(0.14, 0.11, 0.11, 1.0)
-		border_color = Color(0.86, 0.18, 0.18)
-		inner_color = Color(0.10, 0.08, 0.08, 1.0)
-	elif jammed_time_left > 0.0:
-		shell_color = Color(0.15, 0.11, 0.10, 1.0)
-		border_color = Color(1.0, 0.46, 0.16)
-		inner_color = Color(0.12, 0.09, 0.09, 1.0)
-
-	var outer_rect: Rect2 = Rect2(Vector2.ZERO, chamber_size)
-	var shell_rect: Rect2 = Rect2(Vector2(5.0, 5.0), chamber_size - Vector2(10.0, 10.0))
-	var title_rect: Rect2 = Rect2(Vector2(10.0, 10.0), Vector2(chamber_size.x - 20.0, 22.0))
-	var inner_rect: Rect2 = Rect2(Vector2(10.0, top_h + 6.0), Vector2(chamber_size.x - 20.0, chamber_size.y - top_h - gate_height - 18.0))
-
-	draw_rect(outer_rect, Color(0.0, 0.0, 0.0, 0.22), true)
-	draw_rect(outer_rect, shell_color, true)
-	draw_rect(shell_rect, Color(0.04, 0.05, 0.07, 0.98), true)
-	draw_rect(title_rect, Color(border_color.r, border_color.g, border_color.b, 0.14), true)
-	draw_rect(inner_rect, inner_color, true)
-	draw_rect(outer_rect, border_color, false, 3.0)
-	draw_rect(Rect2(Vector2(4.0, 4.0), chamber_size - Vector2(8.0, 8.0)), Color(border_color.r, border_color.g, border_color.b, 0.16), false, 1.5)
-
-	for rivet in [Vector2(11, 11), Vector2(chamber_size.x - 11, 11), Vector2(11, chamber_size.y - 11), Vector2(chamber_size.x - 11, chamber_size.y - 11)]:
-		draw_circle(rivet, 3.0, Color(0.22, 0.24, 0.28))
-		draw_circle(rivet + Vector2(-0.8, -0.8), 1.0, Color(1.0, 1.0, 1.0, 0.18))
-
-	var light_a: Color = Color(0.18, 0.22, 0.26)
-	var light_b: Color = Color(0.18, 0.22, 0.26)
-	if is_damaged:
-		light_a = Color(1.0, 0.14, 0.14, 0.55 + 0.35 * blink)
-		light_b = Color(0.20, 0.07, 0.07)
-	elif jammed_time_left > 0.0:
-		light_a = Color(1.0, 0.42, 0.18, 0.58 + 0.26 * blink)
-		light_b = Color(1.0, 0.78, 0.18, 0.48 + 0.22 * blink)
-	elif is_locked:
-		light_a = Color(1.0, 0.82, 0.20, 0.55 + 0.35 * blink)
-		light_b = Color(1.0, 0.58, 0.14, 0.48 + 0.28 * blink)
-	else:
-		light_a = Color(faction_color.r, faction_color.g, faction_color.b, 0.56 + 0.20 * blink)
-		light_b = Color(0.26, 1.0, 0.74, 0.28 + 0.12 * blink)
-
-	for idx in range(2):
-		var pos_x: float = chamber_size.x - 28.0 + float(idx) * 10.0
-		var c: Color = light_a if idx == 0 else light_b
-		draw_circle(Vector2(pos_x, 21.0), 4.2, Color(c.r, c.g, c.b, 0.18))
-		draw_circle(Vector2(pos_x, 21.0), 2.8, c)
-
-	if not is_damaged:
-		for i in range(5):
-			var y: float = inner_rect.position.y + 14.0 + float(i) * 18.0
-			draw_line(Vector2(inner_rect.position.x + 5.0, y), Vector2(inner_rect.end.x - 5.0, y), Color(1.0, 1.0, 1.0, 0.025), 1.0)
-
-	for peg in pegs:
-		var pcolor: Color = Color(0.40, 0.42, 0.48)
-		if is_damaged:
-			pcolor = Color(0.18, 0.11, 0.11)
-		var glow: Color = Color(border_color.r, border_color.g, border_color.b, 0.12 + blink * 0.05)
-		if is_damaged:
-			glow = Color(1.0, 0.18, 0.18, 0.12 + blink * 0.08)
-		draw_circle(peg, peg_radius + 3.0, glow)
-		draw_circle(peg, peg_radius, pcolor)
-		draw_circle(peg + Vector2(-1.0, -1.0), peg_radius * 0.42, Color(1.0, 1.0, 1.0, 0.56))
-
-	var x2_width: float = _current_x2_width()
-	var gate_frame: Rect2 = Rect2(Vector2(8.0, chamber_size.y - gate_height - 8.0), Vector2(chamber_size.x - 16.0, gate_height + 4.0))
-	draw_rect(gate_frame, Color(0.08, 0.09, 0.11, 0.98), true)
-	draw_rect(gate_frame, Color(0.0, 0.0, 0.0, 0.76), false, 2.0)
-
-	var left_rect: Rect2 = Rect2(Vector2(10.0, chamber_size.y - gate_height - 6.0), Vector2(maxf(0.0, x2_width - 12.0), gate_height - 4.0))
-	var right_rect: Rect2 = Rect2(Vector2(x2_width + 2.0, chamber_size.y - gate_height - 6.0), Vector2(maxf(0.0, chamber_size.x - x2_width - 12.0), gate_height - 4.0))
-	var left_color: Color = Color(0.74, 0.92, 0.22)
-	var right_color: Color = Color(1.0, 0.64, 0.16)
-
-	if jammed_time_left > 0.0:
-		left_color = Color(0.42, 0.42, 0.42)
-		right_color = Color(0.42, 0.42, 0.42)
-	elif is_locked:
-		left_color = Color(0.42, 0.42, 0.42)
-		right_color = Color(0.84, 0.54, 0.14, 0.70 + blink * 0.18)
-	elif is_damaged:
-		left_color = Color(0.32, 0.18, 0.18)
-		right_color = Color(0.32, 0.18, 0.18)
-
-	draw_rect(left_rect, left_color, true)
-	draw_rect(right_rect, right_color, true)
-	draw_rect(Rect2(left_rect.position, Vector2(left_rect.size.x, maxf(4.0, left_rect.size.y * 0.38))), Color(1.0, 1.0, 1.0, 0.12), true)
-	draw_rect(Rect2(right_rect.position, Vector2(right_rect.size.x, maxf(4.0, right_rect.size.y * 0.38))), Color(1.0, 1.0, 1.0, 0.12), true)
-	draw_rect(left_rect, Color(0.0, 0.0, 0.0, 0.55), false, 1.2)
-	draw_rect(right_rect, Color(0.0, 0.0, 0.0, 0.55), false, 1.2)
-
-	var gate_font = ThemeDB.fallback_font
-	var gate_font_size: int = maxi(16, int(round(17.0 / maxf(0.5, scale.x))))
-	if left_rect.size.x > 18.0:
-		var left_baseline: float = round(left_rect.position.y + left_rect.size.y * 0.68)
-		draw_string_outline(
-			gate_font,
-			Vector2(round(left_rect.position.x), left_baseline),
-			_left_gate_text(),
-			HORIZONTAL_ALIGNMENT_CENTER,
-			round(left_rect.size.x),
-			gate_font_size,
-			2,
-			Color(0.0, 0.0, 0.0, 0.9)
-		)
-		draw_string(
-			gate_font,
-			Vector2(round(left_rect.position.x), left_baseline),
-			_left_gate_text(),
-			HORIZONTAL_ALIGNMENT_CENTER,
-			round(left_rect.size.x),
-			gate_font_size,
-			Color(0.06, 0.08, 0.10, 0.95)
-		)
-	if right_rect.size.x > 18.0:
-		var right_baseline: float = round(right_rect.position.y + right_rect.size.y * 0.68)
-		draw_string_outline(
-			gate_font,
-			Vector2(round(right_rect.position.x), right_baseline),
-			_right_gate_text(),
-			HORIZONTAL_ALIGNMENT_CENTER,
-			round(right_rect.size.x),
-			gate_font_size,
-			2,
-			Color(0.0, 0.0, 0.0, 0.9)
-		)
-		draw_string(
-			gate_font,
-			Vector2(round(right_rect.position.x), right_baseline),
-			_right_gate_text(),
-			HORIZONTAL_ALIGNMENT_CENTER,
-			round(right_rect.size.x),
-			gate_font_size,
-			Color(0.06, 0.08, 0.10, 0.95)
-		)
-
-	if jammed_time_left > 0.0:
-		for i in range(8):
-			var start_x: float = 12.0 + float(i) * 18.0
-			draw_line(
-				Vector2(start_x, chamber_size.y - gate_height - 10.0),
-				Vector2(start_x + 18.0, chamber_size.y - 8.0),
-				Color(1.0, 0.42, 0.16, 0.28),
-				2.0
-			)
-
+	ChamberRendererScript.draw(self, _build_draw_snapshot())

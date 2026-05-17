@@ -258,15 +258,16 @@ static func _calculate_roulette(grid_size: int, viewport_size: Vector2, is_mobil
 	return Rect2(Vector2((viewport_size.x - stage_size.x) * 0.5, stage_y), stage_size)
 
 static func _calculate_start_menu_layout(viewport_size: Vector2, is_mobile: bool) -> Dictionary:
-	var root_panel_size: Vector2 = Vector2(792.0, 640.0) if is_mobile else Vector2(840.0, 650.0)
+	var root_panel_size: Vector2 = Vector2(792.0, 660.0) if is_mobile else Vector2(840.0, 684.0)
 	root_panel_size.x = minf(root_panel_size.x, viewport_size.x - 48.0)
 	root_panel_size.y = minf(root_panel_size.y, viewport_size.y - 36.0)
+	var vertical_offset: float = 6.0 if is_mobile else 8.0
 	var root_panel_pos := Vector2(
 		(viewport_size.x - root_panel_size.x) * 0.5,
-		(viewport_size.y - root_panel_size.y) * 0.5
+		clampf((viewport_size.y - root_panel_size.y) * 0.5 + vertical_offset, 12.0, viewport_size.y - root_panel_size.y - 12.0)
 	)
-	var preview_size := Vector2(root_panel_size.x - 36.0, 160.0 if is_mobile else 170.0)
-	var preview_center := Vector2(preview_size.x * 0.5, 74.0 if is_mobile else 78.0)
+	var preview_size := Vector2(root_panel_size.x - 36.0, 192.0 if is_mobile else 224.0)
+	var preview_center := Vector2(preview_size.x * 0.5, 90.0 if is_mobile else 102.0)
 
 	var config_panel_rect := Rect2(Vector2(48.0, 364.0 if not is_mobile else 358.0), Vector2(root_panel_size.x - 96.0, 126.0))
 	var save_panel_rect := Rect2(Vector2(48.0, 494.0 if not is_mobile else 488.0), Vector2(root_panel_size.x - 96.0, 136.0))
@@ -289,7 +290,7 @@ static func _calculate_start_menu_layout(viewport_size: Vector2, is_mobile: bool
 		"title_rect": Rect2(Vector2(150.0, 16.0), Vector2(root_panel_size.x - 300.0, 56.0)),
 		"subtitle_rect": Rect2(Vector2(180.0, 72.0), Vector2(root_panel_size.x - 360.0, 24.0)),
 		"mobile_hint_rect": Rect2(Vector2(180.0, 98.0), Vector2(root_panel_size.x - 360.0, 23.0)),
-		"preview_position": Vector2(root_panel_size.x * 0.5, 236.0 if not is_mobile else 228.0),
+		"preview_position": Vector2(root_panel_size.x * 0.5, 250.0 if not is_mobile else 240.0),
 		"preview_size": preview_size,
 		"preview_center": preview_center,
 		"preview_scale": Vector2(0.40, 0.40) if not is_mobile else Vector2(0.36, 0.36),

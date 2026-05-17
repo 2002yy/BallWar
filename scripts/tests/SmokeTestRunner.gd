@@ -1,5 +1,9 @@
 extends SceneTree
 
+const ChamberBallPhysicsScript = preload("res://scripts/ChamberBallPhysics.gd")
+const ChamberDrawModelScript = preload("res://scripts/ChamberDrawModel.gd")
+const ChamberSaveAdapterScript = preload("res://scripts/ChamberSaveAdapter.gd")
+
 var _failures: Array[String] = []
 var _passes: int = 0
 
@@ -52,6 +56,22 @@ func _run() -> void:
 	await _test_control_chamber_event_rules()
 	_reset_and_assert_runtime_defaults("after control chamber event rules")
 
+	_reset_and_assert_runtime_defaults("before event roulette signals")
+	await _test_event_roulette_signal_bridge()
+	_reset_and_assert_runtime_defaults("after event roulette signals")
+
+	_reset_and_assert_runtime_defaults("before chamber ball physics helper")
+	_test_chamber_ball_physics_helper()
+	_reset_and_assert_runtime_defaults("after chamber ball physics helper")
+
+	_reset_and_assert_runtime_defaults("before chamber draw model")
+	_test_chamber_draw_model()
+	_reset_and_assert_runtime_defaults("after chamber draw model")
+
+	_reset_and_assert_runtime_defaults("before chamber save adapter")
+	await _test_chamber_save_adapter()
+	_reset_and_assert_runtime_defaults("after chamber save adapter")
+
 	_reset_and_assert_runtime_defaults("before restore_from_state interfaces")
 	await _test_restore_from_state_interfaces()
 	_reset_and_assert_runtime_defaults("after restore_from_state interfaces")
@@ -71,6 +91,18 @@ func _run() -> void:
 	_reset_and_assert_runtime_defaults("before bullet pool incremental metrics")
 	_test_bullet_pool_incremental_metrics()
 	_reset_and_assert_runtime_defaults("after bullet pool incremental metrics")
+
+	_reset_and_assert_runtime_defaults("before bullet pool active ordering")
+	_test_bullet_pool_active_ordering()
+	_reset_and_assert_runtime_defaults("after bullet pool active ordering")
+
+	_reset_and_assert_runtime_defaults("before bullet trail dirty cache")
+	_test_bullet_trail_dirty_cache()
+	_reset_and_assert_runtime_defaults("after bullet trail dirty cache")
+
+	_reset_and_assert_runtime_defaults("before player settings bool sanitization")
+	_test_player_settings_bool_sanitization()
+	_reset_and_assert_runtime_defaults("after player settings bool sanitization")
 	await _flush_test_cleanup()
 
 	if _failures.is_empty():
@@ -304,6 +336,255 @@ func _test_control_chamber_event_rules() -> void:
 	_cleanup_node(dummy_turret)
 	await _flush_test_cleanup()
 
+func _test_event_roulette_signal_bridge() -> void:
+	var controller: EventRouletteController = EventRouletteController.new()
+	var chamber: ControlChamber = ControlChamber.new()
+	var banner_state: Dictionary = {"count": 0}
+	var refresh_state: Dictionary = {"count": 0, "last_faction_id": -1}
+	get_root().add_child(chamber)
+	await process_frame
+
+	controller.banner_requested.connect(func(title_text: String, sub_text: String, accent: Color, auto_hide: bool) -> void:
+		banner_state["count"] = int(banner_state.get("count", 0)) + 1
+		banner_state["title_text"] = title_text
+		banner_state["sub_text"] = sub_text
+		banner_state["accent"] = accent
+		banner_state["auto_hide"] = auto_hide
+	)
+	controller.chamber_ui_refresh_requested.connect(func(faction_id: int) -> void:
+		refresh_state["count"] = int(refresh_state.get("count", 0)) + 1
+		refresh_state["last_faction_id"] = faction_id
+	)
+	controller.chambers = {GameConfig.Faction.BLUE: chamber}
+	controller.main_ref = Node.new()
+
+	controller._apply_resolved_event({
+		"faction_id": GameConfig.Faction.BLUE,
+		"final_effect": EventRouletteController.EFFECT_BONUS_10,
+	})
+
+	_assert_eq(chamber.pending_count, 11, "event roulette should still apply event effects through chamber state")
+	_assert_eq(int(banner_state.get("count", 0)), 1, "event roulette should request one banner via signal")
+	_assert_true(banner_state.get("accent", null) is Color, "event roulette banner signal should carry a color payload")
+	_assert_true(bool(banner_state.get("auto_hide", false)), "event roulette banner signal should preserve auto-hide flag")
+	_assert_eq(int(refresh_state.get("count", 0)), 1, "event roulette should request chamber ui refresh via signal")
+	_assert_eq(int(refresh_state.get("last_faction_id", -1)), GameConfig.Faction.BLUE, "event roulette refresh signal should target the affected chamber id")
+
+	_cleanup_node(chamber)
+	_cleanup_node(controller.main_ref)
+	_cleanup_node(controller)
+	await _flush_test_cleanup()
+
+func _test_chamber_ball_physics_helper() -> void:
+	var chamber_size: Vector2 = Vector2(120.0, 286.0)
+	var ball: ControlBall = ControlBall.new()
+	ball.radius = ControlChamber.CONTROL_BALL_RADIUS
+	ball.position = Vector2(24.0, chamber_size.y - ball.radius + 0.5)
+	ball.velocity = Vector2.ZERO
+
+	var left_gate_result: Dictionary = ChamberBallPhysicsScript.step_ball(
+		ball,
+		0.016,
+		{
+			"gravity": 420.0,
+			"pegs": [],
+			"peg_collision_radii": [],
+			"chamber_size": chamber_size,
+			"gate_x": chamber_size.x * 0.5,
+			"gate_divider_width": ControlChamber.GATE_DIVIDER_WIDTH,
+			"gate_height": ControlChamber.GATE_HEIGHT,
+			"gate_divider_rise": ControlChamber.GATE_DIVIDER_RISE,
+			"jammed": false,
+			"stuck_move_eps": ControlChamber.STUCK_MOVE_EPS,
+			"stuck_speed_eps": ControlChamber.STUCK_SPEED_EPS,
+			"stuck_time_limit": ControlChamber.STUCK_TIME_LIMIT,
+			"wall_stuck_margin": ControlChamber.WALL_STUCK_MARGIN,
+			"wall_stuck_y_eps": ControlChamber.WALL_STUCK_Y_EPS,
+			"control_ball_max_stay_time": ControlChamber.CONTROL_BALL_MAX_STAY_TIME,
+		},
+		{},
+		0.0
+	)
+	_assert_eq(str(left_gate_result.get("gate_result", "")), ChamberBallPhysicsScript.GATE_RESULT_LEFT, "chamber physics helper should detect left gate landing")
+
+	ball.position = Vector2(96.0, chamber_size.y - ball.radius + 0.5)
+	var right_gate_result: Dictionary = ChamberBallPhysicsScript.step_ball(
+		ball,
+		0.016,
+		{
+			"gravity": 420.0,
+			"pegs": [],
+			"peg_collision_radii": [],
+			"chamber_size": chamber_size,
+			"gate_x": chamber_size.x * 0.5,
+			"gate_divider_width": ControlChamber.GATE_DIVIDER_WIDTH,
+			"gate_height": ControlChamber.GATE_HEIGHT,
+			"gate_divider_rise": ControlChamber.GATE_DIVIDER_RISE,
+			"jammed": false,
+			"stuck_move_eps": ControlChamber.STUCK_MOVE_EPS,
+			"stuck_speed_eps": ControlChamber.STUCK_SPEED_EPS,
+			"stuck_time_limit": ControlChamber.STUCK_TIME_LIMIT,
+			"wall_stuck_margin": ControlChamber.WALL_STUCK_MARGIN,
+			"wall_stuck_y_eps": ControlChamber.WALL_STUCK_Y_EPS,
+			"control_ball_max_stay_time": ControlChamber.CONTROL_BALL_MAX_STAY_TIME,
+		},
+		{},
+		0.0
+	)
+	_assert_eq(str(right_gate_result.get("gate_result", "")), ChamberBallPhysicsScript.GATE_RESULT_RIGHT, "chamber physics helper should detect right gate landing")
+
+	var relaunch_result: Dictionary = ChamberBallPhysicsScript.step_ball(
+		ball,
+		0.016,
+		{
+			"gravity": 420.0,
+			"pegs": [],
+			"peg_collision_radii": [],
+			"chamber_size": chamber_size,
+			"gate_x": chamber_size.x * 0.5,
+			"gate_divider_width": ControlChamber.GATE_DIVIDER_WIDTH,
+			"gate_height": ControlChamber.GATE_HEIGHT,
+			"gate_divider_rise": ControlChamber.GATE_DIVIDER_RISE,
+			"jammed": false,
+			"stuck_move_eps": ControlChamber.STUCK_MOVE_EPS,
+			"stuck_speed_eps": ControlChamber.STUCK_SPEED_EPS,
+			"stuck_time_limit": ControlChamber.STUCK_TIME_LIMIT,
+			"wall_stuck_margin": ControlChamber.WALL_STUCK_MARGIN,
+			"wall_stuck_y_eps": ControlChamber.WALL_STUCK_Y_EPS,
+			"control_ball_max_stay_time": ControlChamber.CONTROL_BALL_MAX_STAY_TIME,
+		},
+		{},
+		ControlChamber.CONTROL_BALL_MAX_STAY_TIME
+	)
+	_assert_true(bool(relaunch_result.get("relaunch_request", false)), "chamber physics helper should request relaunch after max stay time")
+
+	_cleanup_node(ball)
+
+func _test_chamber_draw_model() -> void:
+	var chamber_size: Vector2 = Vector2(120.0, 286.0)
+	var neutral_snapshot: Dictionary = ChamberDrawModelScript.build_snapshot({
+		"faction_color": GameConfig.faction_color(GameConfig.Faction.BLUE),
+		"chamber_size": chamber_size,
+		"gate_height": ControlChamber.GATE_HEIGHT,
+		"peg_radius": ControlChamber.PEG_RADIUS,
+		"pegs": [],
+		"is_damaged": false,
+		"is_locked": false,
+		"jammed_time_left": 0.0,
+		"status_anim_t": 1.0,
+		"game_elapsed_time": ControlChamber.GATE_RAMP_SECONDS,
+		"gate_multiplier": 3,
+		"scale_x": 1.0,
+		"gate_ramp_seconds": ControlChamber.GATE_RAMP_SECONDS,
+		"gate_start_release_ratio": ControlChamber.GATE_START_RELEASE_RATIO,
+		"gate_end_release_ratio": ControlChamber.GATE_END_RELEASE_RATIO,
+		"gate_min_ratio": ControlChamber.GATE_MIN_RATIO,
+	})
+	_assert_eq(str(neutral_snapshot.get("left_gate_text", "")), "x3", "chamber draw model should expose x3 label when multiplier is 3")
+	_assert_eq(str(neutral_snapshot.get("right_gate_text", "")), "发射", "chamber draw model should expose launch label when healthy")
+	_assert_eq(snappedf(float(neutral_snapshot.get("x2_width", 0.0)), 0.01), 84.0, "chamber draw model should widen x2 gate as the match progresses")
+
+	var jammed_snapshot: Dictionary = ChamberDrawModelScript.build_snapshot({
+		"faction_color": GameConfig.faction_color(GameConfig.Faction.RED),
+		"chamber_size": chamber_size,
+		"gate_height": ControlChamber.GATE_HEIGHT,
+		"peg_radius": ControlChamber.PEG_RADIUS,
+		"pegs": [],
+		"is_damaged": false,
+		"is_locked": false,
+		"jammed_time_left": 3.0,
+		"status_anim_t": 1.0,
+		"game_elapsed_time": 0.0,
+		"gate_multiplier": 2,
+		"scale_x": 1.0,
+		"gate_ramp_seconds": ControlChamber.GATE_RAMP_SECONDS,
+		"gate_start_release_ratio": ControlChamber.GATE_START_RELEASE_RATIO,
+		"gate_end_release_ratio": ControlChamber.GATE_END_RELEASE_RATIO,
+		"gate_min_ratio": ControlChamber.GATE_MIN_RATIO,
+	})
+	_assert_true(bool(jammed_snapshot.get("jammed", false)), "chamber draw model should mark jammed snapshots")
+	_assert_eq(str(jammed_snapshot.get("left_gate_text", "")), "短路", "chamber draw model should expose jammed left label")
+	_assert_eq(snappedf(float(jammed_snapshot.get("x2_width", 0.0)), 0.01), 60.0, "jammed chamber should collapse to equal-width gates")
+
+	var damaged_snapshot: Dictionary = ChamberDrawModelScript.build_snapshot({
+		"faction_color": GameConfig.faction_color(GameConfig.Faction.GREEN),
+		"chamber_size": chamber_size,
+		"gate_height": ControlChamber.GATE_HEIGHT,
+		"peg_radius": ControlChamber.PEG_RADIUS,
+		"pegs": [],
+		"is_damaged": true,
+		"is_locked": false,
+		"jammed_time_left": 0.0,
+		"status_anim_t": 1.0,
+		"game_elapsed_time": 0.0,
+		"gate_multiplier": 2,
+		"scale_x": 1.0,
+		"gate_ramp_seconds": ControlChamber.GATE_RAMP_SECONDS,
+		"gate_start_release_ratio": ControlChamber.GATE_START_RELEASE_RATIO,
+		"gate_end_release_ratio": ControlChamber.GATE_END_RELEASE_RATIO,
+		"gate_min_ratio": ControlChamber.GATE_MIN_RATIO,
+	})
+	_assert_eq(str(damaged_snapshot.get("left_gate_text", "")), "X", "chamber draw model should expose damage label on the left gate")
+	_assert_eq(str(damaged_snapshot.get("right_gate_text", "")), "X", "chamber draw model should expose damage label on the right gate")
+
+func _test_chamber_save_adapter() -> void:
+	var chamber: ControlChamber = ControlChamber.new()
+	chamber.setup(GameConfig.Faction.GREEN, Vector2(48.0, 64.0))
+	get_root().add_child(chamber)
+	await process_frame
+
+	chamber.pending_count = 9
+	chamber.locked_remaining = 4
+	chamber.is_locked = true
+	chamber.set_jammed_time_left(2.25)
+	chamber.set_queued_round_modifiers([{"type": "bonus_10", "amount": 10}])
+	chamber.release_ball = chamber.balls[0]
+
+	var collected: Dictionary = chamber.collect_state()
+	_assert_eq(int(collected.get("chamber_pending_count", 0)), 9, "chamber save adapter should collect pending count")
+	_assert_eq(int(collected.get("chamber_locked_remaining", 0)), 4, "chamber save adapter should collect locked remaining")
+	_assert_true(bool(collected.get("chamber_is_locked", false)), "chamber save adapter should collect lock flag")
+	_assert_eq(int(collected.get("chamber_release_ball_index", -1)), 0, "chamber save adapter should collect release ball index")
+	_assert_eq(collected.get("queued_round_modifiers", []).size(), 1, "chamber save adapter should collect queued modifiers")
+	_assert_eq(collected.get("control_balls", []).size(), 1, "chamber save adapter should collect control ball states")
+
+	var restored: Dictionary = ChamberSaveAdapterScript.restore_state({
+		"chamber_pending_count": 7,
+		"chamber_locked_remaining": 3,
+		"chamber_is_locked": true,
+		"chamber_is_damaged": false,
+		"chamber_ball_count": 99,
+		"chamber_release_ball_index": 8,
+		"chamber_jammed_time_left": 1.5,
+		"queued_round_modifiers": [{"type": "x2", "multiplier": 2}, "bad"],
+		"control_balls": [
+			{
+				"radius": 99.0,
+				"position": [-20.0, 999.0],
+				"velocity": [9999.0, 9999.0],
+				"stay_time": 999.0,
+			}
+		]
+	}, {
+		"chamber_size": chamber.chamber_size,
+		"default_ball_radius": ControlChamber.CONTROL_BALL_RADIUS,
+		"max_restore_control_balls": ControlChamber.MAX_RESTORE_CONTROL_BALLS,
+		"max_control_balls": GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER,
+		"max_pending_count": GameConfig.get_max_pending_count(),
+	})
+	_assert_eq(restored.get("queued_round_modifiers", []).size(), 1, "chamber save adapter should drop invalid queued modifiers")
+	_assert_eq(restored.get("control_balls", []).size(), 1, "chamber save adapter should keep sanitized control balls")
+	_assert_eq(int(restored.get("chamber_release_ball_index", -2)), -1, "chamber save adapter should clear invalid release index")
+	var restored_ball: Dictionary = restored.get("control_balls", [])[0]
+	_assert_eq(snappedf(float(restored_ball.get("radius", 0.0)), 0.01), 12.0, "chamber save adapter should clamp restored radius")
+	_assert_eq(snappedf((restored_ball.get("position", Vector2.ZERO) as Vector2).x, 0.01), 12.0, "chamber save adapter should clamp restored ball x")
+	_assert_eq(snappedf((restored_ball.get("position", Vector2.ZERO) as Vector2).y, 0.01), chamber.chamber_size.y - 12.0, "chamber save adapter should clamp restored ball y")
+	_assert_eq(snappedf(float(restored_ball.get("stay_time", 0.0)), 0.01), ControlChamber.CONTROL_BALL_MAX_STAY_TIME, "chamber save adapter should clamp restored stay time")
+	_assert_true((restored_ball.get("velocity", Vector2.ZERO) as Vector2).length() <= 520.01, "chamber save adapter should clamp restored velocity")
+
+	_cleanup_node(chamber)
+	await _flush_test_cleanup()
+
 func _test_restore_from_state_interfaces() -> void:
 	var chamber: ControlChamber = ControlChamber.new()
 	chamber.setup(GameConfig.Faction.GREEN, Vector2(48.0, 64.0))
@@ -459,3 +740,89 @@ func _test_bullet_pool_incremental_metrics() -> void:
 	_cleanup_node(turret)
 	_cleanup_node(bullet)
 	_cleanup_node(pool)
+
+func _test_bullet_pool_active_ordering() -> void:
+	var pool: BulletPool = BulletPool.new()
+	var bullet_a: Bullet = Bullet.new()
+	var bullet_b: Bullet = Bullet.new()
+	var bullet_c: Bullet = Bullet.new()
+	bullet_a.activate()
+	bullet_b.activate()
+	bullet_c.activate()
+	pool._finalize_spawned_bullet(bullet_a)
+	pool._finalize_spawned_bullet(bullet_b)
+	pool._finalize_spawned_bullet(bullet_c)
+
+	pool.recycle_bullet(bullet_b)
+	_assert_eq(pool.active_bullets.size(), 2, "recycle should swap-pop active bullets without losing count")
+	_assert_true(not pool.active_bullet_indices.has(bullet_b.get_instance_id()), "recycle should clear swapped bullet index entry")
+	_assert_eq(int(pool.active_bullet_indices.get(bullet_a.get_instance_id(), -1)), 0, "oldest bullet should keep a valid active index after middle removal")
+
+	var oldest = pool._get_oldest_active_bullet()
+	_assert_true(oldest == bullet_a, "oldest active bullet lookup should ignore swapped ordering")
+
+	_cleanup_node(bullet_a)
+	_cleanup_node(bullet_b)
+	_cleanup_node(bullet_c)
+	_cleanup_node(pool)
+
+func _test_bullet_trail_dirty_cache() -> void:
+	var pool: BulletPool = BulletPool.new()
+	var trail_layer: BulletTrailLayer = BulletTrailLayer.new()
+	pool.set_trail_layer(trail_layer)
+
+	var bullet: Bullet = Bullet.new()
+	bullet.pool = pool
+	bullet.set_trail_layer(trail_layer)
+	bullet.activate()
+	bullet.global_position = Vector2(32.0, 48.0)
+	bullet.replace_trail_points([Vector2(32.0, 48.0), Vector2(40.0, 48.0), Vector2(48.0, 48.0)])
+	trail_layer._flush_dirty_trail_bullets()
+	_assert_eq(int(trail_layer.get_debug_metrics().get("drawable_trail_bullets", 0)), 1, "dirty trail cache should register bullets with drawable trails")
+
+	bullet.configure_visuals(true, true, 0)
+	trail_layer._flush_dirty_trail_bullets()
+	_assert_eq(int(trail_layer.get_debug_metrics().get("drawable_trail_bullets", -1)), 0, "dirty trail cache should evict bullets when trail drawing is disabled")
+
+	_cleanup_node(bullet)
+	_cleanup_node(trail_layer)
+	_cleanup_node(pool)
+
+func _test_player_settings_bool_sanitization() -> void:
+	var settings_path: String = PlayerSettingsStore.SETTINGS_PATH
+	var settings_abs: String = ProjectSettings.globalize_path(settings_path)
+	if FileAccess.file_exists(settings_path):
+		DirAccess.remove_absolute(settings_abs)
+
+	var raw_file := FileAccess.open(settings_path, FileAccess.WRITE)
+	_assert_true(raw_file != null, "player settings test should create settings file")
+	if raw_file != null:
+		raw_file.store_string("{\"show_performance_info\":\"abc\",\"low_effect_mode\":\"true\",\"show_event_log\":0}")
+		raw_file.close()
+
+	var loaded: Dictionary = PlayerSettingsStore.load_settings()
+	_assert_eq(typeof(loaded.get("show_performance_info", null)), TYPE_BOOL, "player settings should normalize show_performance_info to bool")
+	_assert_eq(typeof(loaded.get("low_effect_mode", null)), TYPE_BOOL, "player settings should normalize low_effect_mode to bool")
+	_assert_eq(typeof(loaded.get("show_event_log", null)), TYPE_BOOL, "player settings should normalize show_event_log to bool")
+	_assert_eq(bool(loaded.get("show_performance_info", not OS.is_debug_build())), OS.is_debug_build(), "player settings should fall back to default for invalid bool strings")
+	_assert_true(bool(loaded.get("low_effect_mode", false)), "player settings should parse truthy strings")
+	_assert_true(not bool(loaded.get("show_event_log", true)), "player settings should parse numeric zero as false")
+
+	PlayerSettingsStore.save_settings({
+		"show_performance_info": "off",
+		"low_effect_mode": 1,
+		"show_event_log": "unexpected",
+	})
+	var saved_file := FileAccess.open(settings_path, FileAccess.READ)
+	_assert_true(saved_file != null, "player settings save should write normalized file")
+	if saved_file != null:
+		var parsed = JSON.parse_string(saved_file.get_as_text())
+		saved_file.close()
+		_assert_true(parsed is Dictionary, "player settings save should persist dictionary json")
+		if parsed is Dictionary:
+			_assert_eq(typeof(parsed.get("show_performance_info", null)), TYPE_BOOL, "saved player settings should keep bool type for performance flag")
+			_assert_eq(typeof(parsed.get("low_effect_mode", null)), TYPE_BOOL, "saved player settings should keep bool type for low effect mode")
+			_assert_eq(typeof(parsed.get("show_event_log", null)), TYPE_BOOL, "saved player settings should keep bool type for event log flag")
+
+	if FileAccess.file_exists(settings_path):
+		DirAccess.remove_absolute(settings_abs)

@@ -1,0 +1,54 @@
+name: Headless Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  godot-headless:
+    runs-on: windows-latest
+    env:
+      GODOT_VERSION: 4.6.2-stable
+      GODOT_ARCHIVE: Godot_v4.6.2-stable_win64.exe.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot
+        id: godot
+        shell: pwsh
+        run: |
+          $archiveUrl = "https://github.com/godotengine/godot/releases/download/$env:GODOT_VERSION/$env:GODOT_ARCHIVE"
+          $archivePath = Join-Path $env:RUNNER_TEMP $env:GODOT_ARCHIVE
+          $extractPath = Join-Path $env:RUNNER_TEMP "godot"
+          Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath
+          Expand-Archive -Path $archivePath -DestinationPath $extractPath -Force
+
+          $godotExe = Get-ChildItem -Path $extractPath -Recurse -Filter "*console.exe" | Select-Object -First 1
+          if (-not $godotExe) {
+            $godotExe = Get-ChildItem -Path $extractPath -Recurse -Filter "*.exe" | Select-Object -First 1
+          }
+          if (-not $godotExe) {
+            throw "Godot executable not found after extraction."
+          }
+
+          "path=$($godotExe.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Headless Parse Check
+        shell: pwsh
+        run: |
+          & "${{ steps.godot.outputs.path }}" --headless --audio-driver Dummy --path "${{ github.workspace }}" --quit
+
+      - name: Smoke Test
+        shell: pwsh
+        run: |
+          & "${{ steps.godot.outputs.path }}" --headless --audio-driver Dummy --path "${{ github.workspace }}" --script "res://scripts/tests/SmokeTestRunner.gd"
+
+      - name: Save Flow Test
+        shell: pwsh
+        run: |
+          & "${{ steps.godot.outputs.path }}" --headless --audio-driver Dummy --path "${{ github.workspace }}" --script "res://scripts/tests/SaveFlowControllerTestRunner.gd"
+
+      - name: Integration Test
+        shell: pwsh
+        run: |
+          & "${{ steps.godot.outputs.path }}" --headless --audio-driver Dummy --path "${{ github.workspace }}" --script "res://scripts/tests/IntegrationTestRunner.gd"

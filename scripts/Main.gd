@@ -1,5 +1,17 @@
 extends Node2D
 
+# Main orchestration boundary:
+# Allowed here:
+# - create runtime systems
+# - connect signals
+# - switch top-level game/menu/pause states
+# - delegate to coordinators/controllers/views
+# Do not add here:
+# - concrete physics behavior
+# - concrete draw behavior
+# - deep save-field repair
+# - specific event effect implementation
+
 const VIEW_W: float = 1120.0
 const VIEW_H: float = 720.0
 const LEGACY_SAVE_PATH: String = "user://ballwar_save.json"
@@ -295,6 +307,12 @@ func _create_event_roulette_system() -> void:
 	var finished_callable: Callable = Callable(self, "_on_event_round_finished")
 	if not runtime.event_controller.event_round_finished.is_connected(finished_callable):
 		runtime.event_controller.event_round_finished.connect(finished_callable)
+	var banner_callable: Callable = Callable(self, "_on_event_banner_requested")
+	if not runtime.event_controller.banner_requested.is_connected(banner_callable):
+		runtime.event_controller.banner_requested.connect(banner_callable)
+	var chamber_refresh_callable: Callable = Callable(self, "_on_event_chamber_ui_refresh_requested")
+	if not runtime.event_controller.chamber_ui_refresh_requested.is_connected(chamber_refresh_callable):
+		runtime.event_controller.chamber_ui_refresh_requested.connect(chamber_refresh_callable)
 
 	_refresh_event_log()
 
@@ -445,6 +463,12 @@ func _refresh_event_log() -> void:
 
 func _on_event_round_finished(_payload: Dictionary) -> void:
 	_refresh_event_log()
+
+func _on_event_banner_requested(title_text: String, sub_text: String, accent: Color, auto_hide: bool) -> void:
+	_show_center_banner(title_text, sub_text, accent, auto_hide)
+
+func _on_event_chamber_ui_refresh_requested(faction_id: int) -> void:
+	_refresh_add_ball_button(faction_id)
 
 func _load_menu_preferences() -> void:
 	if not FileAccess.file_exists(MENU_PREF_PATH):
@@ -646,7 +670,7 @@ func _load_saved_data(slot_index: int = -1, allow_legacy: bool = true) -> Dictio
 func _select_save_slot(slot_index: int) -> void:
 	selected_save_slot = SaveFlowController.normalize_slot(slot_index, selected_save_slot, SAVE_SLOT_COUNT)
 	_save_menu_preferences()
-	_show_menu_status(SaveFlowController.build_slot_selection_status(selected_save_slot, _has_save_file(selected_save_slot)))
+	_show_menu_status(SaveFlowController.build_slot_selection_status_message(selected_save_slot, _has_save_file(selected_save_slot)))
 	_refresh_menu_save_slots()
 
 func _refresh_menu_save_slots() -> void:
@@ -678,7 +702,7 @@ func _refresh_menu_slot_buttons_fallback(summaries: Array) -> void:
 		menu_continue_button.disabled = not has_selected_save
 		menu_continue_button.text = StartMenuUi.build_continue_button_text(selected_save_slot)
 	if menu_start_button != null and is_instance_valid(menu_start_button):
-		menu_start_button.text = StartMenuUi.build_start_button_text(selected_save_slot)
+		menu_start_button.text = StartMenuUi.build_start_button_label(selected_save_slot, has_selected_save)
 
 func _show_menu_status(message: String) -> void:
 	if menu_status_label != null and is_instance_valid(menu_status_label):

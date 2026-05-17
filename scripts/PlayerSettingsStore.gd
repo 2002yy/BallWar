@@ -21,19 +21,36 @@ static func load_settings() -> Dictionary:
 	file.close()
 	if not (parsed is Dictionary):
 		return defaults
-	var result := defaults.duplicate()
-	for key in defaults.keys():
-		if parsed.has(key):
-			result[key] = parsed[key]
-	return result
+	return sanitize_settings(parsed)
 
 static func save_settings(settings: Dictionary) -> void:
-	var clean := default_settings()
-	for key in clean.keys():
-		if settings.has(key):
-			clean[key] = settings[key]
+	var clean := sanitize_settings(settings)
 	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
 	if file == null:
 		return
 	file.store_string(JSON.stringify(clean, "\t"))
 	file.close()
+
+static func sanitize_settings(settings: Dictionary) -> Dictionary:
+	var defaults := default_settings()
+	return {
+		"show_performance_info": _coerce_bool(settings.get("show_performance_info", defaults["show_performance_info"]), bool(defaults["show_performance_info"])),
+		"low_effect_mode": _coerce_bool(settings.get("low_effect_mode", defaults["low_effect_mode"]), bool(defaults["low_effect_mode"])),
+		"show_event_log": _coerce_bool(settings.get("show_event_log", defaults["show_event_log"]), bool(defaults["show_event_log"])),
+	}
+
+static func _coerce_bool(value, default_value: bool) -> bool:
+	if value is bool:
+		return value
+	if value is int or value is float:
+		return value != 0
+	if value is String:
+		var normalized: String = value.strip_edges().to_lower()
+		match normalized:
+			"1", "true", "yes", "on":
+				return true
+			"0", "false", "no", "off", "":
+				return false
+			_:
+				return default_value
+	return default_value

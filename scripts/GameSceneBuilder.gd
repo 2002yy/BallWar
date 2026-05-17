@@ -1,6 +1,16 @@
 extends RefCounted
 class_name GameSceneBuilder
 
+# Owner callback contract for the current builder wiring.
+# Required methods:
+# - _on_scores_changed(counts: Dictionary)
+# - _on_turret_destroyed(faction_id: int)
+# - _on_turret_burst_lock_changed(faction_id: int, locked: bool)
+# - _on_turret_burst_progress(faction_id: int, remaining: int)
+# - _on_chamber_release_requested(faction_id, bullet_count, chamber)
+# - _on_ball_count_changed(faction_id: int, count: int)
+# Keep this list aligned with Main.gd or any alternate runtime owner.
+
 static func create_battlefield(owner, game_layer: Node, grid_size: int, current_layout: Dictionary, view_size: Vector2) -> Dictionary:
     var battlefield = Battlefield.new()
     battlefield.configure(grid_size)
