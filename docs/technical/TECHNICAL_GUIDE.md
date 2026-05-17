@@ -21,6 +21,8 @@ Keep it current, short, and operational.
   - fast session takeover card for the next AI / Codex run
 - `CHANGELOG.md`
   - condensed version spine
+- `.github/workflows/test.yml`
+  - GitHub Actions headless CI: validate + 10-test matrix
 - `docs/history/README.md`
   - history index for stage documents
 - `docs/history/README_v*.md`

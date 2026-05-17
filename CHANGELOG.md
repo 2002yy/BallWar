@@ -15,12 +15,22 @@ Detailed stage notes now live under [docs/history/](docs/history/README.md).
 - Historical Releases: `v1.9.x`, `v0.1.0-mvp`
   - reconstructed history, not the recommended download path
 
-## `v2.1.11`
+## `v2.1.11` — Public Repository Hardening
 
 - Restored corrupted Chinese UTF-8 text in key GDScript files
 - Fixed Android ETC2/ASTC export configuration and added export-check helpers
 - Published Windows zip and Android debug APK assets on GitHub Releases
 - Continued structure cleanup through `ChamberBallPhysics`, `BulletPool` swap-remove, and `EventRouletteController` signal decoupling
+
+**Public repository hardening (v2.1.11-public-repo-hardening):**
+- Restructured README top section: Intro + Download + Screenshots + Tech Highlights for player/recruiter audience
+- Added GitHub Actions CI workflow: project-load validation + 10-test matrix with artifact upload
+- Fixed Android export scripts: removed hardcoded absolute paths, use `$PSScriptRoot`-relative default
+- Aligned `export_presets.cfg`: English preset name, `script_export_mode=0`, version string, English export path
+- All historical `README_v*.md` stage documents remain in `docs/history/` — root directory clean
+- Created `docs/history/README_v2_1_11_public_repo_hardening.md`
+- Updated CHANGELOG, ROADMAP, TECHNICAL_GUIDE, and history index
+
 - Current Latest Stable / 推荐公开下载版本
 
 ## `v2.1.10`

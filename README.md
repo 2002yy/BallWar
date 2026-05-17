@@ -1,8 +1,44 @@
-# BallWar / 领土战争
+# BallWar / 领土战争 (Marble Dominion Ricochet War)
 
-`BallWar`（领土战争 / Marble Dominion Ricochet War）是一个基于 **Godot 4.6 + GDScript** 的 2D 四阵营领土争夺游戏原型。四个阵营从战场四角持续施压，角落炮台负责发射，外部控制仓决定节奏，子弹会占领或重涂中心网格，胜负由模式规则、炮台状态、占领比例和事件系统共同决定。
+A **Godot 4.6 + GDScript** 2D territory-control arcade prototype — four factions fight for grid dominance in a chaotic bullet arena.
 
-This repository preserves the reconstructed development history from early MVP to the current public line, including gameplay milestones, architecture refactors, UI iterations, save/load work, testing notes, packaging, and Android export notes.
+四个阵营通过角落炮台发射子弹争夺中心网格地图，控制仓的弹球积累决定开火节奏。支持基础、占领、限时、狂野四种模式。
+
+**Engine:** Godot 4.6 · **Language:** GDScript · **Tests:** 972 checks (6 runners) · **Platforms:** Windows / Android · **CI:** GitHub Actions [`.github/workflows/test.yml`](.github/workflows/test.yml)
+
+## Try It / 试玩下载
+
+> **v2.1.11 (Latest Stable)** — [Windows zip](https://github.com/2002yy/BallWar/releases/tag/v2.1.11) · [Android APK](https://github.com/2002yy/BallWar/releases/tag/v2.1.11)  
+> All releases: [github.com/2002yy/BallWar/releases](https://github.com/2002yy/BallWar/releases)
+
+## Screenshots
+
+| 开始界面 | 游戏初始 |
+|:--:|:--:|
+| ![](screenshots/%E5%BC%80%E5%A7%8B%E7%95%8C%E9%9D%A2.png) | ![](screenshots/%E6%B8%B8%E6%88%8F%E5%88%9D%E5%A7%8B.png) |
+
+| 游戏中场 | 事件画面 |
+|:--:|:--:|
+| ![](screenshots/%E6%B8%B8%E6%88%8F%E4%B8%AD%E5%9C%BA.png) | ![](screenshots/%E4%BA%8B%E4%BB%B6%E7%94%BB%E9%9D%A2.png) |
+
+| 一方胜利结果 |
+|:--:|
+| ![](screenshots/%E4%B8%80%E6%96%B9%E8%83%9C%E5%88%A9%E7%BB%93%E6%9E%9C.png) |
+
+## Tech Highlights / 技术亮点
+
+**Engineering & test discipline:**
+- **972 headless CI checks** — 10 GDScript test runners (smoke, scene wiring, coordinator, integration, layout) run in parallel via GitHub Actions
+- **Architecture layering** — `Main.gd` orchestration extracted into dedicated coordinators, restore planners, and save adapters with single-responsibility boundaries
+- **Save/load with security hardening** — encrypted slots, input sanitization via centralized codec, restore-plan seams isolated from scene runtime
+- **Performance probes** — bullet-pressure tracking, frame-time monitor, trail-cache dirtying metrics baked into the runtime; separate benchmark suite for regression detection
+- **Android export pipeline** — ETC2/ASTC texture validation, debug APK packaging, PowerShell check/fix scripts
+
+**Gameplay systems:**
+- **Chamber-driven firing rhythm** — control chamber accumulates marbles through multiplier gates; pending-count drives burst density and reload pacing
+- **Four-faction territory control** — simultaneous battle royale on a shared grid; bullets repaint cells and can hit enemy turrets directly
+- **Event roulette** — dynamic in-game events with faction-biased weighting, signal-bridge banner system, and save-state import/export
+- **Multi-mode rules engine** — `basic`, `occupation`, `timed`, `wild` each with their own win conditions, event intervals, and scoring logic
 
 ## 当前状态 / Current Status
 
@@ -26,8 +62,6 @@ This repository preserves the reconstructed development history from early MVP t
   - important checkpoints for review and comparison
 - Historical Releases: `v1.9.x`, `v0.1.0-mvp`
   - reconstructed history, not the recommended download path
-
-Release page: <https://github.com/2002yy/BallWar/releases>
 
 ## 核心玩法 / Core Loop
 
@@ -97,7 +131,7 @@ BallWar/
 
 ## 版本脉络 / Version Spine
 
-- `v2.1.11`: Latest Stable, encoding recovery, Android export fix, build pipeline stabilization
+- `v2.1.11`: Latest Stable, encoding recovery, Android export fix, build pipeline stabilization, public repository hardening
 - `v2.1.10`: save security hardening, hot-path performance optimization, StartMenu clarity
 - `v2.1.9`: settings system, result panel, round statistics
 - `v2.1.8`: decor-layer event model, chamber-state extraction, StartMenu polish
@@ -124,20 +158,6 @@ Additional checklist and scripts:
 - `tools/fix_android_export_config.ps1`
 
 The current public APK is a debug build. Treat it as a trial package, not a signed store/release package.
-
-## Screenshots
-
-| 开始界面 | 游戏初始 |
-|:--:|:--:|
-| ![](screenshots/%E5%BC%80%E5%A7%8B%E7%95%8C%E9%9D%A2.png) | ![](screenshots/%E6%B8%B8%E6%88%8F%E5%88%9D%E5%A7%8B.png) |
-
-| 游戏中场 | 事件画面 |
-|:--:|:--:|
-| ![](screenshots/%E6%B8%B8%E6%88%8F%E4%B8%AD%E5%9C%BA.png) | ![](screenshots/%E4%BA%8B%E4%BB%B6%E7%94%BB%E9%9D%A2.png) |
-
-| 一方胜利结果 |
-|:--:|
-| ![](screenshots/%E4%B8%80%E6%96%B9%E8%83%9C%E5%88%A9%E7%BB%93%E6%9E%9C.png) |
 
 ## License
 

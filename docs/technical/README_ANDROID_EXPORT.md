@@ -44,5 +44,5 @@ textures/vram_compression/import_etc2_astc=true
 ## 命令行导出
 
 ```powershell
-$godot_console --headless --path "<项目路径>" --export-release "领土战争" "C:\Builds\BallWar_vX.Y.Z.apk"
+$godot_console --headless --path "<项目路径>" --export-release "Android" "C:\Builds\BallWar_vX.Y.Z.apk"
 ```

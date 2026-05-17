@@ -12,10 +12,10 @@ This file is the single place for project direction and phase status.
 - Previous stable milestone: `v2.1.10`
 - Stable structural baseline: `v2.1.4`
 - Current theme:
-  - public release narrative cleanup
-  - Android export and packaging stability
-  - chamber physics extraction
-  - performance evidence capture
+  - public repository hardening (complete)
+  - visual and audio polish (next)
+  - mobile layout verification
+  - performance baseline archiving
 
 ## 2. Completed / 已完成
 
@@ -62,6 +62,15 @@ This file is the single place for project direction and phase status.
 - `docs/technical/TECHNICAL_GUIDE.md` 作为工程协作说明
 - `docs/design/` 和 `docs/performance/` 收纳设计、素材与性能附录
 
+### Public repository hardening / 公开仓库收口
+
+- README 顶部重构：面向玩家/招聘官，30 秒看懂项目价值
+- GitHub Actions CI workflow：validate + 10 测试并行 matrix，日志 artifact
+- Android 导出脚本去本机绝对路径（`$PSScriptRoot` 相对路径）
+- `export_presets.cfg` 三处不对齐修复（preset 名称、script_export_mode、version）
+- 版本叙事三处统一（README / CHANGELOG / Releases 页面）
+- 历史版本文档全部归档到 `docs/history/`，根目录保持干净
+
 ## 3. In Progress / 当前进行中
 
 ### Android export hardening / Android 导出固化
@@ -79,6 +88,7 @@ This file is the single place for project direction and phase status.
 
 - Release 与主 README 已按 Latest Stable / Milestone / Historical 分层对齐
 - 根目录已收束为外部入口，过程文档归入 `docs/`
+- 已完成，转入下一阶段视觉与音效收口
 
 ### Performance evidence capture / 性能证据归档
 
@@ -87,20 +97,18 @@ This file is the single place for project direction and phase status.
 
 ## 4. Next / 下一步
 
-1. 归档一轮新的性能基线，覆盖常规模式与高压模式。
-2. 补充 `ChamberBallPhysicsTestRunner.gd`。
-3. 继续拆出控制仓几何、绘制和保存适配边界。
-4. 固化 Android 签名包和试玩交付流程。
-5. 保持 `Main.gd` 作为顶层编排层，不把深层恢复写回逻辑重新塞回去。
+1. **素材实际接入**：菜单背景、按钮皮肤、顶部占领条视觉增强（参考 `docs/design/ASSET_GAP_PLAN.md`）
+2. **音效系统第一版**：按钮点击、子弹发射、格子占领、事件触发、胜负判定全链路音效
+3. **移动端真机布局验证**：确保所有 UI 在真实 Android 设备上可用
+4. **性能基线归档**：覆盖常规模式、高压弹幕（满配四阵营同时发射）、较大网格场景
+5. **ControlChamber 第二阶段拆分**：继续拆出 `ChamberBallPhysics.gd` 的几何和绘制边界
 
 ## 5. Later / 中期候选
 
 - 新手引导
 - 模式说明页
 - 更完整的结算统计
-- 音效系统
-- 移动端按钮布局
-- 美术资源替换与统一风格
+- Android 签名包与商店发布流程
 
 ## 6. Not Now / 暂不处理
 

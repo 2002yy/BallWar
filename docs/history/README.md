@@ -12,6 +12,8 @@ This folder keeps the detailed stage-by-stage BallWar history that used to live 
 
 - `README_v2_1_11.md`
   - Latest Stable public release, encoding recovery, Android export fix
+- `README_v2_1_11_public_repo_hardening.md`
+  - public repository documentation split, CI visibility, export script cleanup, release narrative alignment
 - `README_v2_1_10.md`
   - security hardening, performance-path optimization, Windows zip packaging
 - `README_v2_1_9_settings_and_result_panel.md`
