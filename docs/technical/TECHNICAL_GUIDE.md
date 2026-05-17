@@ -15,9 +15,9 @@ Keep it current, short, and operational.
   - project overview, current line, and entry links
 - `ROADMAP.md`
   - current progress, what is done, what is next, what is deferred
-- `README_TEST_MATRIX.md`
+- `docs/technical/README_TEST_MATRIX.md`
   - correctness baseline, performance probes, and when to run which tests
-- `AI_HANDOFF_CURRENT.md`
+- `docs/technical/AI_HANDOFF_CURRENT.md`
   - fast session takeover card for the next AI / Codex run
 - `CHANGELOG.md`
   - condensed version spine
@@ -90,7 +90,7 @@ Priority / 优先级:
 
 Working rules / 工作规则:
 
-- correctness baseline lives in `README_TEST_MATRIX.md`
+- correctness baseline lives in `docs/technical/README_TEST_MATRIX.md`
 - performance probes are not correctness proof
 - if Codex runtime crashes but there is no clear parse/script failure and desktop local does not reproduce it, record it as an environment limitation instead of rewriting code speculatively
 - when feature work is UI-heavy, still leave either:
@@ -118,7 +118,7 @@ Before shipping or mirroring third-party material, check `assets/ASSET_SOURCES_A
 ## 8. Android Export Boundary / Android 导出边界
 
 - public-facing export notes should stay summarized in `README.md`
-- operational export checklist and helper scripts can live in `README_ANDROID_EXPORT.md` and `tools/`
+- operational export checklist and helper scripts can live in `docs/technical/README_ANDROID_EXPORT.md` and `tools/`
 - `project.godot` must keep:
   - `[rendering]`
   - `textures/vram_compression/import_etc2_astc=true`

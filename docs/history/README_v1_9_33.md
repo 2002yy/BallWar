@@ -2,8 +2,8 @@
 
 本文件为当前总开发文档整合版，合并以下三份来源：
 
-- `TerritoryWar_V3_v1_9_21_performance_appendix.docx`
-- `领土战争_美术UI升级设计文档_v2_按钮与锁定特效补充.docx`
+- `docs/performance/TerritoryWar_V3_v1_9_21_performance_appendix.docx`
+- `docs/design/领土战争_美术UI升级设计文档_v2_按钮与锁定特效补充.docx`
 - `README_v1_9_32.md`
 
 用途：

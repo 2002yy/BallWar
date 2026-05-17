@@ -8,13 +8,14 @@ This file is the single place for project direction and phase status.
 ## 1. Current Line / 当前主线
 
 - Current line: `v2.1.x`
-- Latest documented milestone: `v2.1.9`
-- Last stable structural baseline: `v2.1.4`
+- Latest Stable release: `v2.1.11`
+- Previous stable milestone: `v2.1.10`
+- Stable structural baseline: `v2.1.4`
 - Current theme:
-  - settings system + result panel + statistics
-  - decor-layer event-driven cleanup
-  - chamber-state extraction
-  - public repo entrance cleanup
+  - public release narrative cleanup
+  - Android export and packaging stability
+  - chamber physics extraction
+  - performance evidence capture
 
 ## 2. Completed / 已完成
 
@@ -57,27 +58,27 @@ This file is the single place for project direction and phase status.
 - `README.md` 作为仓库入口
 - `CHANGELOG.md` 作为精简版本脊柱
 - `docs/history/README_v*.md` 保留为历史阶段记录
-- `README_TEST_MATRIX.md` 作为测试矩阵
-- `TECHNICAL_GUIDE.md` 作为工程协作说明
+- `docs/technical/README_TEST_MATRIX.md` 作为测试矩阵
+- `docs/technical/TECHNICAL_GUIDE.md` 作为工程协作说明
+- `docs/design/` 和 `docs/performance/` 收纳设计、素材与性能附录
 
 ## 3. In Progress / 当前进行中
 
 ### Android export hardening / Android 导出固化
 
 - 导出配置与资源压缩设置已基本对齐
-- 仍需把 Debug APK 导出流程整理成更稳定的重复步骤
+- Debug APK 已进入 release 资产流；后续重点是签名包和可重复交付流程
 
 ### Chamber refactor phase 2 / 控制仓第二阶段拆分
 
-- 当前已完成状态外提
-- 下一步优先完成 `ChamberBallPhysics.gd`
+- 当前已完成状态外提与 `ChamberBallPhysics.gd` 初步拆分
 - 配套补充 `ChamberBallPhysicsTestRunner.gd`
 - 后续再继续拆出几何、绘制和保存适配边界
 
 ### Public repo hygiene / 公开仓库整理
 
-- Release 与主 README 的版本叙事正在对齐
-- 根目录文档和历史阶段文档正在分层收敛
+- Release 与主 README 已按 Latest Stable / Milestone / Historical 分层对齐
+- 根目录已收束为外部入口，过程文档归入 `docs/`
 
 ### Performance evidence capture / 性能证据归档
 
@@ -86,12 +87,11 @@ This file is the single place for project direction and phase status.
 
 ## 4. Next / 下一步
 
-1. 固化 Android APK 导出流程，并补一份更稳定的导出检查顺序。
-2. 整理 Release 与 README 的版本对应关系。
-3. 归档一轮新的性能基线，覆盖常规模式与高压模式。
-4. 完成 `ControlChamber` 第二阶段拆分：`ChamberBallPhysics.gd`。
-5. 补充 `ChamberBallPhysicsTestRunner.gd`。
-6. 保持 `Main.gd` 作为顶层编排层，不把深层恢复写回逻辑重新塞回去。
+1. 归档一轮新的性能基线，覆盖常规模式与高压模式。
+2. 补充 `ChamberBallPhysicsTestRunner.gd`。
+3. 继续拆出控制仓几何、绘制和保存适配边界。
+4. 固化 Android 签名包和试玩交付流程。
+5. 保持 `Main.gd` 作为顶层编排层，不把深层恢复写回逻辑重新塞回去。
 
 ## 5. Later / 中期候选
 
@@ -117,11 +117,11 @@ This file is the single place for project direction and phase status.
   - 当前方向、已完成、下一步、暂缓项
 - `CHANGELOG.md`
   - 精简版本脊柱
-- `README_TEST_MATRIX.md`
+- `docs/technical/README_TEST_MATRIX.md`
   - 测试职责与运行建议
-- `TECHNICAL_GUIDE.md`
+- `docs/technical/TECHNICAL_GUIDE.md`
   - 工程边界、编辑器协作、导出与验证说明
-- `AI_HANDOFF_CURRENT.md`
+- `docs/technical/AI_HANDOFF_CURRENT.md`
   - 下一次 AI / Codex 接管卡片
 - `docs/history/README.md`
   - 历史阶段索引

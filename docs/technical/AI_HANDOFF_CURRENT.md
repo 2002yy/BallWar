@@ -1,6 +1,6 @@
 # AI_HANDOFF_CURRENT
 
-Last updated: 2026-05-16
+Last updated: 2026-05-17
 Role / 作用: handoff card only / 仅作快速接管卡片
 
 ## 1. Current Version / 当前版本
@@ -19,9 +19,11 @@ Role / 作用: handoff card only / 仅作快速接管卡片
 - `SaveFlowController` owns the `prepare_*` vs `apply_*` split for continue flow.
 - `RestorePlan.gd` is in the active restore path.
 - `ControlChamber.gd`, `Turret.gd`, and `Bullet.gd` own `restore_from_state(...)`.
-- `Main.gd` stays at top-level sequencing and should keep shrinking away from deep restore mutation.
+- `Main.gd` stays at top-level sequencing and should keep shrinking away from deep restore mutation, deep event logic, and draw/physics details.
 - `BattlefieldDecorLayer.gd` is event/dirty-flag driven instead of per-frame polled.
 - `ChamberState.gd` is extracted as a pure state container.
+- `EventRouletteController.gd` now emits UI requests by signal instead of calling `Main` private helpers directly.
+- `GameSceneBuilder.gd` has an explicit owner callback contract comment; treat it as the current runtime interface seam.
 - `PlayerSettingsStore.gd`, `SettingsPanel`, and `ResultPanel` are wired into the active product flow.
 
 ## 3. Just Completed / 刚完成的内容
@@ -38,17 +40,18 @@ Role / 作用: handoff card only / 仅作快速接管卡片
    - `scripts/tests/PerfBurstBenchmark.gd`
    - `scripts/tests/PerfBurstBenchmarkSingleTurret.gd`
    - `scripts/tests/PerfBurstBenchmarkMultiTurret.gd`
-3. Continue the second-stage `ControlChamber` split without pushing deep restore mutation back into `Main.gd`.
+3. Continue shrinking `ControlChamber` and `Main.gd` without pushing deep restore mutation, event-effect details, or draw/physics logic back into `Main.gd`.
 4. If more history notes are added, place them under `docs/history/` instead of the repo root.
 
 ## 5. Do Not Do / 不要做什么
 
 - do not turn this file into a roadmap or architecture diary
-- do not put roadmap content into `README_TEST_MATRIX.md`
+- do not put roadmap content into `docs/technical/README_TEST_MATRIX.md`
 - do not claim performance validation is complete unless there is either:
   - a recorded probe result, or
   - a clearly labeled manual observation
 - do not move deep restore-field mutation back into `Main.gd`
+- do not add new direct controller-to-`Main` private method calls when a signal seam is sufficient
 - do not treat `docs/history/README_v*.md` as the current source of truth; they are stage records
 
 ## 6. Required Tests / 当前必跑测试
@@ -80,15 +83,15 @@ Performance probes are separate from correctness:
 
 ## 7. Canonical Docs / 主文档分工
 
-- `AI_HANDOFF_CURRENT.md`
+- `docs/technical/AI_HANDOFF_CURRENT.md`
   - quick takeover card for the next AI / Codex session
 - `README.md`
   - current project entrypoint
 - `ROADMAP.md`
   - main progress board and development direction
-- `README_TEST_MATRIX.md`
+- `docs/technical/README_TEST_MATRIX.md`
   - test ownership, baseline, and run guidance only
-- `TECHNICAL_GUIDE.md`
+- `docs/technical/TECHNICAL_GUIDE.md`
   - current architecture, editor, validation, and repo-boundary rules
 - `CHANGELOG.md`
   - condensed version spine

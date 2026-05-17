@@ -20,8 +20,8 @@ This file answers:
 Development progress belongs in `ROADMAP.md`.  
 开发进度请看 `ROADMAP.md`。
 
-Session takeover belongs in `AI_HANDOFF_CURRENT.md`.  
-交接卡片请看 `AI_HANDOFF_CURRENT.md`。
+Session takeover belongs in `docs/technical/AI_HANDOFF_CURRENT.md`.  
+交接卡片请看 `docs/technical/AI_HANDOFF_CURRENT.md`。
 
 ## 1. Scene Wiring Tests / 场景接线测试
 

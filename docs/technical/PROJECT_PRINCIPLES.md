@@ -6,9 +6,9 @@
 - 当前真相文档限定为：
   - `README.md`
   - `ROADMAP.md`
-  - `README_TEST_MATRIX.md`
-  - `TECHNICAL_GUIDE.md`
-  - `AI_HANDOFF_CURRENT.md`
+  - `docs/technical/README_TEST_MATRIX.md`
+  - `docs/technical/TECHNICAL_GUIDE.md`
+  - `docs/technical/AI_HANDOFF_CURRENT.md`
   - `CHANGELOG.md`
 - 临时过程稿不要长期堆在根目录
 - 历史阶段记录统一放在 `docs/history/README_v*.md`

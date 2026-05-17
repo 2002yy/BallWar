@@ -10,6 +10,10 @@ This folder keeps the detailed stage-by-stage BallWar history that used to live 
 
 ## Suggested entry points
 
+- `README_v2_1_11.md`
+  - Latest Stable public release, encoding recovery, Android export fix
+- `README_v2_1_10.md`
+  - security hardening, performance-path optimization, Windows zip packaging
 - `README_v2_1_9_settings_and_result_panel.md`
   - settings system, result panel, statistics
 - `README_v2_1_8_decor_and_chamber_state.md`

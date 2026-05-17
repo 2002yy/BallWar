@@ -169,8 +169,8 @@ Local source and license evidence:
 ## 7. Related Docs / 相关文档
 
 - `art_reference/free_ui_assets/FREE_UI_INTEGRATION_PLAN.md`
-- `TECHNICAL_GUIDE.md`
-- `ASSET_GAP_PLAN.md`
+- `docs/technical/TECHNICAL_GUIDE.md`
+- `docs/design/ASSET_GAP_PLAN.md`
 - `assets/sfx/SFX_SELECTION_NOTES.md`
 
 ## 8. Asset Integration Status / 素材集成状态 (v2.1.8 audit)
