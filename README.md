@@ -3,7 +3,7 @@
 A **Godot 4.6 + GDScript** 2D territory-control arcade prototype — four factions fight for grid dominance in a chaotic bullet arena.  
 一个基于 **Godot 4.6 + GDScript** 的 2D 四阵营领土争夺街机原型，四个阵营在混乱的子弹战场中争夺网格领地。
 
-**Engine:** Godot 4.6 · **Language:** GDScript · **Tests:** 972 checks (6 runners) · **Platforms:** Windows / Android · **CI:** GitHub Actions [`.github/workflows/test.yml`](.github/workflows/test.yml)
+**Engine:** Godot 4.6 · **Language:** GDScript · **Tests:** 10 runners · GitHub Actions CI · **Platforms:** Windows / Android
 
 ## Try It / 试玩下载
 
@@ -27,9 +27,9 @@ A **Godot 4.6 + GDScript** 2D territory-control arcade prototype — four factio
 ## Tech Highlights / 技术亮点
 
 **Engineering & test discipline / 工程与测试：**
-- **972 headless CI checks** — 10 GDScript test runners (smoke, scene wiring, coordinator, integration, layout) run in parallel via GitHub Actions / 10 个测试脚本通过 GitHub Actions 并行运行
+- **10 headless CI runners** — smoke, scene wiring, coordinator, integration, layout tests run in parallel via GitHub Actions / 10 个测试脚本通过 GitHub Actions 并行运行
 - **Architecture layering** — `Main.gd` orchestration extracted into dedicated coordinators, restore planners, and save adapters / Main.gd 编排职责拆分为专用协调器、恢复规划器和保存适配器
-- **Save/load with security hardening** — encrypted slots, input sanitization via centralized codec / 加密存档槽、集中式编解码器输入清洗
+- **Save/load with hardening** — slot-based saves, backup recovery, version checks, and centralized input sanitization / 存档系统加固：多槽位存档、备份恢复、版本校验与集中式数据清洗
 - **Performance probes** — bullet-pressure tracking, frame-time monitor, trail-cache dirtying metrics baked into the runtime / 子弹压力追踪、帧时间监控、弹道缓存脏标记
 - **Android export pipeline** — ETC2/ASTC texture validation, debug APK packaging, PowerShell check/fix scripts / ETC2/ASTC 纹理压缩验证、debug APK 打包、检查/修复脚本
 

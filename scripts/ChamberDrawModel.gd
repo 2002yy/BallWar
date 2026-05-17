@@ -84,7 +84,19 @@ static func build_snapshot(input: Dictionary) -> Dictionary:
 
 	var left_gate_text: String = "短路" if jammed else ("X" if is_damaged else ("x3" if gate_multiplier == 3 else "x2"))
 	var right_gate_text: String = "短路" if jammed else ("X" if is_damaged else "发射")
-	var gate_font_size: int = maxi(16, int(round(17.0 / maxf(0.5, float(input.get("scale_x", 1.0))))))
+
+	# Gate font sizes adapt to available rect width so text is never clipped.
+	var base_font_size: int = maxi(16, int(round(17.0 / maxf(0.5, float(input.get("scale_x", 1.0))))))
+	# Left gate (multiplier "x2"/"x3") — narrower space, step down preemptively
+	var left_gate_font_size: int = base_font_size
+	if left_rect.size.x < 32.0:
+		left_gate_font_size = mini(left_gate_font_size, 14)
+	if left_rect.size.x < 26.0:
+		left_gate_font_size = mini(left_gate_font_size, 12)
+	# Right gate ("发射") — always wide enough, keep base size
+	var right_gate_font_size: int = base_font_size
+	# Gate outline: thinner 1px is enough against the dark gate background
+	var gate_outline_size: int = 1
 
 	return {
 		"chamber_size": chamber_size,
@@ -110,6 +122,8 @@ static func build_snapshot(input: Dictionary) -> Dictionary:
 		"right_color": right_color,
 		"left_gate_text": left_gate_text,
 		"right_gate_text": right_gate_text,
-		"gate_font_size": gate_font_size,
+		"left_gate_font_size": left_gate_font_size,
+		"right_gate_font_size": right_gate_font_size,
+		"gate_outline_size": gate_outline_size,
 		"x2_width": x2_width,
 	}

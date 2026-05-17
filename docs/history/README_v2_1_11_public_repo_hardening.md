@@ -93,7 +93,7 @@ BallWar/
 | Godot headless SmokeTest | `<godot> --headless --path . --script res://scripts/tests/SmokeTestRunner.gd` |
 | Godot headless IntegrationTest | `<godot> --headless --path . --script res://scripts/tests/IntegrationTestRunner.gd` |
 | Android export config check | `.\tools\check_android_export_config.ps1`（从 `tools/` 目录运行） |
-| CI 状态检查 | 推送到 GitHub 后确认 Actions 页面 validate + 10 matrix job 全绿 |
+| CI 状态检查 | GitHub Actions `Headless Tests` workflow — validate + 10 matrix job 全绿 ✅ |
 | Release 下载入口检查 | 确认 GitHub Releases 页面 Latest Stable 标签指向 v2.1.11 |
 | 版本号一致性 | README / CHANGELOG / ROADMAP 三处 v2.1.11 统一 |
 
@@ -104,7 +104,6 @@ BallWar/
 - **移动端布局未经过真机验证** — Godot editor 模拟器通过但不代表真机可用
 - **性能基线可继续补充** — 高压弹幕和大网格场景的性能基线归档暂缺
 - **Android 发布仍为 debug APK** — 签名包和商店交付流程待后续建立
-- **CI 未实际运行验证** — workflow 已定义但需推送至 GitHub 后才能确认 runner 行为
 
 ## 6. Next Version Recommendation
 

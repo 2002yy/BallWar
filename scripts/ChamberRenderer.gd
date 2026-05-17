@@ -27,7 +27,9 @@ static func draw(canvas_item: CanvasItem, snapshot: Dictionary) -> void:
 	var right_color: Color = snapshot.get("right_color", Color.WHITE)
 	var left_gate_text: String = str(snapshot.get("left_gate_text", ""))
 	var right_gate_text: String = str(snapshot.get("right_gate_text", ""))
-	var gate_font_size: int = int(snapshot.get("gate_font_size", 16))
+	var left_gate_font_size: int = int(snapshot.get("left_gate_font_size", 16))
+	var right_gate_font_size: int = int(snapshot.get("right_gate_font_size", 16))
+	var gate_outline_size: int = int(snapshot.get("gate_outline_size", 1))
 
 	canvas_item.draw_rect(outer_rect, Color(0.0, 0.0, 0.0, 0.22), true)
 	canvas_item.draw_rect(outer_rect, shell_color, true)
@@ -78,48 +80,8 @@ static func draw(canvas_item: CanvasItem, snapshot: Dictionary) -> void:
 	canvas_item.draw_rect(right_rect, Color(0.0, 0.0, 0.0, 0.55), false, 1.2)
 
 	var gate_font = ThemeDB.fallback_font
-	if left_rect.size.x > 18.0:
-		var left_baseline: float = round(left_rect.position.y + left_rect.size.y * 0.68)
-		canvas_item.draw_string_outline(
-			gate_font,
-			Vector2(round(left_rect.position.x), left_baseline),
-			left_gate_text,
-			HORIZONTAL_ALIGNMENT_CENTER,
-			round(left_rect.size.x),
-			gate_font_size,
-			2,
-			Color(0.0, 0.0, 0.0, 0.9)
-		)
-		canvas_item.draw_string(
-			gate_font,
-			Vector2(round(left_rect.position.x), left_baseline),
-			left_gate_text,
-			HORIZONTAL_ALIGNMENT_CENTER,
-			round(left_rect.size.x),
-			gate_font_size,
-			Color(0.06, 0.08, 0.10, 0.95)
-		)
-	if right_rect.size.x > 18.0:
-		var right_baseline: float = round(right_rect.position.y + right_rect.size.y * 0.68)
-		canvas_item.draw_string_outline(
-			gate_font,
-			Vector2(round(right_rect.position.x), right_baseline),
-			right_gate_text,
-			HORIZONTAL_ALIGNMENT_CENTER,
-			round(right_rect.size.x),
-			gate_font_size,
-			2,
-			Color(0.0, 0.0, 0.0, 0.9)
-		)
-		canvas_item.draw_string(
-			gate_font,
-			Vector2(round(right_rect.position.x), right_baseline),
-			right_gate_text,
-			HORIZONTAL_ALIGNMENT_CENTER,
-			round(right_rect.size.x),
-			gate_font_size,
-			Color(0.06, 0.08, 0.10, 0.95)
-		)
+	_draw_gate_text(canvas_item, gate_font, left_rect, left_gate_text, left_gate_font_size, gate_outline_size)
+	_draw_gate_text(canvas_item, gate_font, right_rect, right_gate_text, right_gate_font_size, gate_outline_size)
 
 	if jammed:
 		for i in range(8):
@@ -130,3 +92,55 @@ static func draw(canvas_item: CanvasItem, snapshot: Dictionary) -> void:
 				Color(1.0, 0.42, 0.16, 0.28),
 				2.0
 			)
+
+
+static func _draw_gate_text(
+	canvas_item: CanvasItem,
+	font: Font,
+	rect: Rect2,
+	text: String,
+	font_size: int,
+	outline_size: int
+) -> void:
+	if text.is_empty():
+		return
+
+	var pad_x: float = 2.0
+	var draw_width: float = maxf(0.0, rect.size.x - pad_x * 2.0)
+	if draw_width <= 0.0:
+		return
+
+	# Measure text and reduce font size until it fits the available width.
+	# Never output clipped/truncated text — either show it whole or hide it.
+	var actual_font_size: int = font_size
+	var fits: bool = false
+	while actual_font_size >= 10:
+		var text_width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, actual_font_size).x 			+ outline_size * 2.0
+		if text_width <= draw_width:
+			fits = true
+			break
+		actual_font_size -= 1
+
+	if not fits:
+		return
+
+	var baseline: float = round(rect.position.y + rect.size.y * 0.66)
+	canvas_item.draw_string_outline(
+		font,
+		Vector2(round(rect.position.x + pad_x), baseline),
+		text,
+		HORIZONTAL_ALIGNMENT_CENTER,
+		round(draw_width),
+		actual_font_size,
+		outline_size,
+		Color(0.0, 0.0, 0.0, 0.82)
+	)
+	canvas_item.draw_string(
+		font,
+		Vector2(round(rect.position.x + pad_x), baseline),
+		text,
+		HORIZONTAL_ALIGNMENT_CENTER,
+		round(draw_width),
+		actual_font_size,
+		Color(0.06, 0.08, 0.10, 0.95)
+	)
