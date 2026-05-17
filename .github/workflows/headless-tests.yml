@@ -38,6 +38,11 @@ jobs:
         run: |
           & "${{ steps.godot.outputs.path }}" --headless --audio-driver Dummy --path "${{ github.workspace }}" --quit
 
+      - name: Import Project
+        shell: pwsh
+        run: |
+          & "${{ steps.godot.outputs.path }}" --headless --editor --audio-driver Dummy --path "${{ github.workspace }}" --quit
+
       - name: Smoke Test
         shell: pwsh
         run: |
