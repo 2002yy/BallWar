@@ -12,23 +12,23 @@ Keep it current, short, and operational.
 ## 1. Canonical Docs / 主文档分工
 
 - `README.md`
-  - project overview, current line, and entry links
+  - project overview, current line, and entry links / 项目概览、当前状态和入口链接
 - `ROADMAP.md`
-  - current progress, what is done, what is next, what is deferred
+  - current progress, what is done, what is next, what is deferred / 进度板、已完成、下一步、暂缓项
 - `docs/technical/README_TEST_MATRIX.md`
-  - correctness baseline, performance probes, and when to run which tests
+  - correctness baseline, performance probes, and when to run which tests / 正确性基线、性能探针、运行建议
 - `docs/technical/AI_HANDOFF_CURRENT.md`
-  - fast session takeover card for the next AI / Codex run
+  - fast session takeover card for the next AI / Codex run / 下一次 AI/Codex 接管卡
 - `CHANGELOG.md`
-  - condensed version spine
+  - condensed version spine / 精简版本脊柱
 - `.github/workflows/test.yml`
-  - GitHub Actions headless CI: validate + 10-test matrix
+  - GitHub Actions headless CI: validate + 10-test matrix / GitHub Actions headless CI：验证 + 10 测试矩阵
 - `docs/history/README.md`
-  - history index for stage documents
+  - history index for stage documents / 历史阶段索引
 - `docs/history/README_v*.md`
-  - detailed historical stage notes, intentionally preserved
+  - detailed historical stage notes, intentionally preserved / 详细历史阶段记录，有保留地保存
 - `assets/ASSET_SOURCES_AND_LICENSES.md`
-  - asset provenance and redistribution notes
+  - asset provenance and redistribution notes / 素材来源与分发许可
 
 ## 2. Repo Scope And Entry Scenes / 仓库范围与入口场景
 
@@ -53,59 +53,56 @@ Do not recreate those surfaces in code unless there is a clear runtime-only reas
 ## 3. Current Architecture Boundaries / 当前架构边界
 
 - `Main.gd`
-  - top-level lifecycle and orchestration
-  - should keep shrinking away from deep restore-field mutation
+  - top-level lifecycle and orchestration / 顶层生命周期编排
+  - should keep shrinking away from deep restore-field mutation / 应持续收缩，不承担深层恢复逻辑
 - `SaveFlowController.gd`
-  - owns the continue/load flow split between `prepare_*` and `apply_*`
+  - owns the continue/load flow split between `prepare_*` and `apply_*` / 负责继续/加载流程的 prepare/apply 拆分
 - `RestorePlan.gd`
-  - active restore planning data passed through the continue path
+  - active restore planning data passed through the continue path / 沿继续路径传递的主动恢复计划数据
 - `SaveGameCodec.gd`
-  - validates and normalizes save data only
-  - should not directly mutate runtime objects
+  - validates and normalizes save data only / 仅验证和规范化存档数据
+  - should not directly mutate runtime objects / 不应直接修改运行时对象
 - `SaveStateApplier.gd`
-  - applies cleaned data to runtime objects and systems
+  - applies cleaned data to runtime objects and systems / 将清洗后的数据应用到运行时对象与系统
 - `ControlChamber.gd`, `Turret.gd`, `Bullet.gd`
-  - own `restore_from_state(...)` for their internal restore mutation
+  - own `restore_from_state(...)` for their internal restore mutation / 各自拥有内部恢复方法
 - bullet restore path
-  - still needs deferred handling because pooling, trails, and pressure behavior are runtime-heavy
+  - still needs deferred handling / 因对象池、弹道和压力行为较重，仍需延迟处理
 
 ## 4. UI And Scene Policy / UI 与场景规则
 
-- new visible UI should be `.tscn`-first
-- scripts should prefer logic, signals, and lightweight coordination
-- avoid rebuilding large node trees in `_ready()` when a reusable scene is the better fit
-- if a scene has been manually tuned in the editor, do not overwrite it with generator-style scripts
-- runtime-heavy systems can stay code-driven when editor scenes add little value:
+- new visible UI should be `.tscn`-first / 新的可见 UI 优先使用 `.tscn` 场景
+- scripts should prefer logic, signals, and lightweight coordination / 脚本应侧重逻辑、信号和轻量协调
+- avoid rebuilding large node trees in `_ready()` when a reusable scene is the better fit / 已有可复用场景时不要用代码重建节点树
+- if a scene has been manually tuned in the editor, do not overwrite it with generator-style scripts / 已手动调整的场景不要用生成式脚本覆盖
+- runtime-heavy systems can stay code-driven when editor scenes add little value / 运行时较重的系统可以保留代码驱动：
   - `Battlefield.gd`
   - `BulletPool.gd`
-  - pooled bullet/trail internals
-  - control-chamber internal ball runtime state
+  - pooled bullet/trail internals / 子弹池/弹道内部逻辑
+  - control-chamber internal ball runtime state / 控制仓内部弹球运行时状态
 
 ## 5. Validation Policy / 验证规则
 
 Priority / 优先级:
 
-1. desktop local smoke/perf evidence
-2. editor parse/load health
-3. static script scanning and targeted headless checks
-4. Codex runtime observations
+1. desktop local smoke/perf evidence / 桌面端本地冒烟/性能证据
+2. editor parse/load health / 编辑器解析/加载健康度
+3. static script scanning and targeted headless checks / 静态脚本扫描 + 定向 headless 检查
+4. Codex runtime observations / Codex 运行时观察
 
 Working rules / 工作规则:
 
-- correctness baseline lives in `docs/technical/README_TEST_MATRIX.md`
-- performance probes are not correctness proof
-- if Codex runtime crashes but there is no clear parse/script failure and desktop local does not reproduce it, record it as an environment limitation instead of rewriting code speculatively
-- when feature work is UI-heavy, still leave either:
-  - controller/logic tests
-  - a lightweight benchmark hook
-  - or a clear manual verification checklist
+- correctness baseline lives in `docs/technical/README_TEST_MATRIX.md` / 正确性基线见测试矩阵文档
+- performance probes are not correctness proof / 性能探针不能替代正确性验证
+- if Codex runtime crashes but there is no clear parse/script failure and desktop local does not reproduce it, record it as an environment limitation instead of rewriting code speculatively / 无法重现的环境限制不做推测性重写
+- when feature work is UI-heavy, still leave controller/logic tests, a benchmark hook, or a manual verification checklist / UI 重的工作也尽量保留逻辑测试或人工验证清单
 
 ## 6. Asset Boundary / 资源边界
 
 - `assets/`
-  - curated, import-ready, redistribution-aware files only
+  - curated, import-ready, redistribution-aware files only / 仅存放整理好、可导入、可分发的文件
 - `art_reference/free_ui_assets/`
-  - research material, raw downloads, and source capture artifacts
+  - research material, raw downloads, and source capture artifacts / 调研素材、原始下载和源文件
 
 Before shipping or mirroring third-party material, check `assets/ASSET_SOURCES_AND_LICENSES.md`.  
 任何第三方资源在正式提交或分发前，都先看 `assets/ASSET_SOURCES_AND_LICENSES.md`。

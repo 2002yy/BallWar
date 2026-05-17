@@ -84,16 +84,16 @@ Performance probes are separate from correctness:
 ## 7. Canonical Docs / 主文档分工
 
 - `docs/technical/AI_HANDOFF_CURRENT.md`
-  - quick takeover card for the next AI / Codex session
+  - quick takeover card for the next AI / Codex session / 下一次 AI/Codex 快速接管卡
 - `README.md`
-  - current project entrypoint
+  - current project entrypoint / 项目入口
 - `ROADMAP.md`
-  - main progress board and development direction
+  - main progress board and development direction / 进度板与开发方向
 - `docs/technical/README_TEST_MATRIX.md`
-  - test ownership, baseline, and run guidance only
+  - test ownership, baseline, and run guidance / 测试职责、基线和运行建议
 - `docs/technical/TECHNICAL_GUIDE.md`
-  - current architecture, editor, validation, and repo-boundary rules
+  - current architecture, editor, validation, and repo-boundary rules / 架构、编辑器协作、验证规则
 - `CHANGELOG.md`
-  - condensed version spine
+  - condensed version spine / 精简版本脊柱
 - `docs/history/README.md`
-  - historical stage index
+  - historical stage index / 历史阶段索引
