@@ -15,8 +15,10 @@ This folder keeps the detailed stage-by-stage BallWar history that used to live 
 
 ## 推荐入口 / Suggested entry points
 
+- `README_v2_1_11_1_ui_hotfix.md`
+  - Latest Stable / 当前稳定版：控制仓门文字裁切热修复
 - `README_v2_1_11.md`
-  - Latest Stable / 当前稳定版：编码恢复、Android 导出修复
+  - encoding recovery, Android export fix, public repo hardening / 编码恢复、Android 导出修复、公开仓库收口
 - `README_v2_1_11_public_repo_hardening.md`
   - public repository hardening / 公开仓库收口：文档分层、CI 接入、导出脚本清理
 - `README_v2_1_10.md`

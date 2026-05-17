@@ -8,12 +8,20 @@ Detailed stage notes now live under [docs/history/](docs/history/README.md).
 
 ## Release Reading Rule / Release 分层
 
-- Latest Stable: `v2.1.11`
+- Latest Stable: `v2.1.11.1`
   - recommended public download, with Windows zip and Android debug APK assets
 - Milestone Releases: `v2.1.10`, `v2.1.9`, `v2.1.8`, `v2.1.4`, `v2.0.3`
   - important checkpoints, not the default download signal
 - Historical Releases: `v1.9.x`, `v0.1.0-mvp`
   - reconstructed history, not the recommended download path
+
+## `v2.1.11.1` — UI Hotfix / 控制仓文字热修复
+
+- Fixed control-chamber bottom gate label clipping / 修复控制仓底部门文字裁切
+- x2/x3 no longer gets clipped into x in narrow gate layouts / 倍率标签在窄门布局下不再被裁为单字符
+- Reduced gate text outline thickness so 发射 appears less heavy / 减少门文字描边厚度，让"发射"显示不再过粗
+- Rendering-only change; no chamber physics, multiplier, event, bullet, or collision rule changes / 纯绘制变更，不涉及物理、倍率、事件、子弹或碰撞逻辑
+- Verified with SmokeTestRunner, IntegrationTestRunner, LayoutSanityTestRunner, and StartMenuSceneTestRunner / 以 SmokeTestRunner、IntegrationTestRunner、LayoutSanityTestRunner、StartMenuSceneTestRunner 验证通过
 
 ## `v2.1.11` — Public Repository Hardening / 公开仓库收口
 

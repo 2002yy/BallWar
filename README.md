@@ -7,7 +7,7 @@ A **Godot 4.6 + GDScript** 2D territory-control arcade prototype — four factio
 
 ## Try It / 试玩下载
 
-> **v2.1.11 (Latest Stable / 最新稳定版)** — [Windows zip](https://github.com/2002yy/BallWar/releases/tag/v2.1.11) · [Android APK](https://github.com/2002yy/BallWar/releases/tag/v2.1.11)  
+> **v2.1.11.1 (Latest Stable / 最新稳定版)** — [Windows zip](https://github.com/2002yy/BallWar/releases/tag/v2.1.11.1) · [Android APK](https://github.com/2002yy/BallWar/releases/tag/v2.1.11.1)  
 > All releases / 所有版本: [github.com/2002yy/BallWar/releases](https://github.com/2002yy/BallWar/releases)
 
 ## Screenshots / 截图
@@ -42,20 +42,21 @@ A **Godot 4.6 + GDScript** 2D territory-control arcade prototype — four factio
 ## 当前状态 / Current Status
 
 - Current public line / 当前公开主线: `v2.1.x`
-- Latest Stable release / 最新稳定版: `v2.1.11`
-- Previous stable milestone / 前一稳定里程碑: `v2.1.10`
+- Latest Stable release / 最新稳定版: `v2.1.11.1`
+- Previous stable milestone / 前一稳定里程碑: `v2.1.11`
 - Stable structural baseline / 稳定结构基线: `v2.1.4`
 
 版本语义 / Version meaning:
 
-- `v2.1.11` 是当前推荐下载版本，对应 GitHub Releases 的 **Latest Stable**。
+- `v2.1.11.1` 是当前推荐下载版本，对应 GitHub Releases 的 **Latest Stable**。
+- `v2.1.11` 是公开仓库收口的稳定里程碑。
 - `v2.1.10` 是安全加固、性能优化和开始菜单 UI 改进的稳定里程碑。
 - `v2.1.4` 是恢复链路、职责边界和结构收口最明确的结构基线。
 - `v0.1.0-mvp` 只作为历史补录，保留项目起点，不作为推荐下载版本。
 
 ## Release 分层 / Release Layers
 
-- **Latest Stable / 最新稳定版**: `v2.1.11`
+- **Latest Stable / 最新稳定版**: `v2.1.11.1`
   - Windows zip, Android debug APK, source archives / Windows 压缩包、Android 调试 APK、源码
 - **Milestone Releases / 里程碑版本**: `v2.1.10`, `v2.1.9`, `v2.1.8`, `v2.1.4`, `v2.0.3`
   - important checkpoints for review and comparison / 重要检查点，不作为默认下载
@@ -86,7 +87,7 @@ Headless 检查（将 `<godot_console>` 替换为本地 Godot 控制台程序路
 <godot_console> --headless --path . --script res://scripts/tests/LayoutSanityTestRunner.gd
 ```
 
-Current verification recorded for / 当前已验证结果 (`v2.1.11`):
+Current verification recorded for / 当前已验证结果 (`v2.1.11.1`):
 
 - Headless project load / Headless 项目加载: OK
 - `SmokeTestRunner.gd`: PASS (218 checks)
@@ -134,7 +135,8 @@ Root directory keeps only the entry point and runtime-essential files; all stage
 
 ## 版本脉络 / Version Spine
 
-- `v2.1.11`: Latest Stable, encoding recovery, Android export fix, build pipeline stabilization, public repository hardening / 当前稳定版：编码恢复、Android 导出修复、构建流水线稳定、公开仓库收口
+- `v2.1.11.1`: Latest Stable, UI hotfix — control chamber gate label clipping fix / 当前稳定版：控制仓门文字裁切热修复
+- `v2.1.11`: encoding recovery, Android export fix, build pipeline stabilization, public repository hardening / 编码恢复、Android 导出修复、构建流水线稳定、公开仓库收口
 - `v2.1.10`: save security hardening, hot-path performance optimization, StartMenu clarity / 存档安全加固、热路径性能优化、开始菜单改进
 - `v2.1.9`: settings system, result panel, round statistics / 设置系统、结算面板、对局统计
 - `v2.1.8`: decor-layer event model, chamber-state extraction, StartMenu polish / 装饰层事件化、控制仓状态外提、开始菜单打磨
