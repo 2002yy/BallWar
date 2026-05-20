@@ -35,7 +35,7 @@ jobs:
       - name: Validate project.godot loads
         run: |
           set -o pipefail
-          ./${{ env.GODOT_BINARY }} --headless --path . --quit 2>&1 | tee validate.log
+          ./${{ env.GODOT_BINARY }} --headless --audio-driver Dummy --path . --quit 2>&1 | tee validate.log
       - name: Upload validate log
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,10 +99,14 @@ jobs:
       - name: Make Godot executable (cached)
         if: steps.cache-godot.outputs.cache-hit == 'true'
         run: chmod +x ${{ env.GODOT_BINARY }}
+      - name: Import project
+        run: |
+          set -o pipefail
+          ./${{ env.GODOT_BINARY }} --headless --audio-driver Dummy --editor --path . --quit 2>&1 | tee import.log
       - name: Run ${{ matrix.label }}
         run: |
           set -o pipefail
-          ./${{ env.GODOT_BINARY }} --headless --path . --script res://scripts/tests/${{ matrix.script }} 2>&1 | tee test_output.log
+          ./${{ env.GODOT_BINARY }} --headless --audio-driver Dummy --path . --script res://scripts/tests/${{ matrix.script }} 2>&1 | tee test_output.log
           tail -5 test_output.log
       - name: Check test result
         run: |
@@ -119,4 +123,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-log-${{ matrix.label }}
-          path: test_output.log
+          path: |
+            import.log
+            test_output.log
