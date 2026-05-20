@@ -34,6 +34,7 @@ jobs:
         run: chmod +x ${{ env.GODOT_BINARY }}
       - name: Validate project.godot loads
         run: |
+          set -o pipefail
           ./${{ env.GODOT_BINARY }} --headless --path . --quit 2>&1 | tee validate.log
       - name: Upload validate log
         if: always()
@@ -100,18 +101,18 @@ jobs:
         run: chmod +x ${{ env.GODOT_BINARY }}
       - name: Run ${{ matrix.label }}
         run: |
+          set -o pipefail
           ./${{ env.GODOT_BINARY }} --headless --path . --script res://scripts/tests/${{ matrix.script }} 2>&1 | tee test_output.log
           tail -5 test_output.log
       - name: Check test result
         run: |
-          if grep -q "PASS" test_output.log; then
-            echo "✅ ${{ matrix.label }} passed"
-          elif grep -q "FAIL" test_output.log; then
-            echo "❌ ${{ matrix.label }} failed"
+          if grep -q "FAIL" test_output.log; then
+            echo "::error::${{ matrix.label }} printed a FAIL marker"
             exit 1
+          elif grep -q "PASS" test_output.log; then
+            echo "${{ matrix.label }} printed a PASS marker"
           else
-            echo "⚠️ ${{ matrix.label }} did not produce a PASS/FAIL result"
-            exit 1
+            echo "${{ matrix.label }} completed successfully; relying on the Godot exit code"
           fi
       - name: Upload ${{ matrix.label }} log
         if: always()
