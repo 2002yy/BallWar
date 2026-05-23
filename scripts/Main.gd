@@ -892,6 +892,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_cancel_cardfront_selection()
 			get_viewport().set_input_as_handled()
 			return
+	if event is InputEventMouseMotion:
+		_update_cardfront_hover_hint()
+		return
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
 	if runtime.selection_controller.get_selected_card_id() < 0:
@@ -911,6 +914,24 @@ func _unhandled_input(event: InputEvent) -> void:
 func _cancel_cardfront_selection() -> void:
 	if runtime.selection_controller != null and runtime.selection_controller.get_selected_card_id() >= 0:
 		runtime.selection_controller.clear_selection()
+
+
+func _update_cardfront_hover_hint() -> void:
+	if not _is_cardfront_mode():
+		return
+	if runtime.selection_controller == null:
+		return
+	if runtime.selection_controller.get_selected_card_id() < 0:
+		return
+	if runtime.battlefield == null or not is_instance_valid(runtime.battlefield):
+		return
+	if not runtime.battlefield.has_method("world_to_cell"):
+		return
+	var cell: Vector2i = runtime.battlefield.world_to_cell(get_global_mouse_position())
+	if not runtime.battlefield.is_inside(cell):
+		runtime.selection_controller.restore_action_hint()
+		return
+	runtime.selection_controller.update_hover_target_hint(cell)
 
 
 func _cleanup_game_layer() -> void:

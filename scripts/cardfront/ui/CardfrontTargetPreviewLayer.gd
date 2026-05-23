@@ -17,6 +17,8 @@ var _hint_color: Color = Color(0.90, 0.72, 0.18, 0.28)
 var _preview_type: String = ""
 var _owner_id: int = CardfrontRulesScript.PLAYER_FACTION
 var _pulse_time: float = 0.0
+var _invalid_flash_cells: Array[Dictionary] = []
+const INVALID_FLASH_DURATION: float = 0.25
 
 
 func _init() -> void:
@@ -90,36 +92,67 @@ func get_preview_pulse_alpha_for_test() -> float:
 	return _preview_fill_alpha()
 
 
+func flash_invalid_cell(cell: Vector2i) -> void:
+	_invalid_flash_cells.append({
+		"cell": cell,
+		"remaining": INVALID_FLASH_DURATION,
+	})
+	set_process(true)
+	queue_redraw()
+
+
 func _draw() -> void:
-	if not _active:
-		return
-	var pulse: float = _pulse_value()
-	var fill_alpha: float = _preview_fill_alpha()
-	var outline_alpha: float = lerpf(0.76, 1.0, pulse)
-	var outline_width: float = maxf(1.0, float(cell_size) * 0.12) * lerpf(1.0, 1.65, pulse)
-	var fill_color := _with_alpha(_preview_color, fill_alpha)
-	var outline_color := _with_alpha(_preview_color.lightened(0.42), outline_alpha)
-	for cell in _valid_cells:
+	if _active:
+		var pulse: float = _pulse_value()
+		var fill_alpha: float = _preview_fill_alpha()
+		var outline_alpha: float = lerpf(0.76, 1.0, pulse)
+		var outline_width: float = maxf(1.0, float(cell_size) * 0.12) * lerpf(1.0, 1.65, pulse)
+		var fill_color := _with_alpha(_preview_color, fill_alpha)
+		var outline_color := _with_alpha(_preview_color.lightened(0.42), outline_alpha)
+		for cell in _valid_cells:
+			var rect := Rect2(Vector2(cell.x * cell_size, cell.y * cell_size), Vector2(cell_size, cell_size))
+			draw_rect(rect.grow(-1.5), fill_color, true)
+			draw_rect(rect.grow(-0.5), outline_color, false, outline_width)
+		var hint_alpha: float = lerpf(0.26, 0.48, pulse)
+		var hint_outline_alpha: float = lerpf(0.58, 0.88, pulse)
+		var hint_width: float = maxf(1.0, float(cell_size) * 0.10) * lerpf(1.0, 1.45, pulse)
+		var hint_fill := _with_alpha(_hint_color, hint_alpha)
+		var hint_outline := _with_alpha(_hint_color.lightened(0.36), hint_outline_alpha)
+		for cell in _hint_cells:
+			var rect := Rect2(Vector2(cell.x * cell_size, cell.y * cell_size), Vector2(cell_size, cell_size))
+			draw_rect(rect.grow(-1.5), hint_fill, true)
+			draw_rect(rect.grow(-0.5), hint_outline, false, hint_width)
+	for item in _invalid_flash_cells:
+		var cell: Vector2i = item.get("cell", Vector2i.ZERO)
+		var remaining := float(item.get("remaining", 0.0))
+		var alpha := clampf(remaining / INVALID_FLASH_DURATION, 0.0, 1.0)
 		var rect := Rect2(Vector2(cell.x * cell_size, cell.y * cell_size), Vector2(cell_size, cell_size))
-		draw_rect(rect.grow(-1.5), fill_color, true)
-		draw_rect(rect.grow(-0.5), outline_color, false, outline_width)
-	var hint_alpha: float = lerpf(0.26, 0.48, pulse)
-	var hint_outline_alpha: float = lerpf(0.58, 0.88, pulse)
-	var hint_width: float = maxf(1.0, float(cell_size) * 0.10) * lerpf(1.0, 1.45, pulse)
-	var hint_fill := _with_alpha(_hint_color, hint_alpha)
-	var hint_outline := _with_alpha(_hint_color.lightened(0.36), hint_outline_alpha)
-	for cell in _hint_cells:
-		var rect := Rect2(Vector2(cell.x * cell_size, cell.y * cell_size), Vector2(cell_size, cell_size))
-		draw_rect(rect.grow(-1.5), hint_fill, true)
-		draw_rect(rect.grow(-0.5), hint_outline, false, hint_width)
+		draw_rect(rect.grow(-1.0), Color(1.0, 0.16, 0.12, 0.28 * alpha), true)
+		draw_rect(rect.grow(-0.5), Color(1.0, 0.25, 0.18, 0.95 * alpha), false, maxf(2.0, float(cell_size) * 0.18))
 
 
 func _process(delta: float) -> void:
-	if not _active:
+	var need_process := false
+	if _active:
+		_pulse_time += maxf(0.0, delta)
+		need_process = true
+	if not _invalid_flash_cells.is_empty():
+		_tick_invalid_flash(delta)
+		need_process = true
+	if need_process:
+		queue_redraw()
+	else:
 		set_process(false)
-		return
-	_pulse_time += maxf(0.0, delta)
-	queue_redraw()
+
+
+func _tick_invalid_flash(delta: float) -> void:
+	var alive: Array[Dictionary] = []
+	for item in _invalid_flash_cells:
+		var remaining := float(item.get("remaining", 0.0)) - maxf(0.0, delta)
+		if remaining > 0.0:
+			item["remaining"] = remaining
+			alive.append(item)
+	_invalid_flash_cells = alive
 
 
 func _pulse_value() -> float:
@@ -132,6 +165,40 @@ func _preview_fill_alpha() -> float:
 
 func _with_alpha(color: Color, alpha: float) -> Color:
 	return Color(color.r, color.g, color.b, clampf(alpha, 0.0, 1.0))
+
+
+func get_hover_target_info(cell: Vector2i) -> Dictionary:
+	if not _active:
+		return {
+			"active": false,
+			"valid": false,
+			"reason": "no_active_card",
+		}
+	if cell in _valid_cells:
+		return {
+			"active": true,
+			"valid": true,
+			"reason": "valid_target",
+			"preview_type": _preview_type,
+			"region_id": get_target_region_id(cell),
+		}
+	return {
+		"active": true,
+		"valid": false,
+		"reason": _invalid_reason_for_preview_type(),
+		"preview_type": _preview_type,
+	}
+
+
+func _invalid_reason_for_preview_type() -> String:
+	match _preview_type:
+		CardTargetTypeScript.OWNED_BORDER:
+			return "need_owned_border"
+		CardTargetTypeScript.ENEMY_REGION:
+			return "need_enemy_region"
+		CardTargetTypeScript.OWNED_REGION:
+			return "need_owned_region"
+	return "invalid_target"
 
 
 func _find_owned_border_cells() -> void:

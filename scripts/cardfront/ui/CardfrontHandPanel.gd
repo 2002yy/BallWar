@@ -65,6 +65,9 @@ func _layout_panel(view_size: Vector2) -> void:
 	_action_hint_label.position = Vector2(panel_x, container.position.y - 34.0)
 	_action_hint_label.size = Vector2(panel_w, 28.0)
 	_action_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_action_hint_bg.position = _action_hint_label.position
+	_action_hint_bg.size = _action_hint_label.size
+	_action_hint_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_apply_hint_style()
 
 
@@ -139,6 +142,30 @@ func clear_selection() -> void:
 	_hide_action_hint()
 
 
+func show_hover_target_hint(valid: bool, reason: String, card_data: Dictionary) -> void:
+	if _action_hint_label == null:
+		return
+	var card_name := str(card_data.get("card_name", "当前卡牌"))
+	if valid:
+		_action_hint_label.text = "可使用【" + card_name + "】：点击此处释放｜右键/Esc 取消"
+	else:
+		_action_hint_label.text = _invalid_target_hint(reason, card_name)
+	_action_hint_label.visible = true
+	if _action_hint_bg != null:
+		_action_hint_bg.visible = true
+
+
+func _invalid_target_hint(reason: String, card_name: String) -> String:
+	match reason:
+		"need_owned_border":
+			return "不能选择：" + card_name + "只能作用于己方边界格｜右键/Esc 取消"
+		"need_enemy_region":
+			return "不能选择：" + card_name + "只能作用于敌方控制区域｜右键/Esc 取消"
+		"need_owned_region":
+			return "不能选择：" + card_name + "只能作用于己方控制区域｜右键/Esc 取消"
+	return "不能选择：目标无效｜右键/Esc 取消"
+
+
 func get_action_hint_text() -> String:
 	if _action_hint_label == null:
 		return ""
@@ -194,7 +221,8 @@ func _show_action_hint(card_id: int, card_data: Dictionary) -> void:
 	if hint == "":
 		_hide_action_hint()
 		return
-	_action_hint_label.text = hint
+	var cancel_hint := str(hint) + '｜右键/Esc 取消'
+	_action_hint_label.text = cancel_hint
 	_action_hint_label.visible = true
 	_action_hint_bg.visible = true
 
