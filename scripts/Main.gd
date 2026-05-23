@@ -883,13 +883,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if runtime.selection_controller == null:
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		_cancel_cardfront_selection()
-		get_viewport().set_input_as_handled()
-		return
+		if runtime.selection_controller.get_selected_card_id() >= 0:
+			_cancel_cardfront_selection()
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-		_cancel_cardfront_selection()
-		get_viewport().set_input_as_handled()
-		return
+		if runtime.selection_controller.get_selected_card_id() >= 0:
+			_cancel_cardfront_selection()
+			get_viewport().set_input_as_handled()
+			return
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
 	if runtime.selection_controller.get_selected_card_id() < 0:

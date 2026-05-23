@@ -6,6 +6,7 @@ const CardfrontUiAssetRegistryScript = preload("res://scripts/cardfront/ui/Cardf
 const CardViewScene = preload("res://scenes/ui/cardfront/CardfrontCardView.tscn")
 
 @onready var _action_hint_label: Label = $ActionHintLabel
+@onready var _action_hint_bg: ColorRect = $ActionHintBg
 
 var card_system = null
 var resource_states: Dictionary = {}
@@ -195,6 +196,7 @@ func _show_action_hint(card_id: int, card_data: Dictionary) -> void:
 		return
 	_action_hint_label.text = hint
 	_action_hint_label.visible = true
+	_action_hint_bg.visible = true
 
 
 func _hide_action_hint() -> void:
@@ -202,6 +204,7 @@ func _hide_action_hint() -> void:
 		return
 	_action_hint_label.text = ""
 	_action_hint_label.visible = false
+	_action_hint_bg.visible = false
 
 
 func _apply_hint_style() -> void:
