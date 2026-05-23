@@ -504,6 +504,32 @@ func _create_cardfront_region_info_panel() -> void:
 	runtime.region_info_panel = panel_setup.get("region_info_panel", null)
 
 
+func _create_cardfront_tutorial_overlay() -> void:
+	runtime.tutorial_overlay = null
+	if not _is_cardfront_mode():
+		return
+	var ui_canvas = _hud_ref("ui_canvas")
+	if ui_canvas == null:
+		return
+	var overlay_setup: Dictionary = CardfrontModeScript.create_tutorial_overlay(ui_canvas)
+	if bool(overlay_setup.get("configured", false)):
+		runtime.tutorial_overlay = overlay_setup.get("tutorial_overlay", null)
+		_wire_tutorial_settings_signals(overlay_setup.get("tutorial_overlay", null))
+
+
+func _wire_tutorial_settings_signals(overlay) -> void:
+	if overlay == null or not is_instance_valid(overlay):
+		return
+	var settings_panel = _hud_ref("settings_panel")
+	if settings_panel == null or not is_instance_valid(settings_panel):
+		return
+	if not settings_panel.has_signal("settings_changed"):
+		return
+	var callable := Callable(overlay, "on_settings_changed")
+	if not settings_panel.settings_changed.is_connected(callable):
+		settings_panel.settings_changed.connect(callable)
+
+
 func _create_cardfront_feedback_layers() -> void:
 	runtime.card_detail_popup = null
 	runtime.toast_layer = null
@@ -593,6 +619,7 @@ func _create_ui() -> void:
 		_create_cardfront_feedback_layers()
 		_create_cardfront_effect_visual_bridge()
 		_create_cardfront_region_info_panel()
+		_create_cardfront_tutorial_overlay()
 
 	_on_scores_changed(runtime.battlefield.count_cells_by_team())
 
