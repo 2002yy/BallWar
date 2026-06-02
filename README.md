@@ -21,6 +21,13 @@ A **Godot 4.6 + GDScript** 2D territory-control arcade prototype — four factio
 |:--:|:--:|:--:|:--:|:--:|
 | ![](screenshots/%E5%BC%80%E5%A7%8B%E7%95%8C%E9%9D%A2.png) | ![](screenshots/%E6%B8%B8%E6%88%8F%E5%88%9D%E5%A7%8B.png) | ![](screenshots/%E6%B8%B8%E6%88%8F%E4%B8%AD%E5%9C%BA.png) | ![](screenshots/%E4%BA%8B%E4%BB%B6%E7%94%BB%E9%9D%A2.png) | ![](screenshots/%E4%B8%80%E6%96%B9%E8%83%9C%E5%88%A9%E7%BB%93%E6%9E%9C.png) |
 
+## Demo Video / GIF
+
+- 30s gameplay loop: TODO
+- event roulette demo: TODO
+- save/load recovery demo: TODO
+- Android layout demo: TODO
+
 ## Download Latest Release / 下载最新版本
 
 > **v2.1.11.1 (Latest Stable)** — [Windows zip](https://github.com/2002yy/BallWar/releases/tag/v2.1.11.1) · [Android APK](https://github.com/2002yy/BallWar/releases/tag/v2.1.11.1)  
