@@ -5,6 +5,16 @@ A **Godot 4.6 + GDScript** 2D territory-control arcade prototype — four factio
 
 **Engine:** Godot 4.6 · **Language:** GDScript · **Tests:** 10 runners · GitHub Actions CI · **Platforms:** Windows / Android
 
+## Gameplay Loop / 玩法循环
+
+1. Four factions compete for territory on the central grid.
+2. Control chambers decide firing rhythm and burst scale.
+3. Turrets launch bullets into the battlefield.
+4. Bullets convert cells and shift territory control.
+5. Event roulette changes the match tempo.
+6. A faction wins when mode-specific victory conditions are met.
+
+
 ## Screenshots / 截图
 
 | 开始界面 | 游戏初始 | 游戏中场 | 事件画面 | 胜利结果 |
