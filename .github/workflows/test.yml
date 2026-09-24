@@ -53,34 +53,24 @@ jobs:
         include:
           - label: SmokeTest
             script: SmokeTestRunner.gd
-            checks: 218
           - label: StartMenu
             script: StartMenuSceneTestRunner.gd
-            checks: 55
           - label: GameHUD
             script: GameHUDSceneTestRunner.gd
-            checks: 40
           - label: EventRoulette
             script: EventRouletteSceneTestRunner.gd
-            checks: 14
           - label: SettingsPanel
             script: SettingsPanelSceneTestRunner.gd
-            checks: 9
           - label: GameStateCoordinator
             script: GameStateCoordinatorTestRunner.gd
-            checks: 50
           - label: SaveFlow
             script: SaveFlowControllerTestRunner.gd
-            checks: 190
           - label: RestorePlan
             script: RestorePlanTestRunner.gd
-            checks: 11
           - label: Integration
             script: IntegrationTestRunner.gd
-            checks: 133
           - label: LayoutSanity
             script: LayoutSanityTestRunner.gd
-            checks: 376
     steps:
       - uses: actions/checkout@v4
       - name: Restore cached Godot
