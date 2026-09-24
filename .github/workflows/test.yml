@@ -2,6 +2,8 @@ name: Godot Headless Tests
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 env:
