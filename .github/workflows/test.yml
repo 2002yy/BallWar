@@ -61,26 +61,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: SmokeTest
-            script: SmokeTestRunner.gd
-          - label: StartMenu
-            script: StartMenuSceneTestRunner.gd
-          - label: GameHUD
-            script: GameHUDSceneTestRunner.gd
-          - label: EventRoulette
-            script: EventRouletteSceneTestRunner.gd
-          - label: SettingsPanel
-            script: SettingsPanelSceneTestRunner.gd
-          - label: GameStateCoordinator
-            script: GameStateCoordinatorTestRunner.gd
-          - label: SaveFlow
-            script: SaveFlowControllerTestRunner.gd
-          - label: RestorePlan
-            script: RestorePlanTestRunner.gd
-          - label: Integration
-            script: IntegrationTestRunner.gd
-          - label: LayoutSanity
-            script: LayoutSanityTestRunner.gd
+          - label: Core UI and gameplay
+            scripts: |
+              SmokeTestRunner.gd
+              StartMenuSceneTestRunner.gd
+              GameHUDSceneTestRunner.gd
+              EventRouletteSceneTestRunner.gd
+              SettingsPanelSceneTestRunner.gd
+          - label: State persistence and integration
+            scripts: |
+              GameStateCoordinatorTestRunner.gd
+              SaveFlowControllerTestRunner.gd
+              RestorePlanTestRunner.gd
+              IntegrationTestRunner.gd
+              LayoutSanityTestRunner.gd
     steps:
       - uses: actions/checkout@v4
       - name: Restore cached Godot
@@ -104,26 +98,41 @@ jobs:
           set -o pipefail
           ./${{ env.GODOT_BINARY }} --headless --audio-driver Dummy --editor --path . --quit 2>&1 | tee import.log
       - name: Run ${{ matrix.label }}
+        shell: bash
+        env:
+          TEST_SCRIPTS: ${{ matrix.scripts }}
         run: |
-          set -o pipefail
-          ./${{ env.GODOT_BINARY }} --headless --audio-driver Dummy --path . --script res://scripts/tests/${{ matrix.script }} 2>&1 | tee test_output.log
-          tail -5 test_output.log
-      - name: Check test result
-        run: |
-          if grep -q "FAIL" test_output.log; then
-            echo "::error::${{ matrix.label }} printed a FAIL marker"
-            exit 1
-          elif grep -q "PASS" test_output.log; then
-            echo "${{ matrix.label }} printed a PASS marker"
-          else
-            echo "${{ matrix.label }} completed successfully; relying on the Godot exit code"
-          fi
-      - name: Upload ${{ matrix.label }} log
+          set -u
+          mkdir -p artifacts/test-logs
+          failed=0
+          while IFS= read -r script; do
+            [[ -z "$script" ]] && continue
+            log="artifacts/test-logs/${script%.gd}.log"
+            echo "=== Running ${script} ==="
+            set +e
+            ./${GODOT_BINARY} --headless --audio-driver Dummy --path . --script "res://scripts/tests/${script}" 2>&1 | tee "$log"
+            status=${PIPESTATUS[0]}
+            set -e
+            if grep -q "FAIL" "$log"; then
+              echo "::error::${script} printed a FAIL marker"
+              status=1
+            elif grep -q "PASS" "$log"; then
+              echo "${script} printed a PASS marker"
+            elif [[ $status -eq 0 ]]; then
+              echo "${script} completed successfully; relying on the Godot exit code"
+            fi
+            if [[ $status -ne 0 ]]; then
+              failed=1
+            fi
+          done <<< "$TEST_SCRIPTS"
+          exit "$failed"
+      - name: Upload ${{ matrix.label }} logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-log-${{ matrix.label }}
+          name: test-logs-${{ strategy.job-index }}
           path: |
             import.log
-            test_output.log
+            artifacts/test-logs/*.log
+          if-no-files-found: warn
           retention-days: 7
