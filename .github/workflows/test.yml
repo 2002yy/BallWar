@@ -6,6 +6,13 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-headless-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   GODOT_VERSION: 4.6.2-stable
   GODOT_ARCHIVE: Godot_v4.6.2-stable_linux.x86_64.zip
@@ -44,6 +51,7 @@ jobs:
         with:
           name: validate-log
           path: validate.log
+          retention-days: 7
 
   test:
     name: ${{ matrix.label }}
@@ -118,3 +126,4 @@ jobs:
           path: |
             import.log
             test_output.log
+          retention-days: 7
