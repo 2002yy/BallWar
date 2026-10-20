@@ -3,6 +3,13 @@
 Last updated: 2026-05-17
 Role / 作用: handoff card only / 仅作快速接管卡片
 
+### 2026-10-21 Latest main integration / 当前主线绑定
+
+- 设置修复PR #8已以merge afb59014326472e318df734641f8925e232bf2bf进入4.7候选。随后核实main已更新到7c0a426101b6adf32e5fd09d5a7b07617c3e38a2，包含运行修复、文档迁移和新增CI；本分支吸收main为merge517a98a，代码自动合并，仅README冲突保留新main结构与4.7目标。当前权威交接路径随main迁到本文件，未复活根目录旧文档。
+- 重绑后重新导入并在每runner独立且经探针确认的user://目录跑完整12个现役runner，全部退出0、无SCRIPT ERROR/ERROR；SettingsAndResult 34断言通过。当前main上的原生4.7.1窗口也验证开关前后，1120×720截图与marker PASS，无脚本错误，证据ballwar-settings-latest-main/native-20261021。
+- CI来自已合main，现同步使用官方已核实存在的4.7.1-stable Linux资产，纳入SettingsAndResult和EndToEndContinueMain共12项；运行日志先拒绝SCRIPT ERROR/ERROR/FAIL再认可PASS，避免原先“exit0加PASS掩盖脚本错误”。每runner独立XDG_DATA_HOME，mktemp失败即阻断。当前PR #7仍须最新head的CI通过再合main，不把旧分支无CI当当前豁免。
+- 仅此文档/CI收口在验证后变化，不重复跑相同原生测试；最终commit由本段恢复，CI以推送后精确head查询为准。已关闭设置接口测试阻塞，Android模板/导出/签名/发布与长程性能仍未验收。
+
 ### 2026-10-21 Settings wiring fix / 迁移阻塞修复
 
 - 当前设置阻塞已修复：独立branch codex/ballwar-settings-wiring-20261021，基于自身4.7候选3b602f90。不是只删旧断言；Main启动读取PlayerSettingsStore，HUD创建后接settings_changed，开局后应用性能/事件日志显示；面板打开时刷新不会发出伪用户更改或覆写其他偏好。

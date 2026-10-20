@@ -113,7 +113,7 @@ jobs:
             log="artifacts/test-logs/${script%.gd}.log"
             echo "=== Running ${script} ==="
             set +e
-            user_dir="$(mktemp -d "${RUNNER_TEMP}/ballwar-user-XXXXXX")"
+            user_dir="$(mktemp -d "${RUNNER_TEMP}/ballwar-user-XXXXXX")" || exit 1
             XDG_DATA_HOME="$user_dir" ./${GODOT_BINARY} --headless --audio-driver Dummy --path . --script "res://scripts/tests/${script}" 2>&1 | tee "$log"
             status=${PIPESTATUS[0]}
             set -e
