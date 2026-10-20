@@ -3,6 +3,8 @@
 Date / 日期: 2026-05-15
 Role / 作用: test-only document / 只负责测试
 
+Godot目标版本：**4.7.x**（当前验证4.7.1）。测试前使用独立APPDATA/LOCALAPPDATA，并通过ProjectSettings.globalize_path("user://")确认目录位于测试隔离根下；不操作真实玩家数据。判定成功必须同时满足退出0、预期断言完成且日志无SCRIPT ERROR/ERROR。2026-10-21 SettingsAndResult的旧Main接口问题尚未关闭，不能凭其PASS文本算成功，见AI_HANDOFF_CURRENT.md。
+
 This file answers:
 
 - what tests exist

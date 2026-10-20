@@ -1,7 +1,9 @@
 # BallWar / 领土战争
 
-`BallWar` 是一个基于 Godot 4.6 的 2D 领土争夺原型。四个阵营围绕中心方格战场展开对抗：角落炮台负责发射，外部控制仓决定节奏，子弹会占领或重涂格子，胜负由模式与局势共同决定。  
-`BallWar` is a Godot 4.6 2D territory-control prototype built around four factions, corner turrets, chamber-driven firing rhythm, and map ownership pressure.
+`BallWar` 是一个基于 Godot 4.7 的 2D 领土争夺原型。四个阵营围绕中心方格战场展开对抗：角落炮台负责发射，外部控制仓决定节奏，子弹会占领或重涂格子，胜负由模式与局势共同决定。
+`BallWar` is a Godot 4.7 2D territory-control prototype built around four factions, corner turrets, chamber-driven firing rhythm, and map ownership pressure.
+
+开发与验证使用 Godot **4.7.x**；当前本机验证程序为 4.7.1。导出时须使用匹配的 4.7.x export templates，不能复用 4.6 Android 模板。引擎迁移的导入、测试与未验收边界见 `AI_HANDOFF_CURRENT.md`。
 
 This repository preserves the reconstructed local development history from `v1.7` to the current mainline, with tags for key milestones and versioned `README_v*.md` notes for detailed stage history.
 
