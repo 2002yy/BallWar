@@ -66,67 +66,63 @@ func _test_settings_persistence(t: TestAssert) -> void:
 	var log_cb: CheckButton = panel.get_node("PanelMargin/MainVBox/EventLogCheck")
 	t.that(not perf_cb.button_pressed, "panel loads show_perf=false")
 	t.that(not log_cb.button_pressed, "panel loads show_log=false")
+	var emissions: Array = []
+	panel.settings_changed.connect(func(_settings): emissions.append(true))
+	prefs["show_performance_info"] = true
+	PlayerSettingsStore.save_settings(prefs)
+	panel.show_panel()
+	t.eq(emissions.size(), 0, "refreshing panel does not emit a user change")
+	t.eq(PlayerSettingsStore.load_settings(), prefs, "refresh does not clobber other saved choices")
 
 	panel.queue_free()
 	await process_frame
 
 
-# === P2: Performance bar toggle ===
+# === P2: Performance setting through the real panel ===
 func _test_performance_toggle(t: TestAssert) -> void:
-	print("  [P2] performance bar toggle")
-
+	print("  [P2] performance panel -> persisted setting -> runtime HUD")
 	var prefs := PlayerSettingsStore.default_settings()
 	prefs["show_performance_info"] = false
 	PlayerSettingsStore.save_settings(prefs)
-
-	var main_script = load("res://scripts/Main.gd")
-	var main = main_script.new()
+	var main = load("res://scripts/Main.gd").new()
 	get_root().add_child(main)
-	main.player_settings = PlayerSettingsStore.load_settings()
-	main._apply_performance_setting()
-
-	t.that(not RuntimeHudController.performance_visible, "perf_visible=false after load")
-	t.eq(RuntimeHudController.get_perf_debug_text(null, null, 10, {}), "", "perf_debug_text returns empty when hidden")
-
-	prefs["show_performance_info"] = true
-	PlayerSettingsStore.save_settings(prefs)
-	main.player_settings = PlayerSettingsStore.load_settings()
-	main._apply_performance_setting()
-
-	t.that(RuntimeHudController.performance_visible, "perf_visible=true after toggle on")
-
+	main.selected_save_slot = 9
+	main._start_game(20, true, false)
+	await _flush()
+	t.that(not RuntimeHudController.performance_visible, "saved performance=false applied at startup")
+	t.eq(RuntimeHudController.get_perf_debug_text(null, null, 10, {}), "", "hidden performance text is empty")
+	t.that(not main.runtime.hud_ref("fps_label").visible, "performance label hidden")
+	t.that(not main.runtime.hud_ref("fps_bg").visible, "performance background hidden")
+	main._toggle_settings_panel()
+	var panel = main.runtime.hud_ref("settings_panel")
+	t.that(panel.visible, "settings button opens the real panel")
+	var checkbox: CheckButton = panel.get_node("PanelMargin/MainVBox/PerformanceCheck")
+	t.that(not checkbox.button_pressed, "panel reloads saved preference")
+	checkbox.button_pressed = true
+	t.that(RuntimeHudController.performance_visible, "panel signal applies performance=true")
+	t.that(main.runtime.hud_ref("fps_label").visible, "performance label visible after toggle")
+	t.that(bool(PlayerSettingsStore.load_settings()["show_performance_info"]), "panel choice persisted")
 	main.queue_free()
-	await process_frame
+	await _flush()
 
 
-# === P3: Event log toggle ===
+# === P3: Hide the event log without deleting event evidence ===
 func _test_event_log_toggle(t: TestAssert) -> void:
-	print("  [P3] event log toggle")
-
+	print("  [P3] event log visibility preserves history")
 	var prefs := PlayerSettingsStore.default_settings()
 	prefs["show_event_log"] = false
 	PlayerSettingsStore.save_settings(prefs)
-
-	var main_script = load("res://scripts/Main.gd")
-	var main = main_script.new()
-	main.name = "E2E_LogTest"
+	var main = load("res://scripts/Main.gd").new()
 	get_root().add_child(main)
-	main.player_settings = PlayerSettingsStore.load_settings()
-
-	main.selected_grid_size = 20
-	main.selected_game_mode_name = GameConfig.GAME_MODE_BASIC
 	main.selected_save_slot = 9
-	GameConfig.set_game_mode_by_name(GameConfig.GAME_MODE_BASIC)
 	main._start_game(20, true, false)
-	await process_frame
-	await process_frame
-	await process_frame
-
-	main._apply_event_log_setting()
-
+	await _flush()
 	var ec = main.runtime.event_controller
-	if ec != null and is_instance_valid(ec):
-		t.that(not ec.event_log_visible, "event_log_visible=false after apply")
+	t.that(ec != null, "real game creates event controller")
+	if ec != null:
+		t.eq(ec.get("event_log_visible"), false, "saved event visibility applied")
+		t.eq(ec.get_event_log_text(), "", "hidden event log text not exposed")
+		t.that(not main.runtime.hud_ref("event_log_label").visible, "log label hidden")
 		var history_before: int = ec.event_history.size()
 		ec._finish_event_round({
 			"faction_id": GameConfig.Faction.BLUE,
@@ -134,19 +130,20 @@ func _test_event_log_toggle(t: TestAssert) -> void:
 			"final_effect": EventRouletteController.EFFECT_BONUS_10,
 			"result_text": "蓝方：本次 +10！",
 		})
-		var history_after: int = ec.event_history.size()
-		t.that(history_after > history_before, "event_history still records when log hidden")
-
-	prefs["show_event_log"] = true
-	PlayerSettingsStore.save_settings(prefs)
-	main.player_settings = PlayerSettingsStore.load_settings()
-	main._apply_event_log_setting()
-	if ec != null and is_instance_valid(ec):
-		t.that(ec.event_log_visible, "event_log_visible=true after toggle back")
-
+		t.that(ec.event_history.size() > history_before, "hidden events still recorded")
+		var recorded: int = ec.event_history.size()
+		main._toggle_settings_panel()
+		var panel = main.runtime.hud_ref("settings_panel")
+		var checkbox: CheckButton = panel.get_node("PanelMargin/MainVBox/EventLogCheck")
+		checkbox.button_pressed = true
+		t.eq(ec.get("event_log_visible"), true, "panel signal enables event log")
+		t.that(not ec.get_event_log_text().is_empty(), "recorded history visible after enable")
+		t.that(main.runtime.hud_ref("event_log_label").visible, "event label visible")
+		t.eq(ec.event_history.size(), recorded, "visibility toggle does not alter history")
+		t.that(bool(PlayerSettingsStore.load_settings()["show_event_log"]), "event visibility persisted")
 	_cleanup_save_slot(9)
 	main.queue_free()
-	await process_frame
+	await _flush()
 
 
 # === P4: Result panel ===
