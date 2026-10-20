@@ -23,9 +23,9 @@ func _ready() -> void:
 
 
 func _apply_settings_to_controls() -> void:
-	performance_check.button_pressed = bool(current_settings.get("show_performance_info", true))
-	low_effect_check.button_pressed = bool(current_settings.get("low_effect_mode", false))
-	event_log_check.button_pressed = bool(current_settings.get("show_event_log", true))
+	performance_check.set_pressed_no_signal(bool(current_settings.get("show_performance_info", true)))
+	low_effect_check.set_pressed_no_signal(bool(current_settings.get("low_effect_mode", false)))
+	event_log_check.set_pressed_no_signal(bool(current_settings.get("show_event_log", true)))
 
 
 func _on_setting_toggled(_pressed: bool) -> void:

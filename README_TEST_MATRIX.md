@@ -5,6 +5,8 @@ Role / 作用: test-only document / 只负责测试
 
 Godot目标版本：**4.7.x**（当前验证4.7.1）。测试前使用独立APPDATA/LOCALAPPDATA，并通过ProjectSettings.globalize_path("user://")确认目录位于测试隔离根下；不操作真实玩家数据。判定成功必须同时满足退出0、预期断言完成且日志无SCRIPT ERROR/ERROR。2026-10-21 SettingsAndResult的旧Main接口问题尚未关闭，不能凭其PASS文本算成功，见AI_HANDOFF_CURRENT.md。
 
+2026-10-21修复更新：设置链路回归已改为真实面板交互，不直接给Main写旧接口。旧产品负控失败；新产品SettingsAndResult 34断言及12个现役runner全部无错误通过。原生窗口另验开关前后画面；上述“未关闭”只对应修复前候选，当前详见handoff的Settings wiring fix。
+
 This file answers:
 
 - what tests exist

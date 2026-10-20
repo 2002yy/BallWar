@@ -13,6 +13,7 @@ const StartMenuUi = preload("res://scripts/StartMenu.gd")
 var runtime = GameRuntimeContextScript.new()
 var current_score_counts: Dictionary = {0: 0, 1: 0, 2: 0, 3: 0}
 var is_mobile_layout: bool = false
+var player_settings: Dictionary = {}
 
 var menu_layer
 var game_layer
@@ -75,6 +76,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	randomize()
 	is_mobile_layout = _detect_mobile_layout()
+	player_settings = PlayerSettingsStore.load_settings()
+	_apply_performance_setting()
 	_load_menu_preferences()
 	_create_background()
 	_create_start_menu()
@@ -140,7 +143,9 @@ func _toggle_settings_panel() -> void:
 			settings_panel.visible = false
 		return
 
-	if settings_panel.has_method("show_content"):
+	if settings_panel.has_method("show_panel"):
+		settings_panel.show_panel()
+	elif settings_panel.has_method("show_content"):
 		settings_panel.show_content(GameConfig.get_quality_name(), "手机横屏" if is_mobile_layout else "电脑")
 	else:
 		settings_panel.visible = true
@@ -257,6 +262,12 @@ func _create_ui() -> void:
 		print("[GameHUD] Scene load failed, fallback to legacy GameHudView.gd")
 
 	runtime.set_hud_parts(hud_nodes)
+	var settings_panel = _hud_ref("settings_panel")
+	var settings_changed := Callable(self, "_on_player_settings_changed")
+	if settings_panel != null and settings_panel.has_signal("settings_changed"):
+		if not settings_panel.is_connected("settings_changed", settings_changed):
+			settings_panel.connect("settings_changed", settings_changed)
+	_apply_performance_setting()
 	runtime.set_ui_runtime_parts({
 		"top_bar_segments": hud_nodes.get("top_bar_segments", {}),
 		"top_bar_labels": hud_nodes.get("top_bar_labels", {}),
@@ -291,6 +302,7 @@ func _create_event_roulette_system() -> void:
 	runtime.event_controller.name = "EventRouletteController"
 	game_layer.add_child(runtime.event_controller)
 	runtime.event_controller.setup(self, runtime.battlefield, runtime.chambers, runtime.turrets, _hud_ref("event_label"), runtime.event_view)
+	_apply_event_log_setting()
 
 	var finished_callable: Callable = Callable(self, "_on_event_round_finished")
 	if not runtime.event_controller.event_round_finished.is_connected(finished_callable):
@@ -426,6 +438,29 @@ func _toggle_pause() -> void:
 		_hud_ref("pause_button"),
 		Callable(self, "_save_game_progress")
 	)
+
+func _on_player_settings_changed(settings: Dictionary) -> void:
+	player_settings = settings.duplicate()
+	_apply_performance_setting()
+	_apply_event_log_setting()
+
+func _apply_performance_setting() -> void:
+	var enabled: bool = bool(player_settings.get("show_performance_info", OS.is_debug_build()))
+	RuntimeHudController.set_performance_visible(enabled)
+	for key in ["fps_label", "fps_bg"]:
+		var control = _hud_ref(key)
+		if control != null and is_instance_valid(control):
+			control.visible = enabled and not is_mobile_layout
+
+func _apply_event_log_setting() -> void:
+	var enabled: bool = bool(player_settings.get("show_event_log", true))
+	if runtime.event_controller != null and is_instance_valid(runtime.event_controller):
+		runtime.event_controller.event_log_visible = enabled
+	for key in ["event_log_label", "event_log_toggle_btn"]:
+		var control = _hud_ref(key)
+		if control != null and is_instance_valid(control):
+			control.visible = enabled
+	_refresh_event_log()
 
 func _refresh_event_log() -> void:
 	var event_log_label = _hud_ref("event_log_label")
