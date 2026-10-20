@@ -10,6 +10,9 @@
 .DS_Store
 Thumbs.db
 
+android/.build_version
+android/build/
+
 art_reference/free_ui_assets/*
 !art_reference/free_ui_assets/
 !art_reference/free_ui_assets/FREE_UI_INTEGRATION_PLAN.md

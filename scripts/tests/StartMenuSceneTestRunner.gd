@@ -6,7 +6,7 @@ const TestAssert = preload("res://scripts/tests/TestAssert.gd")
 class DummyOwner extends RefCounted:
 	var SAVE_SLOT_COUNT: int = 5
 	var selected_grid_size: int = 40
-	var selected_palette_name: String = "默认随机"
+	var selected_palette_name: String = "\u9ed8\u8ba4\u968f\u673a"
 	var selected_quality_name: String = GameConfig.QUALITY_MEDIUM
 	var selected_game_mode_name: String = GameConfig.GAME_MODE_BASIC
 	var selected_time_limit_minutes: int = 5
@@ -60,11 +60,11 @@ func _run() -> void:
 
 	var owner := DummyOwner.new()
 	var summaries: Array = [
-		{"slot": 1, "state": "valid", "has_data": true, "is_playable": true, "title": "基础模式｜20×20｜中", "detail": "进度 00:35｜版本 2.1.6"},
-		{"slot": 2, "state": "valid", "has_data": true, "is_playable": true, "title": "占领模式｜40×40｜高", "detail": "进度 04:10｜版本 2.1.6"},
-		{"slot": 3, "state": "valid", "has_data": true, "is_playable": true, "title": "基础模式｜20×20｜中", "detail": "进度 01:45｜版本 2.1.6"},
-		{"slot": 4, "state": "empty", "has_data": false, "is_playable": false, "title": "空存档", "detail": "点击选择此槽"},
-		{"slot": 5, "state": "valid", "has_data": true, "is_playable": true, "title": "狂野模式｜10×10｜低", "detail": "进度 00:12｜版本 2.1.6"},
+		{"slot": 1, "state": "valid", "has_data": true, "is_playable": true, "title": "\u57fa\u7840\u6a21\u5f0f\uFF5C20\u00D720\uFF5C\u4e2d", "detail": "\u8fdb\u5ea6 00:35\uFF5C\u7248\u672c 2.1.6"},
+		{"slot": 2, "state": "valid", "has_data": true, "is_playable": true, "title": "\u5360\u9886\u6a21\u5f0f\uFF5C40\u00D740\uFF5C\u9ad8", "detail": "\u8fdb\u5ea6 04:10\uFF5C\u7248\u672c 2.1.6"},
+		{"slot": 3, "state": "valid", "has_data": true, "is_playable": true, "title": "\u57fa\u7840\u6a21\u5f0f\uFF5C20\u00D720\uFF5C\u4e2d", "detail": "\u8fdb\u5ea6 01:45\uFF5C\u7248\u672c 2.1.6"},
+		{"slot": 4, "state": "empty", "has_data": false, "is_playable": false, "title": "\u7a7a\u5b58\u6863", "detail": "\u70b9\u51fb\u9009\u62e9\u6b64\u69fd"},
+		{"slot": 5, "state": "valid", "has_data": true, "is_playable": true, "title": "\u72c2\u91ce\u6a21\u5f0f\uFF5C10\u00D710\uFF5C\u4f4e", "detail": "\u8fdb\u5ea6 00:12\uFF5C\u7248\u672c 2.1.6"},
 	]
 	var layout: Dictionary = LayoutProfiles.get_profile(40).duplicate(true)
 	layout.merge(LayoutCoordinator.calculate_layout(40, Vector2(1120, 720), false), true)
@@ -115,11 +115,11 @@ func _run() -> void:
 	var slot_button_3: Button = slot_grid.get_node("SlotButton_3")
 	var slot_button_4: Button = slot_grid.get_node("SlotButton_4")
 	var initial_slot_2_base: String = _normalize_slot_label(slot_button_2.text)
-	t.eq(slot_button_3.text, "● 槽3｜基础｜20×20｜中", "selected slot label compacted on first setup")
-	t.eq(slot_button_4.text, "槽4｜空", "empty slot label compacted on first setup")
-	t.eq(start_button.text, "新局覆盖槽3", "start button shows overwrite target")
-	t.eq(continue_button.text, "读取槽3", "continue button shows selected slot")
-	t.eq(status_label.text, "当前存档槽：3", "status label shows selected slot")
+	t.eq(slot_button_3.text, "\u25cf \u69fd3\uFF5C\u57fa\u7840\uFF5C20\u00D720\uFF5C\u4e2d", "selected slot label compacted on first setup")
+	t.eq(slot_button_4.text, "\u69fd4\uFF5C\u7a7a", "empty slot label compacted on first setup")
+	t.eq(start_button.text, "\u5f00\u59cb\u65b0\u6e38\u620f", "start button uses clearer new-game copy")
+	t.eq(continue_button.text, "\u8bfb\u53d6\u69fd3", "continue button shows selected slot")
+	t.eq(status_label.text, "\u5df2\u9009\u62e9\u5b58\u6863\u69fd 3\uff0c\u65b0\u6e38\u620f\u4f1a\u8986\u76d6\u8fd9\u91cc\u7684\u5b58\u6863", "status label explains overwrite target")
 	t.that(_rect_within_parent(continue_button.position, continue_button.size, root_panel.size), "continue button stays inside root panel")
 	t.that(_rect_within_parent(status_label.position, status_label.size, root_panel.size), "status label stays inside root panel")
 
@@ -128,11 +128,11 @@ func _run() -> void:
 	await process_frame
 
 	t.eq(_normalize_slot_label(slot_button_2.text), initial_slot_2_base, "slot label format stays consistent after refresh")
-	t.eq(slot_button_2.text, "● 槽2｜占领｜40×40｜高", "selected slot text keeps compact format after refresh")
-	t.eq(slot_button_3.text, "槽3｜基础｜20×20｜中", "previously selected slot loses marker but keeps format")
-	t.eq(start_button.text, "新局覆盖槽2", "start button retargets selected slot after refresh")
-	t.eq(continue_button.text, "读取槽2", "continue button retargets selected slot after refresh")
-
+	t.eq(slot_button_2.text, "\u25cf \u69fd2\uFF5C\u5360\u9886\uFF5C40\u00D740\uFF5C\u9ad8", "selected slot text keeps compact format after refresh")
+	t.eq(slot_button_3.text, "\u69fd3\uFF5C\u57fa\u7840\uFF5C20\u00D720\uFF5C\u4e2d", "previously selected slot loses marker but keeps format")
+	t.eq(start_button.text, "\u5f00\u59cb\u65b0\u6e38\u620f", "start button stays clear after refresh")
+	t.eq(continue_button.text, "\u8bfb\u53d6\u69fd2", "continue button retargets selected slot after refresh")
+	t.eq(status_label.text, "\u5df2\u9009\u62e9\u5b58\u6863\u69fd 2\uff0c\u65b0\u6e38\u620f\u4f1a\u8986\u76d6\u8fd9\u91cc\u7684\u5b58\u6863", "status label retargets selected slot after refresh")
 	instance.queue_free()
 	await process_frame
 
@@ -142,7 +142,7 @@ func _run() -> void:
 
 
 func _normalize_slot_label(text_value: String) -> String:
-	return text_value.trim_prefix("● ")
+	return text_value.trim_prefix("\u25cf ")
 
 
 func _rect_within_parent(pos: Vector2, size: Vector2, parent_size: Vector2) -> bool:
@@ -156,4 +156,4 @@ func _reset_and_assert_runtime_defaults(t: TestAssert, context: String) -> void:
 	GameConfig.reset_runtime_defaults()
 	t.eq(GameConfig.get_game_mode_name(), GameConfig.GAME_MODE_BASIC, "%s mode reset" % context)
 	t.eq(GameConfig.get_quality_name(), GameConfig.QUALITY_MEDIUM, "%s quality reset" % context)
-	t.eq(GameConfig.get_palette_name(), "经典", "%s palette reset" % context)
+	t.eq(GameConfig.get_palette_name(), "\u7ecf\u5178", "%s palette reset" % context)

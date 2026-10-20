@@ -82,7 +82,11 @@ func deactivate() -> void:
 	_request_trail_redraw()
 
 func _request_trail_redraw() -> void:
-	if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
+	if trail_layer == null or not is_instance_valid(trail_layer):
+		return
+	if trail_layer.has_method("mark_bullet_dirty"):
+		trail_layer.mark_bullet_dirty(self)
+	elif trail_layer.has_method("request_trail_redraw"):
 		trail_layer.request_trail_redraw()
 
 func _notify_trail_segments_if_needed(previous_segments: int) -> void:

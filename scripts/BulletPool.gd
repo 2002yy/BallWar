@@ -3,6 +3,9 @@ class_name BulletPool
 
 var inactive_bullets: Array = []
 var active_bullets: Array = []
+var active_bullet_indices: Dictionary = {}
+var active_spawn_order: Array[int] = []
+var active_spawn_cursor: int = 0
 var peak_active_count: int = 0
 var visual_pressure_update_timer: float = 0.0
 var trail_layer
@@ -36,6 +39,7 @@ const PRIORITY: Dictionary = {
 	"trail_segments_high": 4,
 	"fps_low": 5,
 }
+const ACTIVE_SPAWN_ORDER_COMPACT_CURSOR_THRESHOLD: int = 256
 
 func _process(delta: float) -> void:
 	visual_pressure_update_timer -= delta
@@ -76,7 +80,13 @@ func set_tracked_turrets(turret_map: Dictionary) -> void:
 func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, target_turrets: Dictionary = {}):
 	var max_active: int = GameConfig.get_max_active_bullets()
 	while active_bullets.size() >= max_active and active_bullets.size() > 0:
-		recycle_bullet(active_bullets[0])
+		var oldest_bullet = _get_oldest_active_bullet()
+		if oldest_bullet == null:
+			prune_invalid_bullets()
+			oldest_bullet = _get_oldest_active_bullet()
+		if oldest_bullet == null:
+			break
+		recycle_bullet(oldest_bullet)
 
 	var bullet = _obtain_bullet_with_visual_profile()
 	bullet.setup(faction_id, pos, dir, battlefield, target_turrets)
@@ -86,7 +96,13 @@ func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, targ
 func spawn_bullet_from_state(state: Dictionary, battlefield, target_turrets: Dictionary = {}):
 	var max_active: int = GameConfig.get_max_active_bullets()
 	while active_bullets.size() >= max_active and active_bullets.size() > 0:
-		recycle_bullet(active_bullets[0])
+		var oldest_bullet = _get_oldest_active_bullet()
+		if oldest_bullet == null:
+			prune_invalid_bullets()
+			oldest_bullet = _get_oldest_active_bullet()
+		if oldest_bullet == null:
+			break
+		recycle_bullet(oldest_bullet)
 
 	var bullet = _obtain_bullet_with_visual_profile()
 	bullet.restore_from_state(state, battlefield, target_turrets)
@@ -107,7 +123,7 @@ func update_visual_pressure() -> void:
 func recycle_bullet(bullet) -> void:
 	if bullet == null:
 		return
-	active_bullets.erase(bullet)
+	_remove_active_bullet_fast(bullet)
 	_unregister_active_bullet(bullet)
 	if inactive_bullets.find(bullet) < 0:
 		inactive_bullets.append(bullet)
@@ -129,10 +145,15 @@ func get_active_bullets() -> Array:
 	return result
 
 func prune_invalid_bullets() -> void:
+	var removed_any: bool = false
 	for i in range(active_bullets.size() - 1, -1, -1):
 		var b = active_bullets[i]
 		if b == null or not is_instance_valid(b) or not b.is_active:
-			active_bullets.remove_at(i)
+			_remove_active_bullet_at(i)
+			removed_any = true
+	if removed_any:
+		_rebuild_active_bullet_indices()
+	_compact_active_spawn_order()
 
 func get_active_count() -> int:
 	return active_bullets.size()
@@ -357,13 +378,85 @@ func _obtain_bullet_with_visual_profile():
 	return bullet
 
 func _finalize_spawned_bullet(bullet):
+	var bullet_id: int = bullet.get_instance_id()
+	active_bullet_indices[bullet_id] = active_bullets.size()
 	active_bullets.append(bullet)
+	active_spawn_order.append(bullet_id)
 	peak_active_count = maxi(peak_active_count, active_bullets.size())
 	_register_active_bullet(bullet)
 	spawned_bullets_this_second += 1
 	if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
 		trail_layer.request_trail_redraw()
 	return bullet
+
+func _remove_active_bullet_fast(bullet) -> bool:
+	if bullet == null or not is_instance_valid(bullet):
+		return false
+	var bullet_id: int = bullet.get_instance_id()
+	if not active_bullet_indices.has(bullet_id):
+		return false
+	var idx: int = int(active_bullet_indices[bullet_id])
+	_remove_active_bullet_at(idx)
+	return true
+
+func _remove_active_bullet_at(idx: int) -> void:
+	if idx < 0 or idx >= active_bullets.size():
+		return
+	var last_idx: int = active_bullets.size() - 1
+	var removed_bullet = active_bullets[idx]
+	var removed_bullet_id: int = removed_bullet.get_instance_id() if removed_bullet != null and is_instance_valid(removed_bullet) else -1
+	if idx != last_idx:
+		var last_bullet = active_bullets[last_idx]
+		active_bullets[idx] = last_bullet
+		if last_bullet != null and is_instance_valid(last_bullet):
+			active_bullet_indices[last_bullet.get_instance_id()] = idx
+	active_bullets.pop_back()
+	if removed_bullet_id >= 0:
+		active_bullet_indices.erase(removed_bullet_id)
+	if active_bullets.is_empty():
+		active_spawn_order.clear()
+		active_spawn_cursor = 0
+	elif active_spawn_cursor >= ACTIVE_SPAWN_ORDER_COMPACT_CURSOR_THRESHOLD:
+		_compact_active_spawn_order()
+
+func _get_oldest_active_bullet():
+	while active_spawn_cursor < active_spawn_order.size():
+		var bullet_id: int = int(active_spawn_order[active_spawn_cursor])
+		var idx: int = int(active_bullet_indices.get(bullet_id, -1))
+		if idx < 0 or idx >= active_bullets.size():
+			active_spawn_cursor += 1
+			continue
+		var bullet = active_bullets[idx]
+		if bullet == null or not is_instance_valid(bullet):
+			active_spawn_cursor += 1
+			continue
+		if bullet.get_instance_id() != bullet_id or not bullet.is_active:
+			active_spawn_cursor += 1
+			continue
+		return bullet
+	return null
+
+func _compact_active_spawn_order() -> void:
+	if active_spawn_order.is_empty():
+		active_spawn_cursor = 0
+		return
+	if active_spawn_cursor <= 0:
+		return
+	var compacted: Array[int] = []
+	for i in range(active_spawn_cursor, active_spawn_order.size()):
+		var bullet_id: int = int(active_spawn_order[i])
+		if active_bullet_indices.has(bullet_id):
+			compacted.append(bullet_id)
+	active_spawn_order = compacted
+	active_spawn_cursor = 0
+
+func _rebuild_active_bullet_indices() -> void:
+	active_bullet_indices.clear()
+	for i in range(active_bullets.size()):
+		var bullet = active_bullets[i]
+		if bullet == null or not is_instance_valid(bullet):
+			continue
+		active_bullet_indices[bullet.get_instance_id()] = i
 
 func _prefer_reason(current_reason: String, candidate_reason: String, candidate_severity: int, new_severity: int) -> String:
 	if candidate_severity < new_severity and current_reason != "none":

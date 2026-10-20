@@ -5,9 +5,57 @@ const SUPPORTED_SAVE_MAJOR_PREFIXES: Array[String] = ["1.9", "2.0"]
 const SAVE_SCHEMA_VERSION: String = "2.0.0"
 const CURRENT_SAVE_VERSION: String = SAVE_SCHEMA_VERSION
 const MAX_RESTORE_CONTROL_BALLS: int = 8
+const PAYLOAD_HASH_KEY: String = "payload_hash"
+const INTEGRITY_STATUS_MISSING: String = "missing"
+const INTEGRITY_STATUS_VALID: String = "valid"
+const INTEGRITY_STATUS_MISMATCH: String = "mismatch"
 
 static func get_current_save_version() -> String:
 	return CURRENT_SAVE_VERSION
+
+static func attach_payload_hash(core_payload: Dictionary) -> Dictionary:
+	var normalized_core: Dictionary = extract_core_payload(core_payload)
+	var payload_with_hash: Dictionary = normalized_core.duplicate(true)
+	payload_with_hash[PAYLOAD_HASH_KEY] = compute_payload_hash(normalized_core)
+	return payload_with_hash
+
+static func extract_core_payload(payload: Dictionary) -> Dictionary:
+	var core_payload: Dictionary = payload.duplicate(true)
+	core_payload.erase(PAYLOAD_HASH_KEY)
+	return core_payload
+
+static func compute_payload_hash(core_payload: Dictionary) -> int:
+	return hash(JSON.stringify(core_payload, "", true, true))
+
+static func inspect_payload_integrity(payload: Dictionary) -> Dictionary:
+	var core_payload: Dictionary = extract_core_payload(payload)
+	if not payload.has(PAYLOAD_HASH_KEY):
+		return {
+			"data": core_payload,
+			"integrity_status": INTEGRITY_STATUS_MISSING,
+			"integrity_ok": true,
+			"expected_hash": 0,
+			"stored_hash": null,
+		}
+
+	var stored_hash_raw = payload.get(PAYLOAD_HASH_KEY, null)
+	var stored_hash = null
+	if stored_hash_raw is int:
+		stored_hash = stored_hash_raw
+	elif stored_hash_raw is float:
+		stored_hash = int(stored_hash_raw)
+	elif stored_hash_raw is String and str(stored_hash_raw).is_valid_int():
+		stored_hash = int(stored_hash_raw)
+
+	var expected_hash: int = compute_payload_hash(core_payload)
+	var integrity_ok: bool = stored_hash != null and int(stored_hash) == expected_hash
+	return {
+		"data": core_payload,
+		"integrity_status": INTEGRITY_STATUS_VALID if integrity_ok else INTEGRITY_STATUS_MISMATCH,
+		"integrity_ok": integrity_ok,
+		"expected_hash": expected_hash,
+		"stored_hash": stored_hash,
+	}
 
 static func is_supported_save_version(version: String) -> bool:
 	var normalized: String = str(version)
@@ -78,7 +126,7 @@ static func collect_bullet_states(bullet_container) -> Array:
 	return result
 
 static func validate_save_data(data: Dictionary) -> Dictionary:
-	var clean: Dictionary = data.duplicate(true)
+	var clean: Dictionary = extract_core_payload(data)
 
 	clean["grid_size"] = LayoutProfiles.sanitize_grid_size(clean.get("grid_size", 40))
 

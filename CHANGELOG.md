@@ -1,121 +1,103 @@
-# Changelog / 变更记录
+# Changelog / 版本脊柱
 
-Date / 日期: 2026-05-15  
-Role / 作用: condensed history spine / 精简历史主线
+Date / 日期: 2026-05-17  
+Role / 作用: condensed milestone spine / 精简版本脊柱
 
-Detailed stage notes remain in `README_v*.md`.  
-详细阶段记录继续保留在 `README_v*.md`。  
-This file only keeps the short history spine, latest stable-line summary, and where to look next.  
-这份文件只保留简明历史脉络、当前稳定线摘要，以及该去哪里继续看。
+Detailed stage notes now live under [docs/history/](docs/history/README.md).  
+详细阶段记录现已统一收敛到 [docs/history/](docs/history/README.md)。
 
-## Current Stable Line / 当前稳定主线
+## Release Reading Rule / Release 分层
 
-- Version / 版本: `v2.1.10`
-- Date / 日期: `2026-05-16`
-- Theme / 主题:
-  - save-system security hardening
-  - performance-path optimization
-  - start-menu UI clarity
+- Latest Stable: `v2.1.11.1`
+  - recommended public download, with Windows zip and Android debug APK assets
+- Milestone Releases: `v2.1.10`, `v2.1.9`, `v2.1.8`, `v2.1.4`, `v2.0.3`
+  - important checkpoints, not the default download signal
+- Historical Releases: `v1.9.x`, `v0.1.0-mvp`
+  - reconstructed history, not the recommended download path
 
-Key points / 重点:
+## `v2.1.11.1` — UI Hotfix / 控制仓文字热修复
 
-- Save file size limit (1MB), path traversal filter, nested array validation
-- Turret O(n²) queue total → O(1), has_method cache, cached map_size
-- keys() → direct iteration, find+remove_at → erase, const priority dictionary
-- StartButton full-width prominence, text contrast improvements
-- All Windows exports switched to embed_pck=false + zip bundle
+- Fixed control-chamber bottom gate label clipping / 修复控制仓底部门文字裁切
+- x2/x3 no longer gets clipped into x in narrow gate layouts / 倍率标签在窄门布局下不再被裁为单字符
+- Reduced gate text outline thickness so 发射 appears less heavy / 减少门文字描边厚度，让"发射"显示不再过粗
+- Rendering-only change; no chamber physics, multiplier, event, bullet, or collision rule changes / 纯绘制变更，不涉及物理、倍率、事件、子弹或碰撞逻辑
+- Verified with SmokeTestRunner, IntegrationTestRunner, LayoutSanityTestRunner, and StartMenuSceneTestRunner / 以 SmokeTestRunner、IntegrationTestRunner、LayoutSanityTestRunner、StartMenuSceneTestRunner 验证通过
 
-Detailed stage writeup in `README_v2_1_10.md`.
+## `v2.1.11` — Public Repository Hardening / 公开仓库收口
 
-## Milestone Spine / 里程碑主线
+- Restored corrupted Chinese UTF-8 text in key GDScript files / 恢复关键脚本中被破坏的中文编码
+- Fixed Android ETC2/ASTC export configuration and added export-check helpers / 修复 Android ETC2/ASTC 导出配置，增加检查与修复脚本
+- Published Windows zip and Android debug APK assets on GitHub Releases / 发布 Windows zip 和 Android debug APK 到 Releases
+- Continued structure cleanup through `ChamberBallPhysics`, `BulletPool` swap-remove, and `EventRouletteController` signal decoupling / 继续控制仓物理外提、子弹池交换删除、事件控制器信号解耦
 
-### `v2.1.10`
+**Public repository hardening / 公开仓库产品化收口:**
+- Restructured README top section for player/recruiter audience / README 顶部重构：面向玩家与招聘官
+- Added GitHub Actions CI workflow / 接入 GitHub Actions CI：项目加载验证 + 10 测试并行矩阵
+- Fixed Android export scripts: removed hardcoded absolute paths / Android 导出脚本去本机绝对路径
+- Aligned `export_presets.cfg` settings / 对齐 export_presets.cfg 预设配置
+- Historical docs remain in `docs/history/` — root directory clean / 历史文档全部归档到 docs/history/
 
-- focus: security hardening (save file size, path traversal, validation), performance optimization (O(n²)→O(1), cache, erase, const), start-menu UI clarity, export packaging stability
-- detailed notes: `README_v2_1_10.md`
+- Current Latest Stable / 推荐公开下载版本
 
-### `v2.1.7`
+## `v2.1.10` / 安全加固与性能优化
 
-- focus: containerized start menu, leader tie fix, chamber blur fix, event status refactor, lifecycle cleanup, asset audit
-- detailed notes: `README_v2_1_7_ui_polish_and_fixes.md`
+- Added save file size limits, path traversal filtering, and nested save-data validation / 增加存档文件大小限制、路径穿越过滤、嵌套数据校验
+- Reduced turret queue, bullet map-size lookup, dictionary iteration, and bullet recycling hot-path costs / 优化炮台队列、子弹地图尺寸查询、字典遍历、回收热路径
+- Improved StartMenu button prominence, text contrast, and slot readability / 改进开始菜单按钮视觉、文字对比度和槽位可读性
+- Repacked Windows releases as `.exe + .pck` zip bundles / Windows 发布包改为 `.exe + .pck` 压缩包
 
-### `v2.1.5` - `v2.1.6`
+## `v2.1.9` / 设置系统与结算面板
 
-- focus: event explanation layer, menu preferences persistence, save/restore bug fix, end-to-end continue test
-- detailed notes:
-  - `README_v2_1_5_event_log_and_menu_prefs.md`
-  - `README_v2_1_6_save_restore_fix_and_e2e_test.md`
+- Added `PlayerSettingsStore.gd` / 新增玩家设置存储
+- Added interactive `SettingsPanel` / 新增交互式设置面板
+- Added `ResultPanel` with victory reason, game duration, final territory ratio, and statistics / 新增结算面板：胜利原因、游戏时长、占领率、统计
+- Added peak active bullet and event trigger statistics / 新增峰值活跃子弹和事件触发统计
+- Connected low-FX, performance HUD, and event-log settings to runtime behavior / 低特效、性能 HUD、事件日志设置接入运行时
 
-### `v2.1.1` - `v2.1.4`
+## `v2.1.8` / 装饰层事件化与状态外提
 
-- focus: continue/save-load orchestration cleanup, restore ownership clarification, performance-path cleanup
-- detailed notes:
-  - `README_v2_1_1_game_state_coordinator.md`
-  - `README_v2_1_2_save_flow_controller.md`
-  - `README_v2_1_3_restore_chain_audit.md`
-  - `README_v2_1_4_restore_interfaces_and_perf_cleanup.md`
+- Changed `BattlefieldDecorLayer` from polling to event/dirty-marker behavior / 战场装饰层从轮询改为事件/脏标记模式
+- Extracted `ChamberState` from `ControlChamber` / 从 ControlChamber 外提 ChamberState
+- Improved StartMenu layout, preview, and slot readability / 改进开始菜单布局、预览和槽位可读性
+- Strengthened save recovery and continue flow coverage / 增强存档恢复与继续游戏链路
 
-### `v2.0.3` - `v2.0.7`
+## `v2.1.5` - `v2.1.7` / UI 打磨与修复
 
-- focus: test audit, save system centralization, win-condition extraction, layout sanity coverage, UI scene migration
-- detailed notes:
-  - `README_v2_0_3_fix_log.md`
-  - `README_v2_0_3_test_audit.md`
-  - `README_v2_0_4_win_condition_refactor.md`
-  - `README_v2_0_5_save_centralization.md`
-  - `README_v2_0_6_layout_sanity.md`
-  - `README_v2_0_7_start_menu_scene.md`
+- Continued event explanation, menu preferences, and UI detail work / 事件说明、菜单偏好、UI 细节持续打磨
+- Fixed save/restore bugs and improved continue stability / 修复存档/恢复错误，提升继续游戏稳定性
+- Containerized StartMenu behavior and cleaned lifecycle/event state / 开始菜单行为容器化、生命周期与事件状态清理
+- Continued asset audit and resource-boundary cleanup / 持续素材审计与资源边界清理
 
-### `v1.9.31` - `v2.0.2`
+## `v2.1.0` - `v2.1.4` / 场景化与结构基线
 
-- focus: save-slot flow, event/UI polish, smoke/perf baselines, benchmark hardening
-- detailed notes:
-  - `README_v1_9_31.md`
-  - `README_v1_9_32.md`
-  - `README_v1_9_33.md`
-  - `README_v1_9_34.md`
-  - `README_v1_9_35.md`
-  - `README_v1_9_36_tests_and_perf.md`
-  - `README_v1_9_37_perf_benchmark.md`
-  - `README_v2_0_0_perf_benchmark.md`
-  - `README_v2_0_0_tests_and_perf.md`
-  - `README_v2_0_1_trail_pressure_fix.md`
-  - `README_v2_0_2_ui_event_polish.md`
+- Migrated `StartMenu.tscn` into an editable UI scene / 开始菜单迁移为可编辑 UI 场景
+- Split continue flow into `prepare_*` and `apply_*` / 继续流程拆分为 prepare/apply 两阶段
+- Moved `restore_from_state(...)` ownership out of `Main.gd` into runtime objects / 将恢复逻辑从 Main.gd 移至运行时对象
+- Clarified `Main.gd` as top-level orchestration / 明确 Main.gd 为顶层编排角色
+- Established the stable structural baseline / 确立了当前仍被引用的稳定结构基线
 
-### `v1.9.22` - `v1.9.30`
+## `v2.0.x` / 系统化测试与编排层
 
-- focus: performance stabilization, adaptive pressure handling, HUD/perf observability, flow cleanup
-- detailed notes remain in the corresponding `README_v1_9_*` files
+- Systematized save/restore, win conditions, and layout sanity coverage / 系统化存档/恢复、胜负判断、布局回归覆盖
+- Formed coordination layers such as `SaveFlowController` and `GameStateCoordinator` / 形成 SaveFlowController、GameStateCoordinator 等编排层
+- Introduced a more maintainable test matrix and version-note workflow / 引入可维护的测试矩阵和版本文档工作流
+- Laid the groundwork for later v2.1.x UI scene migration / 为后续 UI 场景迁移打下基础
 
-### Early Prototype Patches / 早期原型补丁 (`v1.1` - `v1.6`)
+## `v1.9.x` / 多模式规则与性能
 
-- `v1.1`
-  - switched bullets away from `Area2D`-driven collision setup to avoid physics-query flush errors
-- `v1.2`
-  - moved turrets toward corners and constrained rotation to inward-facing arcs
-  - chamber bottom routing was simplified to deterministic `x2` / `R` exits
-- `v1.3`
-  - added the start menu, grid-size selection, and Chinese UI text
-- `v1.4`
-  - improved bullet readability and chamber text visibility
-- `v1.5`
-  - added smooth turret sweeping, add-ball buttons, turret health/destruction, and turret-hit bullet logic
-- `v1.5.1` / `v1.5.2`
-  - cleaned `:=` inference-related warnings by switching to explicit `=`
-- `v1.6`
-  - polished the menu, top HUD, chamber labels, add-ball buttons, and code-drawn preview visuals
+- Developed multi-mode rules and event systems / 开发多模式规则与事件系统
+- Focused on bullet-pool, trail, and battlefield rendering performance / 聚焦子弹池、弹道和战场渲染性能
+- Introduced `SmokeTestRunner`, `IntegrationTestRunner`, and `PerfBurstBenchmark` / 引入冒烟测试、集成测试和性能基准
+- Moved the project from "playable" toward "maintainable" / 从"可玩"走向"可维护"
 
-## How To Read History / 历史阅读方式
+## `v1.7.x` - `v1.8.x` / 早期稳定化
 
-- `README_v*.md`
-  - detailed stage notes, kept for continuity
-- `CHANGELOG.md`
-  - quick spine only
-- Git tags
-  - best entry point when you want to jump between reconstructed milestones
+- Stabilized early battlefield, control-chamber, and turret rules / 稳定早期战场、控制仓和炮台规则
+- Polished early UI and battlefield feedback / 打磨早期 UI 和战场反馈
+- Started accumulating versioned stage documentation / 开始积累版本化阶段文档
 
-## Notes / 说明
+## `v0.1.0-mvp` / 创始原型
 
-- `README_v*.md` are preserved on purpose; they are the detailed historical trail.
-- older one-off audit, migration, patch-note, and folder-note Markdown files were consolidated into fewer live docs.
-- current live document roles are summarized in `TECHNICAL_GUIDE.md`.
+- Established the minimum four-faction territory-control loop / 建立最小四阵营领土争夺玩法闭环
+- Implemented the earliest battlefield, turret, control-chamber, and launch logic / 实现最早期的战场、炮台、控制仓和发射逻辑
+- Preserved as the historical founding prototype / 作为创始原型保留

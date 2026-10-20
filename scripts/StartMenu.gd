@@ -68,6 +68,30 @@ static func build_status_text(slot: int) -> String:
 	return "当前存档槽：%d" % slot
 
 
+static func build_start_button_label(_slot: int, _has_save_data: bool = false) -> String:
+	return "\u5f00\u59cb\u65b0\u6e38\u620f"
+
+
+static func build_status_label(slot: int, has_save_data: bool) -> String:
+	if has_save_data:
+		return "\u5df2\u9009\u62e9\u5b58\u6863\u69fd %d\uff0c\u65b0\u6e38\u620f\u4f1a\u8986\u76d6\u8fd9\u91cc\u7684\u5b58\u6863" % slot
+	return "\u5df2\u9009\u62e9\u7a7a\u5b58\u6863\u69fd %d\uff0c\u65b0\u6e38\u620f\u4f1a\u4fdd\u5b58\u5728\u8fd9\u91cc" % slot
+
+
+static func build_mode_tip_text(mode_name: String, time_limit_minutes: int) -> String:
+	match mode_name:
+		GameConfig.GAME_MODE_BASIC:
+			return "\u57fa\u7840\uff1a\u6d88\u706d\u6240\u6709\u5bf9\u624b\u70ae\u53f0\u5373\u53ef\u83b7\u80dc"
+		GameConfig.GAME_MODE_OCCUPATION:
+			return "\u5360\u9886\uff1a\u8fbe\u5230 75% \u9886\u571f\u5373\u53ef\u83b7\u80dc"
+		GameConfig.GAME_MODE_TIMED:
+			return "\u9650\u65f6\uff1a%d \u5206\u949f\u5012\u8ba1\u65f6\u7ed3\u675f\u540e\uff0c\u9886\u5730\u6700\u591a\u65b9\u83b7\u80dc" % time_limit_minutes
+		GameConfig.GAME_MODE_WILD:
+			return "\u72c2\u91ce\uff1a\u5168\u5c40 x3 \u500d\u7387\uff0c\u5355\u6b21\u4e0a\u9650\u66f4\u9ad8\uff0c\u4e8b\u4ef6\u66f4\u9891\u7e41"
+		_:
+			return ""
+
+
 func get_parts() -> Dictionary:
 	var slot_buttons: Dictionary = {}
 	for i in range(5):
@@ -85,6 +109,23 @@ func get_parts() -> Dictionary:
 	}
 
 
+func _refresh_mode_tip() -> void:
+	mode_tip_label.text = StartMenu.build_mode_tip_text(
+		_owner.selected_game_mode_name,
+		_owner.selected_time_limit_minutes
+	)
+
+
+func _refresh_action_labels(has_selected_save: bool) -> void:
+	start_button.text = StartMenu.build_start_button_label(_owner.selected_save_slot, has_selected_save)
+	continue_button.text = StartMenu.build_continue_button_text(_owner.selected_save_slot)
+	continue_button.disabled = not has_selected_save
+
+
+func _refresh_menu_status_label(has_save_data: bool) -> void:
+	menu_status_label.text = StartMenu.build_status_label(_owner.selected_save_slot, has_save_data)
+
+
 func setup(p_owner, view_size: Vector2, save_summaries: Array, current_layout: Dictionary = {}) -> void:
 	_owner = p_owner
 	_owner.selected_save_slot = clampi(int(_owner.selected_save_slot), 1, _owner.SAVE_SLOT_COUNT)
@@ -97,6 +138,7 @@ func setup(p_owner, view_size: Vector2, save_summaries: Array, current_layout: D
 	_init_decor()
 	refresh_slots(save_summaries)
 	menu_status_label.text = StartMenu.build_status_text(_owner.selected_save_slot)
+	_refresh_menu_status_label(_owner._has_save_file(_owner.selected_save_slot))
 	_connect_signals()
 
 
@@ -109,7 +151,7 @@ func refresh_save_slots(save_summaries: Array) -> void:
 
 
 func _apply_layout(view_size: Vector2) -> void:
-	var default_panel_size := Vector2(840.0, 650.0)
+	var default_panel_size := Vector2(840.0, 684.0)
 	var default_panel_pos := Vector2(
 		(view_size.x - default_panel_size.x) * 0.5,
 		(view_size.y - default_panel_size.y) * 0.5
@@ -188,6 +230,8 @@ func _sync_options_from_owner() -> void:
 	_update_reset_button_state()
 	_update_mode_tip()
 	_update_action_labels(_owner._has_save_file(_owner.selected_save_slot))
+	_refresh_mode_tip()
+	_refresh_action_labels(_owner._has_save_file(_owner.selected_save_slot))
 
 
 func _is_default_config() -> bool:
@@ -304,6 +348,8 @@ func _refresh_slots(save_summaries: Array) -> void:
 			btn.self_modulate = Color(0.16, 0.22, 0.32)
 
 	_update_action_labels(selected_summary.get("is_playable", false))
+	_refresh_action_labels(bool(selected_summary.get("is_playable", false)))
+	_refresh_menu_status_label(bool(selected_summary.get("has_data", false)))
 
 
 func _connect_signals() -> void:
@@ -341,6 +387,7 @@ func _on_size_option_selected(index: int) -> void:
 func _on_mode_option_selected(index: int) -> void:
 	_owner.selected_game_mode_name = mode_option.get_item_text(index)
 	_update_mode_tip()
+	_refresh_mode_tip()
 	_owner._save_menu_preferences()
 
 
@@ -352,6 +399,7 @@ func _on_quality_option_selected(index: int) -> void:
 func _on_time_spin_changed(value: float) -> void:
 	_owner.selected_time_limit_minutes = clampi(int(round(value)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)
 	_update_mode_tip()
+	_refresh_mode_tip()
 	_owner._save_menu_preferences()
 
 

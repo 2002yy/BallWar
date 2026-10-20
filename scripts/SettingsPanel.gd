@@ -1,7 +1,7 @@
 extends Control
 class_name SettingsPanelController
 
-const PlayerSettingsStore = preload("res://scripts/PlayerSettingsStore.gd")
+const PlayerSettingsStoreClass = preload("res://scripts/PlayerSettingsStore.gd")
 
 signal settings_changed(settings: Dictionary)
 
@@ -13,7 +13,7 @@ var current_settings: Dictionary = {}
 
 
 func _ready() -> void:
-	current_settings = PlayerSettingsStore.load_settings()
+	current_settings = PlayerSettingsStoreClass.load_settings()
 	_apply_settings_to_controls()
 
 	performance_check.toggled.connect(_on_setting_toggled)
@@ -32,12 +32,12 @@ func _on_setting_toggled(_pressed: bool) -> void:
 	current_settings["show_performance_info"] = performance_check.button_pressed
 	current_settings["low_effect_mode"] = low_effect_check.button_pressed
 	current_settings["show_event_log"] = event_log_check.button_pressed
-	PlayerSettingsStore.save_settings(current_settings)
+	PlayerSettingsStoreClass.save_settings(current_settings)
 	settings_changed.emit(current_settings.duplicate())
 
 
 func show_panel() -> void:
-	current_settings = PlayerSettingsStore.load_settings()
+	current_settings = PlayerSettingsStoreClass.load_settings()
 	_apply_settings_to_controls()
 	visible = true
 

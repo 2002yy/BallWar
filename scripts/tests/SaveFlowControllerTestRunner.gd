@@ -46,6 +46,10 @@ func _run() -> void:
 	_test_prepare_continue_payload(t)
 	_reset_and_assert_runtime_defaults(t, "after prepare_continue_payload")
 
+	_reset_and_assert_runtime_defaults(t, "before prepare_continue_payload_integrity")
+	_test_prepare_continue_payload_integrity(t)
+	_reset_and_assert_runtime_defaults(t, "after prepare_continue_payload_integrity")
+
 	_reset_and_assert_runtime_defaults(t, "before build_continue_runtime_state")
 	_test_build_continue_runtime_state(t)
 	_reset_and_assert_runtime_defaults(t, "after build_continue_runtime_state")
@@ -223,9 +227,9 @@ func _test_prepare_continue_payload(t: TestAssert) -> void:
 		valid_file.flush()
 		valid_file = null
 
-	var prepared: Dictionary = SaveFlowController.prepare_continue_payload(1, 1, 5, path_template, legacy_path, true)
-	t.that(bool(prepared.get("ok", false)), "prepare_continue_payload accepts valid save")
-	t.eq(int(prepared.get("data", {}).get("grid_size", -1)), 40, "prepared payload returns clean data")
+	var valid_prepared: Dictionary = SaveFlowController.prepare_continue_payload(1, 1, 5, path_template, legacy_path, true)
+	t.that(bool(valid_prepared.get("ok", false)), "prepare_continue_payload accepts valid save")
+	t.eq(int(valid_prepared.get("data", {}).get("grid_size", -1)), 40, "prepared payload returns clean data")
 
 	var broken_primary := FileAccess.open(slot1_path, FileAccess.WRITE)
 	if broken_primary != null:
@@ -239,12 +243,48 @@ func _test_prepare_continue_payload(t: TestAssert) -> void:
 		backup_valid = null
 	var recovered_prepare: Dictionary = SaveFlowController.prepare_continue_payload(1, 1, 5, path_template, legacy_path, true)
 	t.that(bool(recovered_prepare.get("ok", false)), "prepare_continue_payload accepts recovered backup save")
-	t.eq(str(recovered_prepare.get("status_message", "")), "存档损坏，已尝试恢复备份", "prepare_continue_payload exposes backup recovery status")
+	t.eq(str(recovered_prepare.get("status_message", "")), SaveFlowController.BACKUP_RECOVERED_STATUS_MESSAGE, "prepare_continue_payload exposes backup recovery status")
 
 	if FileAccess.file_exists(slot1_path):
 		DirAccess.remove_absolute(slot1_abs)
 	if FileAccess.file_exists(slot1_backup_path):
 		DirAccess.remove_absolute(slot1_backup_abs)
+	if FileAccess.file_exists(legacy_path):
+		DirAccess.remove_absolute(legacy_abs)
+
+func _test_prepare_continue_payload_integrity(t: TestAssert) -> void:
+	var path_template: String = "user://saveflow_prepare_integrity_slot_%d.json"
+	var slot1_path: String = SaveFlowController.get_save_path(1, path_template, 5)
+	var slot1_abs: String = ProjectSettings.globalize_path(slot1_path)
+	var legacy_path: String = "user://saveflow_prepare_integrity_legacy.json"
+	var legacy_abs: String = ProjectSettings.globalize_path(legacy_path)
+
+	if FileAccess.file_exists(slot1_path):
+		DirAccess.remove_absolute(slot1_abs)
+	if FileAccess.file_exists(legacy_path):
+		DirAccess.remove_absolute(legacy_abs)
+
+	var tampered_payload: Dictionary = SaveGameCodec.attach_payload_hash({
+		"save_version": "2.0.0",
+		"grid_size": 40,
+		"quality_name": GameConfig.QUALITY_MEDIUM,
+		"game_mode_name": GameConfig.GAME_MODE_BASIC,
+	})
+	tampered_payload["grid_size"] = 60
+
+	var tampered_file := FileAccess.open(slot1_path, FileAccess.WRITE)
+	if tampered_file != null:
+		tampered_file.store_string(JSON.stringify(tampered_payload))
+		tampered_file.close()
+
+	var prepared: Dictionary = SaveFlowController.prepare_continue_payload(1, 1, 5, path_template, legacy_path, true)
+	t.that(bool(prepared.get("ok", false)), "prepare_continue_payload should keep tampered but readable saves playable")
+	t.eq(str(prepared.get("status_message", "")), SaveFlowController.SAVE_INTEGRITY_STATUS_MESSAGE, "prepare_continue_payload should expose integrity repair status")
+	t.eq(str(prepared.get("warning_message", "")), SaveFlowController.SAVE_INTEGRITY_WARNING_MESSAGE, "prepare_continue_payload should expose integrity repair warning")
+	t.eq(int(prepared.get("data", {}).get("grid_size", -1)), 60, "prepare_continue_payload repair mode should continue with sanitized tampered payload")
+
+	if FileAccess.file_exists(slot1_path):
+		DirAccess.remove_absolute(slot1_abs)
 	if FileAccess.file_exists(legacy_path):
 		DirAccess.remove_absolute(legacy_abs)
 
@@ -421,7 +461,7 @@ func _test_invalid_save_slot_summaries(t: TestAssert) -> void:
 
 	var incompatible_file := FileAccess.open(SaveFlowController.get_save_path(2, path_template, 5), FileAccess.WRITE)
 	if incompatible_file != null:
-		incompatible_file.store_string("{\"save_version\":\"9.9.9\",\"grid_size\":40,\"quality_name\":\"中\"}")
+		incompatible_file.store_string("{\"save_version\":\"9.9.9\",\"grid_size\":40,\"quality_name\":\"\\u9ad8\"}")
 		incompatible_file.flush()
 		incompatible_file = null
 
@@ -447,7 +487,7 @@ func _test_invalid_save_slot_summaries(t: TestAssert) -> void:
 func _test_slot_selection_status_and_ui(t: TestAssert) -> void:
 	t.eq(
 		SaveFlowController.build_slot_selection_status(2, true),
-		"\u5df2\u9009\u62e9\u5b58\u6863\u69fd 2\uff0c\u53ef\u7ee7\u7eed\u6216\u8986\u76d6\u5f00\u59cb",
+		"\u5df2\u9009\u62e9\u5b58\u6863\u69fd 2\uff0c\u65b0\u6e38\u620f\u4f1a\u8986\u76d6\u8fd9\u91cc\u7684\u5b58\u6863",
 		"filled slot status message"
 	)
 	t.eq(
@@ -525,6 +565,7 @@ func _test_write_game_progress(t: TestAssert) -> void:
 			t.eq(parsed.get("save_slot", -1), 2, "save payload keeps selected slot")
 			t.eq(parsed.get("grid_size", -1), 40, "save payload keeps battlefield grid")
 			t.eq(parsed.get("winner_text", ""), "winner", "save payload keeps winner text")
+			t.that(parsed.has(SaveGameCodec.PAYLOAD_HASH_KEY), "save payload should include integrity hash")
 		file = null
 
 	var second_result: Dictionary = SaveFlowController.write_game_progress_result(
@@ -556,4 +597,4 @@ func _reset_and_assert_runtime_defaults(t: TestAssert, context: String) -> void:
 	GameConfig.reset_runtime_defaults()
 	t.eq(GameConfig.get_game_mode_name(), GameConfig.GAME_MODE_BASIC, "%s mode reset" % context)
 	t.eq(GameConfig.get_quality_name(), GameConfig.QUALITY_MEDIUM, "%s quality reset" % context)
-	t.eq(GameConfig.get_palette_name(), "经典", "%s palette reset" % context)
+	t.eq(GameConfig.get_palette_name(), "\u7ecf\u5178", "%s palette reset" % context)

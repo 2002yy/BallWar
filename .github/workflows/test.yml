@@ -1,0 +1,142 @@
+name: Godot Headless Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-headless-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.1-stable
+  GODOT_ARCHIVE: Godot_v4.7.1-stable_linux.x86_64.zip
+  GODOT_EXE: Godot_v4.7.1-stable_linux.x86_64
+  GODOT_BINARY: godot_headless
+
+jobs:
+  validate:
+    name: Validate project load
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore cached Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.GODOT_BINARY }}
+          key: ${{ runner.os }}-godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_ARCHIVE }}
+      - name: Download Godot headless
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          curl -sL "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}/${{ env.GODOT_ARCHIVE }}" -o godot.zip
+          unzip godot.zip
+          mv ${{ env.GODOT_EXE }} ${{ env.GODOT_BINARY }}
+          chmod +x ${{ env.GODOT_BINARY }}
+      - name: Make Godot executable (cached)
+        if: steps.cache-godot.outputs.cache-hit == 'true'
+        run: chmod +x ${{ env.GODOT_BINARY }}
+      - name: Validate project.godot loads
+        run: |
+          set -o pipefail
+          ./${{ env.GODOT_BINARY }} --headless --audio-driver Dummy --editor --import --path . --quit 2>&1 | tee validate.log
+          if grep -Eq "SCRIPT ERROR|^ERROR:" validate.log; then exit 1; fi
+      - name: Upload validate log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validate-log
+          path: validate.log
+          retention-days: 7
+
+  test:
+    name: ${{ matrix.label }}
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Core UI and gameplay
+            scripts: |
+              SmokeTestRunner.gd
+              StartMenuSceneTestRunner.gd
+              GameHUDSceneTestRunner.gd
+              EventRouletteSceneTestRunner.gd
+              SettingsPanelSceneTestRunner.gd
+          - label: State persistence and integration
+            scripts: |
+              GameStateCoordinatorTestRunner.gd
+              SaveFlowControllerTestRunner.gd
+              RestorePlanTestRunner.gd
+              IntegrationTestRunner.gd
+              LayoutSanityTestRunner.gd
+              SettingsAndResultTestRunner.gd
+              EndToEndContinueMainTestRunner.gd
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore cached Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.GODOT_BINARY }}
+          key: ${{ runner.os }}-godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_ARCHIVE }}
+      - name: Download Godot headless
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          curl -sL "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}/${{ env.GODOT_ARCHIVE }}" -o godot.zip
+          unzip godot.zip
+          mv ${{ env.GODOT_EXE }} ${{ env.GODOT_BINARY }}
+          chmod +x ${{ env.GODOT_BINARY }}
+      - name: Make Godot executable (cached)
+        if: steps.cache-godot.outputs.cache-hit == 'true'
+        run: chmod +x ${{ env.GODOT_BINARY }}
+      - name: Import project
+        run: |
+          set -o pipefail
+          ./${{ env.GODOT_BINARY }} --headless --audio-driver Dummy --editor --path . --quit 2>&1 | tee import.log
+      - name: Run ${{ matrix.label }}
+        shell: bash
+        env:
+          TEST_SCRIPTS: ${{ matrix.scripts }}
+        run: |
+          set -u
+          mkdir -p artifacts/test-logs
+          failed=0
+          while IFS= read -r script; do
+            [[ -z "$script" ]] && continue
+            log="artifacts/test-logs/${script%.gd}.log"
+            echo "=== Running ${script} ==="
+            set +e
+            user_dir="$(mktemp -d "${RUNNER_TEMP}/ballwar-user-XXXXXX")"
+            XDG_DATA_HOME="$user_dir" ./${GODOT_BINARY} --headless --audio-driver Dummy --path . --script "res://scripts/tests/${script}" 2>&1 | tee "$log"
+            status=${PIPESTATUS[0]}
+            set -e
+            if grep -Eq "SCRIPT ERROR|^ERROR:|FAIL" "$log"; then
+              echo "::error::${script} printed a runtime error or FAIL marker"
+              status=1
+            elif grep -q "PASS" "$log"; then
+              echo "${script} printed a PASS marker"
+            elif [[ $status -eq 0 ]]; then
+              echo "${script} completed successfully; relying on the Godot exit code"
+            fi
+            if [[ $status -ne 0 ]]; then
+              failed=1
+            fi
+          done <<< "$TEST_SCRIPTS"
+          exit "$failed"
+      - name: Upload ${{ matrix.label }} logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ strategy.job-index }}
+          path: |
+            import.log
+            artifacts/test-logs/*.log
+          if-no-files-found: warn
+          retention-days: 7
