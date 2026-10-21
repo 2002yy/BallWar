@@ -1,9 +1,11 @@
 # BallWar / 领土战争 (Marble Dominion Ricochet War)
 
-A **Godot 4.6 + GDScript** 2D territory-control arcade prototype — four factions fight for grid dominance in a chaotic bullet arena.  
-一个基于 **Godot 4.6 + GDScript** 的 2D 四阵营领土争夺街机原型。
+A **Godot 4.7 + GDScript** 2D territory-control arcade prototype — four factions fight for grid dominance in a chaotic bullet arena.
+一个基于 **Godot 4.7 + GDScript** 的 2D 四阵营领土争夺街机原型。
 
-**Engine:** Godot 4.6 · **Language:** GDScript · **Tests:** 10 runners · GitHub Actions CI · **Platforms:** Windows / Android
+**Engine:** Godot 4.7 · **Language:** GDScript · **Tests:** 12 runners · GitHub Actions CI · **Platforms:** Windows / Android
+
+4.7迁移使用4.7.1验证；导出模板必须匹配4.7.x，不能复用4.6模板。当前迁移/设置验证见 `docs/technical/AI_HANDOFF_CURRENT.md`。
 
 ## Gameplay Loop / 玩法循环
 
@@ -35,7 +37,7 @@ A **Godot 4.6 + GDScript** 2D territory-control arcade prototype — four factio
 
 ## Tech Highlights / 技术亮点
 
-- **10 headless CI runners** — smoke, wiring, coordinator, integration, layout tests via GitHub Actions
+- **12 headless CI runners** — smoke, wiring, coordinator, integration, layout tests via GitHub Actions
 - **Architecture layering** — `Main.gd` orchestration → coordinators, restore planners, save adapters ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 - **Save/load with hardening** — slot-based saves, backup recovery, version checks, input sanitization ([docs/SAVE_SYSTEM.md](docs/SAVE_SYSTEM.md))
 - **Performance probes** — bullet pressure, frame time, trail cache metrics built into runtime ([docs/PERFORMANCE.md](docs/PERFORMANCE.md))
@@ -74,7 +76,7 @@ Full guide: [docs/TESTING.md](docs/TESTING.md)
 
 ## Development Setup / 开发环境
 
-Open `project.godot` with **Godot 4.6** in the editor.
+Open `project.godot` with **Godot 4.7** in the editor.
 
 ```powershell
 # Headless check examples:
