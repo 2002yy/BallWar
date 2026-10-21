@@ -458,9 +458,11 @@ func _toggle_pause() -> void:
 	)
 
 func _on_player_settings_changed(settings: Dictionary) -> void:
+	var event_log_changed: bool = bool(player_settings.get("show_event_log", true)) != bool(settings.get("show_event_log", true))
 	player_settings = settings.duplicate()
 	_apply_performance_setting()
-	_apply_event_log_setting()
+	if event_log_changed:
+		_apply_event_log_setting()
 
 func _apply_performance_setting() -> void:
 	var enabled: bool = bool(player_settings.get("show_performance_info", OS.is_debug_build()))

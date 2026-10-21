@@ -3,6 +3,11 @@
 Last updated: 2026-05-17
 Role / 作用: handoff card only / 仅作快速接管卡片
 
+### 2026-10-21 Review: preserve manually collapsed event log
+
+- PR #7 finding4328062474有效：面板每个checkbox都发完整偏好，Main无条件重设日志visible，导致改性能/低特效也展开玩家已折叠的日志。现在比较show_event_log偏好，仅该偏好改变时更新日志可见性；启动/开局仍按已保存设置初始化，事件历史不删除。
+- 回归通过真实HUD按钮折叠→面板性能/低特效切换→日志仍折叠，再显式关开事件日志偏好才显示，保留历史。旧代码实际exit1（negative日志ballwar-collapse-review-negative-20261021）；修复后12/12隔离原生runner exit0且无SCRIPT ERROR/ERROR，SettingsAndResult **40 checks PASS**。证据D:/study-agent-validation/ballwar-collapse-review-final-20261021。目标Godot4.7不变，无存档schema/玩法/玩家数据变化；候选SHA由本段提交恢复，推送后仅查一次新head CI，不借ecd582d旧绿灯。
+
 ### 2026-10-21 Latest main integration / 当前主线绑定
 
 - 设置修复PR #8已以merge afb59014326472e318df734641f8925e232bf2bf进入4.7候选。随后核实main已更新到7c0a426101b6adf32e5fd09d5a7b07617c3e38a2，包含运行修复、文档迁移和新增CI；本分支吸收main为merge517a98a，代码自动合并，仅README冲突保留新main结构与4.7目标。当前权威交接路径随main迁到本文件，未复活根目录旧文档。

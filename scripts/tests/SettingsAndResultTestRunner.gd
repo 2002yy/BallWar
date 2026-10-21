@@ -141,6 +141,21 @@ func _test_event_log_toggle(t: TestAssert) -> void:
 		t.that(main.runtime.hud_ref("event_log_label").visible, "event label visible")
 		t.eq(ec.event_history.size(), recorded, "visibility toggle does not alter history")
 		t.that(bool(PlayerSettingsStore.load_settings()["show_event_log"]), "event visibility persisted")
+		var log_label = main.runtime.hud_ref("event_log_label")
+		var log_toggle = main.runtime.hud_ref("event_log_toggle_btn")
+		log_toggle.pressed.emit()
+		t.that(not log_label.visible, "HUD toggle collapses enabled event log")
+		var perf: CheckButton = panel.get_node("PanelMargin/MainVBox/PerformanceCheck")
+		perf.button_pressed = not perf.button_pressed
+		t.that(not log_label.visible, "performance preference preserves manual collapse")
+		var low: CheckButton = panel.get_node("PanelMargin/MainVBox/LowEffectCheck")
+		low.button_pressed = not low.button_pressed
+		t.that(not log_label.visible, "low-effect preference preserves manual collapse")
+		t.eq(ec.get("event_log_visible"), true, "manual collapse does not disable event history")
+		checkbox.button_pressed = false
+		checkbox.button_pressed = true
+		t.that(log_label.visible, "explicit event preference change shows the log again")
+		t.eq(ec.event_history.size(), recorded, "collapse and preference edits preserve history")
 	_cleanup_save_slot(9)
 	main.queue_free()
 	await _flush()
