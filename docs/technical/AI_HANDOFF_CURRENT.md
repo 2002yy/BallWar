@@ -1,7 +1,26 @@
 # AI_HANDOFF_CURRENT
 
-Last updated: 2026-05-17
+Last updated: 2026-11-20
 Role / 作用: handoff card only / 仅作快速接管卡片
+
+### 2026-11-20 Legacy UI fallback retirement (candidate; CI pending)
+
+- 正式游戏只装配 `StartMenu.tscn`、`GameHUD.tscn`、
+  `EventRouletteView.tscn`、`SettingsPanel.tscn` 和 `PreviewScene.tscn`。
+  这些资源现在由生产代码预加载，是发布包必须具备的组成部分。
+- 成组删除过时的 `StartMenuView`、`MenuDecor`、`UIFactory` 及其 UID，
+  移除代码生成 HUD、失效刷新别名、单纯为缺失场景提供的备用面板/控件。
+  `GameHudView` 中仍使用的四阵营加球按钮创建/状态更新保留。
+- 删除旧刷新别名的专属测试断言，改为检查正式 `PreviewScene` 已挂载；
+  其余场景、布局、存档/继续及集成测试不删除。
+- 本地 Godot 4.7.1 完整导入无脚本错误，12 runner 中 11 通过；
+  `StartMenuSceneTestRunner` 的“status label stays inside root panel”
+  在未改动的 `main@e009d727` 独立 worktree 上同样失败，
+  属于当前本机基线问题。不得把本地结果声明为全绿；
+  需以本候选精确 HEAD 的 GitHub CI 判定是否可合并。
+- 历史阶段报告保留在 `docs/history/`；实时测试入口以
+  `.github/workflows/test.yml` 的 12 runner 为准，不再拿旧 1083
+  checks 数字当现役门禁。
 
 ### 2026-10-21 Review: preserve manually collapsed event log
 

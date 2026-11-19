@@ -5,22 +5,26 @@ Role: test matrix and run guidance / 测试矩阵与运行建议
 
 ## Correctness Baseline / 正确性基线
 
-10 headless test runners, verified via GitHub Actions CI (`Headless Tests` workflow).
+12 headless correctness runners, verified by the Godot 4.7.1 `Godot Headless Tests` workflow.
 
-| Runner | Checks | Category |
-|---|---|---|
-| `LayoutSanityTestRunner.gd` | 376 | Layout boundary |
-| `SmokeTestRunner.gd` | 218 | Smoke / fast regression |
-| `SaveFlowControllerTestRunner.gd` | 190 | Save/load orchestration |
-| `IntegrationTestRunner.gd` | 133 | Cross-system correctness |
-| `StartMenuSceneTestRunner.gd` | 55 | Scene wiring |
-| `GameStateCoordinatorTestRunner.gd` | 50 | Gameplay state flow |
-| `GameHUDSceneTestRunner.gd` | 27 | Scene wiring |
-| `EventRouletteSceneTestRunner.gd` | 14 | Scene wiring |
-| `RestorePlanTestRunner.gd` | 11 | Restore planning |
-| `SettingsPanelSceneTestRunner.gd` | 9 | Scene wiring |
+| Runner | Category |
+|---|---|
+| `LayoutSanityTestRunner.gd` | Layout boundary |
+| `SmokeTestRunner.gd` | Smoke / fast regression |
+| `SaveFlowControllerTestRunner.gd` | Save/load orchestration |
+| `IntegrationTestRunner.gd` | Cross-system correctness |
+| `StartMenuSceneTestRunner.gd` | Scene wiring |
+| `GameStateCoordinatorTestRunner.gd` | Gameplay state flow |
+| `GameHUDSceneTestRunner.gd` | Scene wiring |
+| `EventRouletteSceneTestRunner.gd` | Scene wiring |
+| `RestorePlanTestRunner.gd` | Restore planning |
+| `SettingsPanelSceneTestRunner.gd` | Scene wiring |
+| `SettingsAndResultTestRunner.gd` | Persisted HUD preferences and result flow |
+| `EndToEndContinueMainTestRunner.gd` | Full Main save/continue flow |
 
-**Total: 1083 expected checks** across 10 runners.
+The older **1083 expected checks** count belongs to the historical 10-runner
+snapshot. Current CI requires each runner to exit successfully with no
+`SCRIPT ERROR`, `ERROR:` or `FAIL` in its output; counts may evolve.
 
 ## Categories / 测试分类
 
@@ -29,6 +33,10 @@ Role: test matrix and run guidance / 测试矩阵与运行建议
 Verify `.tscn` scenes load, node paths stay stable, setup code does not break layout.
 
 Files: `StartMenuSceneTestRunner`, `GameHUDSceneTestRunner`, `EventRouletteSceneTestRunner`, `SettingsPanelSceneTestRunner`
+
+These scenes, together with `PreviewScene.tscn`, are mandatory packaged
+resources. Scene tests verify the shipped implementation rather than retired
+code-generated fallback interfaces.
 
 Run after: editing `.tscn`, changing scene scripts, changing node paths.
 
@@ -111,4 +119,6 @@ Run when: tuning firing or performance policies, collecting benchmark evidence.
 
 ## CI / GitHub Actions
 
-The `Headless Tests` workflow in `.github/workflows/test.yml` runs validate + all 10 runners in parallel on every push. Artifacts uploaded even on failure.
+The `Godot Headless Tests` workflow in `.github/workflows/test.yml` imports
+the project, validates it, then runs all 12 runners in two isolated batches on
+pushes to `main` and pull requests. Logs are uploaded even on failure.

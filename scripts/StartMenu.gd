@@ -1,6 +1,8 @@
 extends CanvasLayer
 class_name StartMenu
 
+const PreviewScene = preload("res://scenes/ui/PreviewScene.tscn")
+
 @onready var shade: ColorRect = get_node("Shade")
 @onready var root_panel: Panel = get_node("RootPanel")
 @onready var panel_bg: ColorRect = get_node("RootPanel/PanelBg")
@@ -146,10 +148,6 @@ func refresh_slots(save_summaries: Array) -> void:
 	_refresh_slots(save_summaries)
 
 
-func refresh_save_slots(save_summaries: Array) -> void:
-	refresh_slots(save_summaries)
-
-
 func _apply_layout(view_size: Vector2) -> void:
 	var default_panel_size := Vector2(840.0, 684.0)
 	var default_panel_pos := Vector2(
@@ -287,10 +285,6 @@ func _compact_mode_name(mode_name: String) -> String:
 			return mode_name
 
 
-func _compact_slot_title(title_text: String) -> String:
-	return StartMenu.compact_slot_title(title_text)
-
-
 func _build_slot_label(slot: int, summary: Dictionary) -> String:
 	return StartMenu.build_slot_label(slot, summary, _owner.selected_save_slot)
 
@@ -299,13 +293,7 @@ func _init_decor() -> void:
 	for child in chamber_preview.get_children():
 		child.queue_free()
 
-	var decor
-	var preview_scene_path: String = "res://scenes/ui/PreviewScene.tscn"
-	if ResourceLoader.exists(preview_scene_path):
-		var preview_scene: PackedScene = load(preview_scene_path)
-		decor = preview_scene.instantiate()
-	else:
-		decor = preload("res://scripts/MenuDecor.gd").new()
+	var decor: Node2D = PreviewScene.instantiate()
 	decor.position = Vector2.ZERO
 	decor.scale = Vector2.ONE
 	chamber_preview.add_child(decor)

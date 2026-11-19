@@ -20,7 +20,9 @@ const SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.save"
 const SAVE_SLOT_COUNT: int = 5
 const MENU_PREF_PATH: String = "user://menu_preferences.json"
 const GameRuntimeContextScript = preload("res://scripts/GameRuntimeContext.gd")
-const StartMenuUi = preload("res://scripts/StartMenu.gd")
+const StartMenuScene = preload("res://scenes/ui/StartMenu.tscn")
+const GameHUDScene = preload("res://scenes/ui/GameHUD.tscn")
+const EventRouletteScene = preload("res://scenes/ui/EventRouletteView.tscn")
 
 var runtime = GameRuntimeContextScript.new()
 var current_score_counts: Dictionary = {0: 0, 1: 0, 2: 0, 3: 0}
@@ -41,7 +43,6 @@ var is_game_over: bool = false
 var menu_title_label
 var menu_start_button
 var menu_continue_button
-var menu_save_slot_buttons: Dictionary = {}
 var menu_status_label
 var pending_menu_status_message: String = ""
 var ui_time: float = 0.0
@@ -155,12 +156,7 @@ func _toggle_settings_panel() -> void:
 			settings_panel.visible = false
 		return
 
-	if settings_panel.has_method("show_panel"):
-		settings_panel.show_panel()
-	elif settings_panel.has_method("show_content"):
-		settings_panel.show_content(GameConfig.get_quality_name(), "手机横屏" if is_mobile_layout else "电脑")
-	else:
-		settings_panel.visible = true
+	settings_panel.show_panel()
 
 func _create_background() -> void:
 	var background = ColorRect.new()
@@ -176,23 +172,15 @@ func _create_start_menu() -> void:
 
 	var menu_nodes: Dictionary
 	var menu_layout: Dictionary = _build_runtime_layout(LayoutProfiles.sanitize_grid_size(selected_grid_size))
-	var scene_path: String = "res://scenes/ui/StartMenu.tscn"
-	if ResourceLoader.exists(scene_path):
-		var scene: PackedScene = load(scene_path)
-		var instance: CanvasLayer = scene.instantiate()
-		add_child(instance)
-		instance.setup(self, Vector2(VIEW_W, VIEW_H), _get_save_slot_summaries(), menu_layout)
-		menu_nodes = instance.get_parts()
-		print("[StartMenu] Loaded scene StartMenu.tscn")
-	else:
-		menu_nodes = StartMenuView.create(self, Vector2(VIEW_W, VIEW_H), _get_save_slot_summaries(), menu_layout)
-		print("[StartMenu] Scene load failed, fallback to legacy StartMenuView.gd")
+	var instance: CanvasLayer = StartMenuScene.instantiate()
+	add_child(instance)
+	instance.setup(self, Vector2(VIEW_W, VIEW_H), _get_save_slot_summaries(), menu_layout)
+	menu_nodes = instance.get_parts()
 
 	menu_layer = menu_nodes.get("menu_layer", null)
 	menu_title_label = menu_nodes.get("menu_title_label", null)
 	menu_start_button = menu_nodes.get("menu_start_button", null)
 	menu_continue_button = menu_nodes.get("menu_continue_button", null)
-	menu_save_slot_buttons = menu_nodes.get("menu_save_slot_buttons", {})
 	menu_status_label = menu_nodes.get("menu_status_label", null)
 	if pending_menu_status_message != "":
 		_show_menu_status(pending_menu_status_message)
@@ -259,19 +247,11 @@ func _create_control_chambers() -> void:
 	_sync_chamber_game_elapsed_time()
 
 func _create_ui() -> void:
-	var hud_nodes: Dictionary
-	var scene_path: String = "res://scenes/ui/GameHUD.tscn"
-	if ResourceLoader.exists(scene_path):
-		var scene: PackedScene = load(scene_path)
-		var game_hud: CanvasLayer = scene.instantiate()
-		game_hud.name = "UICanvas"
-		game_layer.add_child(game_hud)
-		game_hud.setup_static(self, Vector2(VIEW_W, VIEW_H), runtime.current_layout, is_mobile_layout)
-		hud_nodes = game_hud.get_static_parts()
-		print("[GameHUD] Loaded scene GameHUD.tscn")
-	else:
-		hud_nodes = GameHudView.create_runtime_ui(self, game_layer, runtime.battlefield, runtime.current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
-		print("[GameHUD] Scene load failed, fallback to legacy GameHudView.gd")
+	var game_hud: CanvasLayer = GameHUDScene.instantiate()
+	game_hud.name = "UICanvas"
+	game_layer.add_child(game_hud)
+	game_hud.setup_static(self, Vector2(VIEW_W, VIEW_H), runtime.current_layout, is_mobile_layout)
+	var hud_nodes: Dictionary = game_hud.get_static_parts()
 
 	runtime.set_hud_parts(hud_nodes)
 	var settings_panel = _hud_ref("settings_panel")
@@ -295,18 +275,8 @@ func _create_event_roulette_system() -> void:
 	if game_layer == null or ui_canvas == null:
 		return
 
-	var scene_path: String = "res://scenes/ui/EventRouletteView.tscn"
-	if ResourceLoader.exists(scene_path):
-		var scene: PackedScene = load(scene_path)
-		runtime.event_view = scene.instantiate()
-		runtime.event_view.setup(Vector2(VIEW_W, VIEW_H), runtime.current_layout, is_mobile_layout)
-		print("[EventRoulette] Loaded scene EventRouletteView.tscn")
-	else:
-		var event_view_script = load("res://scripts/EventRouletteView.gd")
-		runtime.event_view = event_view_script.new()
-		runtime.event_view.name = "EventRouletteView"
-		runtime.event_view.setup(Vector2(VIEW_W, VIEW_H), runtime.current_layout, is_mobile_layout)
-		print("[EventRoulette] Scene load failed, fallback to legacy EventRouletteView.gd")
+	runtime.event_view = EventRouletteScene.instantiate()
+	runtime.event_view.setup(Vector2(VIEW_W, VIEW_H), runtime.current_layout, is_mobile_layout)
 	ui_canvas.add_child(runtime.event_view)
 
 	var event_controller_script = load("res://scripts/EventRouletteController.gd")
@@ -589,7 +559,6 @@ func _cleanup_menu() -> void:
 	menu_title_label = null
 	menu_start_button = null
 	menu_continue_button = null
-	menu_save_slot_buttons.clear()
 	menu_status_label = null
 
 func _cleanup_game_layer() -> void:
@@ -714,32 +683,6 @@ func _refresh_menu_save_slots() -> void:
 	var summaries: Array = _get_save_slot_summaries()
 	if menu_layer != null and is_instance_valid(menu_layer) and menu_layer.has_method("refresh_slots"):
 		menu_layer.refresh_slots(summaries)
-		return
-	if menu_layer != null and is_instance_valid(menu_layer) and menu_layer.has_method("refresh_save_slots"):
-		menu_layer.refresh_save_slots(summaries)
-		return
-	_refresh_menu_slot_buttons_fallback(summaries)
-
-func _refresh_menu_slot_buttons_fallback(summaries: Array) -> void:
-	for summary in summaries:
-		if not (summary is Dictionary):
-			continue
-		var slot: int = int(summary.get("slot", 1))
-		if not menu_save_slot_buttons.has(slot):
-			continue
-		var button: Button = menu_save_slot_buttons[slot] as Button
-		if button == null or not is_instance_valid(button):
-			continue
-		button.text = StartMenuUi.build_slot_label(slot, summary, selected_save_slot)
-		button.tooltip_text = str(summary.get("detail", "点击选择此槽"))
-		button.self_modulate = Color(0.28, 0.54, 0.88) if slot == selected_save_slot else Color(0.16, 0.22, 0.32)
-
-	var has_selected_save: bool = _has_save_file(selected_save_slot)
-	if menu_continue_button != null and is_instance_valid(menu_continue_button):
-		menu_continue_button.disabled = not has_selected_save
-		menu_continue_button.text = StartMenuUi.build_continue_button_text(selected_save_slot)
-	if menu_start_button != null and is_instance_valid(menu_start_button):
-		menu_start_button.text = StartMenuUi.build_start_button_label(selected_save_slot, has_selected_save)
 
 func _show_menu_status(message: String) -> void:
 	if menu_status_label != null and is_instance_valid(menu_status_label):

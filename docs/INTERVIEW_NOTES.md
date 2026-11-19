@@ -2,15 +2,15 @@
 
 ## 一句话介绍
 
-BallWar 是一个 Godot 4.6 四阵营领土争夺原型，重点展示玩法循环、事件系统、存档恢复、性能探针和 headless 自动化测试。
+BallWar 是一个 Godot 4.7 四阵营领土争夺原型，重点展示玩法循环、事件系统、存档恢复、性能探针和 headless 自动化测试。
 
 ## 技术亮点
 
-- Godot 4.6 + GDScript
+- Godot 4.7 + GDScript
 - Main orchestration split into controllers and planners
 - Save/load hardening with backup recovery and version checks
 - Bullet pressure and frame-time performance probes
-- 10 headless CI runners, 1083 checks
+- 12 headless CI runners（1083 checks 是旧 10-runner 快照，并非当前固定门禁）
 - Windows / Android release pipeline
 
 ## 面试重点
