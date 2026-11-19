@@ -118,10 +118,10 @@
 
 | 缺口 | 当前状态 | 推荐来源 | 许可证 | 优先级 | 建议落地位置 | 接入点 |
 |---|---|---|---|---|---|---|
-| 全局字体 | `Kenney Future.ttf` 已有但未用 | 本地 `assets/ui/kenney_scifi/font/` | `CC0` | `P0` | 建议后续镜像到 `assets/theme/fonts/` 或直接保留原路径 | `StartMenu.gd`, `StartMenuView.gd`, `RuntimeHudController.gd`, `EventRouletteView.tscn`, 所有仍依赖 `ThemeDB.fallback_font` 的界面 |
+| 全局字体 | `Kenney Future.ttf` 已有但未用 | 本地 `assets/ui/kenney_scifi/font/` | `CC0` | `P0` | 建议后续镜像到 `assets/theme/fonts/` 或直接保留原路径 | `StartMenu.gd`, `RuntimeHudController.gd`, `EventRouletteView.tscn`, 所有仍依赖 `ThemeDB.fallback_font` 的界面 |
 | 子弹发射音 | 完全缺失 | 本地已下 `50 CC0 Sci-Fi SFX` | `CC0` | `P0` | 后续筛选后导入 `assets/sfx/bullets/` | `scripts/Turret.gd:_spawn_bullet()` |
 | 格子占领音 | 完全缺失 | 本地已下 `UI sounds`、`Interface Beeps`、`50 CC0 Sci-Fi SFX` | `CC0` | `P0` | `assets/sfx/capture/` | `scripts/Battlefield.gd` 的分数/归属变化路径，重点看 `scores_changed` 触发链 |
-| 按钮点击 / hover | 完全缺失 | 本地已下 `10 Clicks and Switches`、`Interface Sounds`、`GUI Sound Effects` | `CC0` | `P1` | `assets/sfx/ui/` | `scripts/StartMenu.gd`, `scripts/StartMenuView.gd`, 以及暂停/设置菜单按钮连接处 |
+| 按钮点击 / hover | 完全缺失 | 本地已下 `10 Clicks and Switches`、`Interface Sounds`、`GUI Sound Effects` | `CC0` | `P1` | `assets/sfx/ui/` | `scripts/StartMenu.gd`、`scripts/GameHUD.gd`、暂停/设置菜单按钮连接处 |
 | 事件转盘 tick | 完全缺失 | 本地已下 `Interface Beeps`、`UI sounds` | `CC0` | `P1` | `assets/sfx/event_roulette/` | `scripts/EventRouletteController.gd`, `scenes/ui/EventRouletteView.tscn` |
 | 事件结果音 | 完全缺失 | 本地已下 `Victory Sting`、`Win Jingle`、`GUI Sound Effects` | `CC0` | `P1` | `assets/sfx/event_result/` | `scripts/EventRouletteController.gd:_finish_event_round()` 附近 |
 | 控制舱过门音 | 完全缺失 | 本地已下 `Interface Sounds`、`UI sounds` | `CC0` | `P2` | `assets/sfx/chamber/` | `scripts/ControlChamber.gd` 的放球 / 过门 / 回弹路径 |

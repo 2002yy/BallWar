@@ -3,7 +3,7 @@
 Date / 日期: 2026-05-17
 Role / 作用: test-only document / 只负责测试
 
-Godot目标版本：**4.7.x**（当前验证4.7.1）。测试前使用独立APPDATA/LOCALAPPDATA，并通过ProjectSettings.globalize_path("user://")确认目录位于测试隔离根下；不操作真实玩家数据。判定成功必须同时满足退出0、预期断言完成且日志无SCRIPT ERROR/ERROR。2026-10-21 SettingsAndResult的旧Main接口问题尚未关闭，不能凭其PASS文本算成功，见AI_HANDOFF_CURRENT.md。
+Godot目标版本：**4.7.x**（当前验证4.7.1）。测试前使用隔离的 `user://` 目录（Linux：每个 runner 独立 `XDG_DATA_HOME`；Windows：独立 `APPDATA/LOCALAPPDATA`），不操作真实玩家数据。判定成功必须同时满足退出0、断言成功且日志无 `SCRIPT ERROR`/`ERROR:`/`FAIL`。2026-10-21 的 SettingsAndResult 接口故障已在后续补丁修复。
 
 2026-10-21修复更新：设置链路回归已改为真实面板交互，不直接给Main写旧接口。旧产品负控失败；新产品SettingsAndResult 34断言及12个现役runner全部无错误通过。原生窗口另验开关前后画面；上述“未关闭”只对应修复前候选，当前详见handoff的Settings wiring fix。
 
@@ -192,7 +192,7 @@ Files / 文件:
 
 ## 8. Active Correctness Baseline / 当前 Correctness 基线
 
-These ten scripts are the active baseline and should normally stay green:
+These 12 scripts are the active baseline and should stay green:
 
 - `StartMenuSceneTestRunner.gd`
 - `GameHUDSceneTestRunner.gd`
@@ -204,13 +204,16 @@ These ten scripts are the active baseline and should normally stay green:
 - `SmokeTestRunner.gd`
 - `IntegrationTestRunner.gd`
 - `LayoutSanityTestRunner.gd`
+- `SettingsAndResultTestRunner.gd`
+- `EndToEndContinueMainTestRunner.gd`
 
 Performance probes are useful, but they are not part of the strict correctness baseline.  
 性能探针很有价值，但它们不属于严格的 correctness baseline。
 
 ## 9. CI-Verified Baseline / CI 验证基线
 
-The GitHub Actions matrix (`.github/workflows/test.yml`) runs all 10 correctness runners and passed on `2026-05-17`:
+The following is a **historical 2026-05-17 snapshot**, not the current CI matrix.
+Today's GitHub Actions matrix runs the 12 scripts listed above on Godot 4.7.1:
 
 | Runner | Expected checks | CI status |
 |---|---|---|
@@ -227,9 +230,11 @@ The GitHub Actions matrix (`.github/workflows/test.yml`) runs all 10 correctness
 
 Total: 1083 expected checks across 10 runners.
 
-CI status: [`.github/workflows/test.yml`](/.github/workflows/test.yml) — `Headless Tests` workflow green on `main`.
+Current workflow: [`.github/workflows/test.yml`](/.github/workflows/test.yml) — `Godot Headless Tests`.
 
-> These counts reflect the CI workflow's expected values. If a runner's assertion count changes, update the `checks` field in the matrix and this table together.
+> Historical fixed counts are retained for comparison only; the current CI
+> validates runner completion and checks for errors instead of pinning a
+> historical assertion total.
 
 ## 10. What To Run / 改动后跑什么
 

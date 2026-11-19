@@ -57,20 +57,30 @@ System layering (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)):
 
 ## Testing / 测试
 
-10 headless test runners run via GitHub Actions CI. Correctness baseline: **1083 checks**.
+The Godot 4.7.1 CI runs **12 headless correctness runners**. The former 1083-check
+count described the older 10-runner snapshot; current acceptance uses each
+runner's exit status, assertion failures, and engine error logs.
 
-| Runner | Checks |
+| Runner | Responsibility |
 |---|---|
-| `LayoutSanityTestRunner.gd` | 376 |
-| `SmokeTestRunner.gd` | 218 |
-| `SaveFlowControllerTestRunner.gd` | 190 |
-| `IntegrationTestRunner.gd` | 133 |
-| `StartMenuSceneTestRunner.gd` | 55 |
-| `GameStateCoordinatorTestRunner.gd` | 50 |
-| `GameHUDSceneTestRunner.gd` | 27 |
-| `EventRouletteSceneTestRunner.gd` | 14 |
-| `RestorePlanTestRunner.gd` | 11 |
-| `SettingsPanelSceneTestRunner.gd` | 9 |
+| `LayoutSanityTestRunner.gd` | Responsive layout boundaries |
+| `SmokeTestRunner.gd` | Core gameplay smoke checks |
+| `SaveFlowControllerTestRunner.gd` | Save/load orchestration |
+| `IntegrationTestRunner.gd` | Cross-system behavior |
+| `StartMenuSceneTestRunner.gd` | Scene-driven main menu |
+| `GameStateCoordinatorTestRunner.gd` | Game state transitions |
+| `GameHUDSceneTestRunner.gd` | Scene-driven HUD |
+| `EventRouletteSceneTestRunner.gd` | Event scene wiring |
+| `RestorePlanTestRunner.gd` | Restore planning |
+| `SettingsPanelSceneTestRunner.gd` | Settings scene wiring |
+| `SettingsAndResultTestRunner.gd` | Persisted HUD settings and results |
+| `EndToEndContinueMainTestRunner.gd` | Save/continue through Main |
+
+Static menu, HUD, event, settings, and preview scenes are required resources;
+obsolete code-generated fallback UIs have been retired. The active chamber
+control buttons still use `GameHudView.gd`.
+The manually maintained `.tscn` files are the only source of scene layout;
+obsolete one-shot scene overwriting scripts were removed.
 
 Full guide: [docs/TESTING.md](docs/TESTING.md)
 

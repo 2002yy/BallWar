@@ -74,13 +74,13 @@ func _run() -> void:
 
 	t.that(instance.has_method("get_parts"), "has get_parts")
 	t.that(instance.has_method("refresh_slots"), "has refresh_slots")
-	t.that(instance.has_method("refresh_save_slots"), "keeps refresh_save_slots compatibility")
 	var parts: Dictionary = instance.get_parts()
 	t.eq(parts["menu_save_slot_buttons"].size(), 5, "slot buttons: 5 found")
 
 	var root_panel: Panel = instance.get_node("RootPanel")
 	var preview_container: Control = instance.get_node("RootPanel/MainVBox/PreviewContainer")
 	var chamber_preview: Node2D = instance.get_node("RootPanel/MainVBox/PreviewContainer/ChamberPreview")
+	t.that(chamber_preview.get_node_or_null("PreviewScene") != null, "shipped preview scene is attached")
 	var slot_grid: GridContainer = instance.get_node("RootPanel/MainVBox/SavePanel/SaveVBox/SlotGrid")
 	var start_button: Button = instance.get_node("RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow2/StartButton")
 	var continue_button: Button = instance.get_node("RootPanel/MainVBox/ContinueButton")
