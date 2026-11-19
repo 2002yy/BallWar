@@ -133,6 +133,7 @@ func get_static_parts() -> Dictionary:
 		"pause_button": pause_button,
 		"exit_button": exit_button,
 		"fps_label": fps_label,
+		"fps_bg": fps_bg,
 		"settings_button": settings_button,
 		"settings_panel": settings_panel,
 		"leader_label": leader_label,
@@ -140,6 +141,7 @@ func get_static_parts() -> Dictionary:
 		"stage_label": stage_label,
 		"event_label": event_label,
 		"event_log_label": event_log_label,
+		"event_log_toggle_btn": event_log_toggle_btn,
 	}
 
 func setup_side_buttons(controller_ref) -> void:
@@ -222,6 +224,8 @@ func _layout_side_buttons(view_size: Vector2, mobile_mode: bool, current_layout:
 		var settings_panel_rect: Rect2 = hud_positions.get("settings_panel_rect", default_rect)
 		settings_panel.position = settings_panel_rect.position
 		settings_panel.size = settings_panel_rect.size
+		if settings_panel.has_signal("settings_changed"):
+			settings_panel.size.y = maxf(settings_panel.size.y, 168.0)
 
 func _layout_bottom_hud(view_size: Vector2, mobile_mode: bool, current_layout: Dictionary = {}) -> void:
 	var hud_positions: Dictionary = current_layout.get("hud_positions", {})

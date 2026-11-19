@@ -87,6 +87,7 @@ var last_event_effect: String = ""
 var reroll_count: int = 0
 var is_presenting_event: bool = false
 var event_history: Array[Dictionary] = []
+var event_log_visible: bool = true
 var event_label_update_timer: float = 0.0
 var event_label_dirty: bool = true
 
@@ -559,6 +560,8 @@ func _on_view_presentation_finished(_payload_from_view: Dictionary) -> void:
 	_finish_event_round(_pending_payload)
 
 func get_event_log_text(max_entries: int = 8) -> String:
+	if not event_log_visible:
+		return ""
 	var lines: PackedStringArray = []
 	var start_idx: int = maxi(0, event_history.size() - max_entries)
 	for i in range(start_idx, event_history.size()):

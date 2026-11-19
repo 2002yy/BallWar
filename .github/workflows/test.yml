@@ -14,9 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GODOT_VERSION: 4.6.2-stable
-  GODOT_ARCHIVE: Godot_v4.6.2-stable_linux.x86_64.zip
-  GODOT_EXE: Godot_v4.6.2-stable_linux.x86_64
+  GODOT_VERSION: 4.7.1-stable
+  GODOT_ARCHIVE: Godot_v4.7.1-stable_linux.x86_64.zip
+  GODOT_EXE: Godot_v4.7.1-stable_linux.x86_64
   GODOT_BINARY: godot_headless
 
 jobs:
@@ -44,7 +44,8 @@ jobs:
       - name: Validate project.godot loads
         run: |
           set -o pipefail
-          ./${{ env.GODOT_BINARY }} --headless --audio-driver Dummy --path . --quit 2>&1 | tee validate.log
+          ./${{ env.GODOT_BINARY }} --headless --audio-driver Dummy --editor --import --path . --quit 2>&1 | tee validate.log
+          if grep -Eq "SCRIPT ERROR|^ERROR:" validate.log; then exit 1; fi
       - name: Upload validate log
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,6 +76,8 @@ jobs:
               RestorePlanTestRunner.gd
               IntegrationTestRunner.gd
               LayoutSanityTestRunner.gd
+              SettingsAndResultTestRunner.gd
+              EndToEndContinueMainTestRunner.gd
     steps:
       - uses: actions/checkout@v4
       - name: Restore cached Godot
@@ -110,11 +113,12 @@ jobs:
             log="artifacts/test-logs/${script%.gd}.log"
             echo "=== Running ${script} ==="
             set +e
-            ./${GODOT_BINARY} --headless --audio-driver Dummy --path . --script "res://scripts/tests/${script}" 2>&1 | tee "$log"
+            user_dir="$(mktemp -d "${RUNNER_TEMP}/ballwar-user-XXXXXX")" || exit 1
+            XDG_DATA_HOME="$user_dir" ./${GODOT_BINARY} --headless --audio-driver Dummy --path . --script "res://scripts/tests/${script}" 2>&1 | tee "$log"
             status=${PIPESTATUS[0]}
             set -e
-            if grep -q "FAIL" "$log"; then
-              echo "::error::${script} printed a FAIL marker"
+            if grep -Eq "SCRIPT ERROR|^ERROR:|FAIL" "$log"; then
+              echo "::error::${script} printed a runtime error or FAIL marker"
               status=1
             elif grep -q "PASS" "$log"; then
               echo "${script} printed a PASS marker"
