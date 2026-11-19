@@ -13,6 +13,10 @@ Role / 作用: handoff card only / 仅作快速接管卡片
   `GameHudView` 中仍使用的四阵营加球按钮创建/状态更新保留。
 - 删除旧刷新别名的专属测试断言，改为检查正式 `PreviewScene` 已挂载；
   其余场景、布局、存档/继续及集成测试不删除。
+- 同步退役四个仅用于初始生成场景、没有现役调用方的
+  `scripts/tools/build_*_scene.gd` 及其 UID。其源码明确警告运行会覆盖
+  编辑器中已成为权威来源的 `.tscn` 文件；不再保留两套场景生成权威。
+  `audit_gd_indentation.py` 与独立性能探针继续保留。
 - 本地 Godot 4.7.1 完整导入无脚本错误，12 runner 中 11 通过；
   `StartMenuSceneTestRunner` 的“status label stays inside root panel”
   在未改动的 `main@e009d727` 独立 worktree 上同样失败，

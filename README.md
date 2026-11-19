@@ -79,6 +79,8 @@ runner's exit status, assertion failures, and engine error logs.
 Static menu, HUD, event, settings, and preview scenes are required resources;
 obsolete code-generated fallback UIs have been retired. The active chamber
 control buttons still use `GameHudView.gd`.
+The manually maintained `.tscn` files are the only source of scene layout;
+obsolete one-shot scene overwriting scripts were removed.
 
 Full guide: [docs/TESTING.md](docs/TESTING.md)
 
