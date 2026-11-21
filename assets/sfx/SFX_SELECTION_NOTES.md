@@ -6,8 +6,8 @@
 说明:
 - 这里不是原始下载包镜像，而是第一轮“可直接接线”的筛选结果。
 - 命名目标是让后续代码接入时不需要重新猜素材用途。
-- 原始下载包、完整解包和许可证页都保留在:
-  - `art_reference/asset_gap_downloads/`
+- 原始下载压缩包和许可证页仍保留在 `art_reference/asset_gap_downloads/`；2026-11-22 经逐文件 SHA-256 校验后，235 个可以从归档恢复的历史解包音频已从 Git 工作区移除（详见 `art_reference/README.md`）。
+- 需要试听被移除的候选时请临时解压原始 ZIP / 7z；Kenney 的三个非等价文本文件不应被覆盖。
 
 ## 当前目录结构
 
@@ -69,5 +69,5 @@
 ## 备注
 
 - 当前筛选是“先覆盖功能面”，不是“最终混音定稿”。
-- 后续如果要缩小包体，可以在每个子目录里保留 1 到 2 个最终版，其余回退到 `art_reference/asset_gap_downloads/`。
+- 后续如果要缩小正式包体，可以在每个 `assets/sfx/` 子目录保留 1 到 2 个最终版；其他候选的上游源文件可从 `art_reference/asset_gap_downloads/audio_cc0/` 下的归档临时恢复。
 - 如果要统一音色风格，优先在 `Kenney Interface Sounds` 与 `50 CC0 Sci-Fi SFX` 内部做二次收敛。

@@ -56,7 +56,7 @@
 - `audio_cc0/`
   - 原始下载包和单文件音效。
 - `audio_cc0_extracted/`
-  - 已解包、可直接试听和二次筛选的音效。
+  - 历史解包位置；2026-11-22 已移除 235 个可恢复音频副本，仅保留与 ZIP 字节不等价的 Kenney 文本文件。试听候选须临时解压原始压缩包。
 - `music_candidates/`
   - 菜单循环 / 环境氛围 / 战斗背景候选。
 - `licenses/`
@@ -77,7 +77,7 @@
 
 当前统计:
 - 音效原始包 / 单文件: `8`
-- 已解包文件数: `238`
+- 历史已解包文件数: `238`（原始统计；当前已移除 235 份可恢复音频，仅保留 3 份 Kenney 差异文本，详见 `art_reference/README.md`）
 - 直接单文件音效: `1`
 - 可立即筛选的音效候选总数: `239`
 
@@ -196,7 +196,7 @@
    - `assets/ASSET_SOURCES_AND_LICENSES.md`
    - `art_reference/free_ui_assets/FREE_UI_INTEGRATION_PLAN.md`
 3. 如果先做音效:
-   - 从 `art_reference/asset_gap_downloads/audio_cc0_extracted/` 里筛选
+   - 从 `art_reference/asset_gap_downloads/audio_cc0/` 的原始 ZIP / 7z 临时解压后筛选（不要覆盖保留的 Kenney 文本差异）
    - 复制最小集合到 `assets/sfx/`
    - 新增一个统一音频入口，不要把 `AudioStreamPlayer` 散着塞进每个脚本
 4. 如果先做 UI:
