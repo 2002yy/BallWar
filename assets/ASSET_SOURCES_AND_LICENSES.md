@@ -144,7 +144,7 @@ Primary source packs and licenses:
 
 Local source and license evidence:
 
-- raw packs, remaining extracted candidates and download evidence:
+- original archives, provenance snapshots and the few retained non-identical metadata files (verified extracted audio copies were removed in November 2026):
   - `art_reference/asset_gap_downloads/`
   - the three standalone music downloads have exact-byte copies retained under `assets/sfx/`; see [reference asset deduplication mapping](../art_reference/README.md#已去重的音乐源文件2026-11-22)
 - saved source pages and license snapshots:
