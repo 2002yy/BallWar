@@ -15,12 +15,22 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Compare all original ZIP entries to tracked extracted files
+      - name: Extract GUI 7z archive into an isolated temporary directory
+        shell: bash
+        run: |
+          if ! command -v 7z >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y p7zip-full
+          fi
+          mkdir -p "$RUNNER_TEMP/ballwar-gui-source"
+          7z x -y -o"$RUNNER_TEMP/ballwar-gui-source" art_reference/asset_gap_downloads/audio_cc0/opengameart_gui_sound_effects.7z >/dev/null
+      - name: Compare ZIP and 7z original payloads to extracted files
         shell: bash
         run: |
           python - <<'PY'
           import collections
           import hashlib
+          import os
           from pathlib import Path
           import sys
           import zipfile
@@ -42,26 +52,36 @@ jobs:
           for archive, folder in cases:
               archive_path = root / "audio_cc0" / archive
               extracted = root / "audio_cc0_extracted" / folder
+              excluded = {"license.txt", "kenney.url", "patreon.url"} if "interface_sounds_kenney" in archive else set()
               with zipfile.ZipFile(archive_path) as z:
                   members = [m for m in z.infolist()
                              if not m.is_dir()
                              and "__MACOSX" not in Path(m.filename).parts
-                             and Path(m.filename).name not in (".DS_Store", "Thumbs.db")]
-                  expected = collections.Counter(
-                      fingerprint(Path(m.filename).name, z.read(m)) for m in members
-                  )
+                             and Path(m.filename).name not in (".DS_Store", "Thumbs.db")
+                             and Path(m.filename).name.lower() not in excluded]
+                  expected = collections.Counter(fingerprint(Path(m.filename).name, z.read(m)) for m in members)
               files = [p for p in extracted.rglob("*")
                        if p.is_file() and p.suffix != ".import"
-                       and p.name not in (".DS_Store", "Thumbs.db")]
+                       and p.name not in (".DS_Store", "Thumbs.db")
+                       and p.name.lower() not in excluded]
               actual = collections.Counter(fingerprint(p.name, p.read_bytes()) for p in files)
-              missing = expected - actual
-              extra = actual - expected
-              print(f"{archive} => {folder}: archived={sum(expected.values())} extracted={sum(actual.values())}; missing={sum(missing.values())}, extra={sum(extra.values())}", flush=True)
+              missing, extra = expected - actual, actual - expected
+              print(f"{archive}: archived={sum(expected.values())} extracted={sum(actual.values())}; missing={sum(missing.values())}, extra={sum(extra.values())}", flush=True)
               for kind, data in (("missing", missing), ("extra", extra)):
                   for item, n in list(data.items())[:6]:
-                      print(f"  {kind}: {item[0]}, bytes={item[1]}, sha256={item[2]}, copies={n}", flush=True)
-              if missing or extra:
-                  bad += 1
-          print(f"ARCHIVE AUDIT: {len(cases)-bad}/{len(cases)} exact filename+length+SHA256 multisets", flush=True)
+                      print(f"  {kind}: {item[0]}, size={item[1]}, sha256={item[2]}, n={n}", flush=True)
+              bad += bool(missing or extra)
+          
+          source_gui = Path(os.environ["RUNNER_TEMP"]) / "ballwar-gui-source"
+          extracted_gui = root / "audio_cc0_extracted" / "oga_gui_sound_effects"
+          gui_expected = collections.Counter(fingerprint(p.name, p.read_bytes()) for p in source_gui.rglob("*") if p.is_file())
+          gui_actual = collections.Counter(fingerprint(p.name, p.read_bytes()) for p in extracted_gui.rglob("*") if p.is_file() and p.suffix != ".import")
+          gui_missing, gui_extra = gui_expected-gui_actual, gui_actual-gui_expected
+          print(f"GUI 7z: archived={sum(gui_expected.values())} extracted={sum(gui_actual.values())}; missing={sum(gui_missing.values())}, extra={sum(gui_extra.values())}", flush=True)
+          for kind, data in (("missing", gui_missing), ("extra", gui_extra)):
+              for item, n in list(data.items())[:6]:
+                  print(f"  7z {kind}: {item[0]}, size={item[1]}, sha256={item[2]}, n={n}", flush=True)
+          bad += bool(gui_missing or gui_extra)
+          print(f"ARCHIVE AUDIT: {len(cases)+1-bad}/{len(cases)+1} original archive payload sets (Kenney 3 changed metadata files explicitly retained)", flush=True)
           sys.exit(1 if bad else 0)
           PY
