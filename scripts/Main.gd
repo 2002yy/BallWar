@@ -20,6 +20,7 @@ const SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.save"
 const SAVE_SLOT_COUNT: int = 5
 const MENU_PREF_PATH: String = "user://menu_preferences.json"
 const GameRuntimeContextScript = preload("res://scripts/GameRuntimeContext.gd")
+const BulletRestoreQueueScript = preload("res://scripts/BulletRestoreQueue.gd")
 const StartMenuScene = preload("res://scenes/ui/StartMenu.tscn")
 const GameHUDScene = preload("res://scenes/ui/GameHUD.tscn")
 const EventRouletteScene = preload("res://scenes/ui/EventRouletteView.tscn")
@@ -47,8 +48,7 @@ var menu_status_label
 var pending_menu_status_message: String = ""
 var ui_time: float = 0.0
 var chamber_scale: float = 1.0
-var pending_restore_bullets: Array = []
-var pending_restore_index: int = 0
+var bullet_restore_queue = BulletRestoreQueueScript.new()
 var perf_debug_update_timer: float = 0.0
 var hud_meta_update_timer: float = 0.0
 const PERF_DEBUG_UPDATE_INTERVAL: float = 0.25
@@ -98,7 +98,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	ui_time += delta
 
-	if GameStateCoordinator.should_process_restore_queue(get_tree(), is_game_over, pending_restore_bullets.size()):
+	if GameStateCoordinator.should_process_restore_queue(get_tree(), is_game_over, bullet_restore_queue.pending_count()):
 		_process_pending_bullet_restore()
 
 	if GameStateCoordinator.should_advance_gameplay(get_tree(), game_layer, is_game_over):
@@ -567,8 +567,7 @@ func _cleanup_game_layer() -> void:
 		game_layer.queue_free()
 		game_layer = null
 	runtime.reset()
-	pending_restore_bullets.clear()
-	pending_restore_index = 0
+	bullet_restore_queue.reset()
 
 func _get_save_path(slot_index: int) -> String:
 	return SaveFlowController.get_save_path(slot_index, SAVE_PATH_TEMPLATE, SAVE_SLOT_COUNT)
@@ -603,26 +602,14 @@ func _restore_bullet_states(states) -> void:
 		return
 
 	_clear_bullets()
-	pending_restore_bullets.clear()
-	pending_restore_index = 0
-
-	if not (states is Array):
-		return
-
-	var restore_count: int = mini(states.size(), GameConfig.get_restore_bullet_limit())
-	for i in range(restore_count):
-		if states[i] is Dictionary:
-			pending_restore_bullets.append(states[i])
+	bullet_restore_queue.load_states(states, GameConfig.get_restore_bullet_limit())
 
 func _process_pending_bullet_restore() -> void:
 	if runtime.bullet_pool == null or runtime.battlefield == null:
-		pending_restore_bullets.clear()
-		pending_restore_index = 0
+		bullet_restore_queue.reset()
 		return
 
-	var end_index: int = mini(pending_restore_index + GameConfig.get_restore_per_frame(), pending_restore_bullets.size())
-	for i in range(pending_restore_index, end_index):
-		var state = pending_restore_bullets[i]
+	for state in bullet_restore_queue.take_batch(GameConfig.get_restore_per_frame()):
 		if not (state is Dictionary):
 			continue
 
@@ -634,12 +621,6 @@ func _process_pending_bullet_restore() -> void:
 			bullet.restore_from_state(state, runtime.battlefield, runtime.turrets)
 			bullet.activate()
 			runtime.bullet_pool.add_child(bullet)
-
-	pending_restore_index = end_index
-	if pending_restore_index >= pending_restore_bullets.size():
-		pending_restore_bullets.clear()
-		pending_restore_index = 0
-
 
 func _save_game_progress() -> Dictionary:
 	var result: Dictionary = SaveFlowController.write_game_progress_result(
