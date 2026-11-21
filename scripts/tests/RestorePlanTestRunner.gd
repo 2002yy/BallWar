@@ -2,6 +2,7 @@ extends SceneTree
 
 const TestAssert = preload("res://scripts/tests/TestAssert.gd")
 const RestorePlan = preload("res://scripts/RestorePlan.gd")
+const BulletRestoreQueue = preload("res://scripts/BulletRestoreQueue.gd")
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -12,6 +13,7 @@ func _run() -> void:
 
 	_test_build_from_clean_data(t)
 	_test_to_restore_dictionary(t)
+	_test_bullet_restore_queue(t)
 
 	t.report("[RestorePlanTest]")
 	quit(0 if t.failures.is_empty() else 1)
@@ -53,3 +55,29 @@ func _test_to_restore_dictionary(t: TestAssert) -> void:
 	t.eq(int(restored.get("event_state", {}).get("reroll_count", -1)), 2, "restore plan roundtrip event state")
 	t.eq((restored.get("bullets", []) as Array).size(), 1, "restore plan roundtrip bullets")
 	t.eq(bool(restored.get("is_game_over", true)), false, "restore plan roundtrip game over flag")
+
+func _test_bullet_restore_queue(t: TestAssert) -> void:
+	var queue = BulletRestoreQueue.new()
+	var states: Array = [{"faction_id": 0}, "invalid", {"faction_id": 1}, {"faction_id": 2}]
+	queue.load_states(states, 3)
+	t.eq(queue.pending_count(), 2, "bullet queue caps source before filtering invalid states")
+	var first: Array = queue.take_batch(1)
+	t.eq(first.size(), 1, "bullet queue respects per-frame budget")
+	t.eq(int(first[0].get("faction_id", -1)), 0, "bullet queue keeps first valid state")
+	t.eq(queue.pending_count(), 1, "bullet queue cursor advances once")
+	var second: Array = queue.take_batch(1)
+	t.eq(int(second[0].get("faction_id", -1)), 1, "bullet queue keeps input order")
+	t.eq(queue.pending_count(), 0, "bullet queue clears after final batch")
+	t.eq(queue.take_batch(2).size(), 0, "empty queue does not re-emit bullets")
+
+	queue.load_states([{"faction_id": 3}, {"faction_id": 2}], 2)
+	t.eq(queue.take_batch(0).size(), 0, "zero budget does not consume pending states")
+	t.eq(queue.pending_count(), 2, "zero budget preserves queue")
+	queue.load_states([{"faction_id": 1}], 2)
+	t.eq(queue.pending_count(), 1, "new restore replaces partially consumed queue")
+	t.eq(int(queue.take_batch(2)[0].get("faction_id", -1)), 1, "replacement never emits prior states")
+	queue.load_states("invalid", 2)
+	t.eq(queue.pending_count(), 0, "non-array restore input leaves queue empty")
+	queue.load_states([{"faction_id": 0}], 1)
+	queue.reset()
+	t.eq(queue.pending_count(), 0, "cleanup clears pending restore work")
