@@ -1,0 +1,67 @@
+name: Temporary original-archive recovery audit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/archive-recovery-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recoverability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare all original ZIP entries to tracked extracted files
+        shell: bash
+        run: |
+          python - <<'PY'
+          import collections
+          import hashlib
+          from pathlib import Path
+          import sys
+          import zipfile
+          
+          root = Path("art_reference/asset_gap_downloads")
+          cases = [
+              ("opengameart_10_clicks_and_switches.zip", "oga_10_clicks_and_switches"),
+              ("opengameart_50_cc0_scifi_sfx.zip", "oga_50_cc0_scifi_sfx"),
+              ("opengameart_beeps.zip", "oga_interface_beeps"),
+              ("opengameart_interface_sounds_kenney.zip", "oga_interface_sounds_kenney"),
+              ("opengameart_ui_sounds.zip", "oga_ui_sounds"),
+              ("opengameart_win_jingle.zip", "oga_win_jingle"),
+          ]
+          
+          def fingerprint(name, data):
+              return name.lower(), len(data), hashlib.sha256(data).hexdigest()
+          
+          bad = 0
+          for archive, folder in cases:
+              archive_path = root / "audio_cc0" / archive
+              extracted = root / "audio_cc0_extracted" / folder
+              with zipfile.ZipFile(archive_path) as z:
+                  members = [m for m in z.infolist()
+                             if not m.is_dir()
+                             and "__MACOSX" not in Path(m.filename).parts
+                             and Path(m.filename).name not in (".DS_Store", "Thumbs.db")]
+                  expected = collections.Counter(
+                      fingerprint(Path(m.filename).name, z.read(m)) for m in members
+                  )
+              files = [p for p in extracted.rglob("*")
+                       if p.is_file() and p.suffix != ".import"
+                       and p.name not in (".DS_Store", "Thumbs.db")]
+              actual = collections.Counter(fingerprint(p.name, p.read_bytes()) for p in files)
+              missing = expected - actual
+              extra = actual - expected
+              print(f"{archive} => {folder}: archived={sum(expected.values())} extracted={sum(actual.values())}; missing={sum(missing.values())}, extra={sum(extra.values())}", flush=True)
+              for kind, data in (("missing", missing), ("extra", extra)):
+                  for item, n in list(data.items())[:6]:
+                      print(f"  {kind}: {item[0]}, bytes={item[1]}, sha256={item[2]}, copies={n}", flush=True)
+              if missing or extra:
+                  bad += 1
+          print(f"ARCHIVE AUDIT: {len(cases)-bad}/{len(cases)} exact filename+length+SHA256 multisets", flush=True)
+          sys.exit(1 if bad else 0)
+          PY
