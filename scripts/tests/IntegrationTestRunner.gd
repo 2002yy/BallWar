@@ -102,7 +102,15 @@ func _test_save_schema_version() -> void:
 	_assert.that(v3.has("_invalid_reason"), "save schema: empty version should be rejected")
 
 	var v4 := SaveGameCodec.validate_save_data(Fixtures.build_minimal_save_payload("1.9.0"))
-	_assert.that(not v4.has("_invalid_reason"), "save schema: 1.9.0 should pass (prefix match)")
+	_assert.that(not v4.has("_invalid_reason"), "save schema: 1.9.0 should remain compatible")
+
+	for valid_version in ["1.9", "2.0", "1.9.99", "2.0.123", "2.0.1.2"]:
+		var valid_data := SaveGameCodec.validate_save_data(Fixtures.build_minimal_save_payload(valid_version))
+		_assert.that(not valid_data.has("_invalid_reason"), "save schema: accepted numeric legacy version %s" % valid_version)
+
+	for invalid_version in ["1.90.0", "2.01.0", "2.0broken", "1.9.2beta", "2.0.", "2.0..1", "2.0.-1", "2.0.+1", "2.0.1 ", "2.0.alpha"]:
+		var invalid_data := SaveGameCodec.validate_save_data(Fixtures.build_minimal_save_payload(invalid_version))
+		_assert.that(invalid_data.has("_invalid_reason"), "save schema: reject malformed or lookalike version %s" % invalid_version)
 
 func _test_save_game_mode_persistence() -> void:
 	var mode_list: Array = GameConfig.get_game_mode_names()
