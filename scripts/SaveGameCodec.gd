@@ -58,10 +58,22 @@ static func inspect_payload_integrity(payload: Dictionary) -> Dictionary:
 	}
 
 static func is_supported_save_version(version: String) -> bool:
-	var normalized: String = str(version)
+	# Preserve bare 1.9 / 2.0 and their numeric patch versions, but do not
+	# mistake an arbitrary string sharing the prefix for a compatible schema.
 	for prefix in SUPPORTED_SAVE_MAJOR_PREFIXES:
-		if normalized.begins_with(prefix):
+		if version == prefix:
 			return true
+		if not version.begins_with(prefix + "."):
+			continue
+		var suffix: String = version.substr(prefix.length() + 1)
+		for component in suffix.split("."):
+			if component.is_empty():
+				return false
+			for i in range(component.length()):
+				var digit: int = component.unicode_at(i)
+				if digit < 48 or digit > 57:
+					return false
+		return true
 	return false
 
 static func vec2_to_arr(v: Vector2) -> Array:
