@@ -24,12 +24,30 @@ static func load_settings() -> Dictionary:
 	return sanitize_settings(parsed)
 
 static func save_settings(settings: Dictionary) -> void:
-	var clean := sanitize_settings(settings)
-	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+	_write_settings_atomically(SETTINGS_PATH, sanitize_settings(settings))
+
+
+static func _write_settings_atomically(path: String, clean: Dictionary) -> bool:
+	# Stage a complete JSON file next to the current settings file; never
+	# truncate the authoritative file before the replacement succeeds.
+	var temp_path: String = "%s.tmp" % path
+	var file := FileAccess.open(temp_path, FileAccess.WRITE)
 	if file == null:
-		return
+		return false
 	file.store_string(JSON.stringify(clean, "\t"))
+	file.flush()
+	var write_error: Error = file.get_error()
 	file.close()
+	if write_error != OK:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
+		return false
+
+	var temp_absolute: String = ProjectSettings.globalize_path(temp_path)
+	var final_absolute: String = ProjectSettings.globalize_path(path)
+	if DirAccess.rename_absolute(temp_absolute, final_absolute) != OK:
+		DirAccess.remove_absolute(temp_absolute)
+		return false
+	return true
 
 static func sanitize_settings(settings: Dictionary) -> Dictionary:
 	var defaults := default_settings()

@@ -17,6 +17,7 @@ func _run() -> void:
 
 	_cleanup_settings_file()
 	await _test_settings_persistence(t)
+	_test_atomic_settings_replacement(t)
 	await _flush()
 	await _test_performance_toggle(t)
 	await _flush()
@@ -38,9 +39,51 @@ func _flush() -> void:
 
 
 func _cleanup_settings_file() -> void:
-	var path := ProjectSettings.globalize_path("user://player_settings.json")
+	for uri in ["user://player_settings.json", "user://player_settings.json.tmp"]:
+		var path: String = ProjectSettings.globalize_path(uri)
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+
+
+# === P0: Settings persistence interruption boundary ===
+func _test_atomic_settings_replacement(t: TestAssert) -> void:
+	print("  [P0] staged settings commit preserves previous complete JSON")
+	var path: String = "user://atomic_player_settings_test.json"
+	var tmp_path: String = "%s.tmp" % path
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	var absolute_temp: String = ProjectSettings.globalize_path(tmp_path)
 	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
+		DirAccess.remove_absolute(absolute_path)
+	if FileAccess.file_exists(tmp_path):
+		DirAccess.remove_absolute(absolute_temp)
+
+	var initial: Dictionary = {
+		"show_performance_info": false,
+		"low_effect_mode": false,
+		"show_event_log": true,
+	}
+	t.that(PlayerSettingsStore._write_settings_atomically(path, initial), "first settings snapshot writes")
+	var first: String = FileAccess.get_file_as_string(path)
+	t.eq(JSON.parse_string(first), initial, "initial JSON survives round trip")
+	t.that(not FileAccess.file_exists(tmp_path), "temporary file removed after first publish")
+
+	var changed: Dictionary = initial.duplicate()
+	changed["low_effect_mode"] = true
+	t.that(PlayerSettingsStore._write_settings_atomically(path, changed), "second snapshot replaces existing settings")
+	var second: String = FileAccess.get_file_as_string(path)
+	t.eq(JSON.parse_string(second), changed, "latest JSON replaces entire previous snapshot")
+	t.that(not FileAccess.file_exists(tmp_path), "temporary file removed after overwrite")
+
+	# Block creation of the staging file with a directory. This injects a
+	# deterministic write failure without removing/replacing the good file.
+	var make_error: Error = DirAccess.make_dir_absolute(absolute_temp)
+	t.eq(make_error, OK, "test staging directory created")
+	if make_error == OK:
+		t.that(not PlayerSettingsStore._write_settings_atomically(path, initial), "failed staging reports failure")
+		t.eq(FileAccess.get_file_as_string(path), second, "failed write keeps previous complete JSON")
+		DirAccess.remove_absolute(absolute_temp)
+
+	DirAccess.remove_absolute(absolute_path)
 
 
 # === P1: Settings persistence ===
