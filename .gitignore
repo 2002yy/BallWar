@@ -13,6 +13,9 @@ Thumbs.db
 android/.build_version
 android/build/
 
+# Archived reference files are not imported into Godot; never track generated remap sidecars.
+art_reference/**/*.import
+
 art_reference/free_ui_assets/*
 !art_reference/free_ui_assets/
 !art_reference/free_ui_assets/FREE_UI_INTEGRATION_PLAN.md
