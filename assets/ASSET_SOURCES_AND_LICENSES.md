@@ -144,8 +144,9 @@ Primary source packs and licenses:
 
 Local source and license evidence:
 
-- raw downloads and extracted packs:
+- raw packs, remaining extracted candidates and download evidence:
   - `art_reference/asset_gap_downloads/`
+  - the three standalone music downloads have exact-byte copies retained under `assets/sfx/`; see [reference asset deduplication mapping](../art_reference/README.md#已去重的音乐源文件2026-11-22)
 - saved source pages and license snapshots:
   - `art_reference/asset_gap_downloads/licenses/`
 

@@ -83,11 +83,13 @@
 
 ### 3.2 已下载的音乐 / 环境氛围候选
 
-| 文件 | 本地路径 | 推荐用途 | 来源 | 许可证 |
+以下路径为当前保留副本。原始下载文件名保留在表中；2026-11-22 按 Git Blob SHA 核实与正式资源完全相同后，去除了三份独立的 `music_candidates/` 副本；映射见 [`art_reference/README.md`](../../art_reference/README.md#已去重的音乐源文件2026-11-22)。
+
+| 原始文件名 | 当前保留路径 | 推荐用途 | 来源 | 许可证 |
 |---|---|---|---|---|
-| `opengameart_space_echo.ogg` | `art_reference/asset_gap_downloads/music_candidates/` | 菜单循环 / 低存在感外层氛围 | OpenGameArt `Space Echo` | `CC0` |
-| `opengameart_scifi_background_noise.ogg` | `art_reference/asset_gap_downloads/music_candidates/` | 战斗环境底噪 / 低音量 ambience | OpenGameArt `Sci-Fi Background noise` | `CC0` |
-| `opengameart_space_dungeon_bpm100.mp3` | `art_reference/asset_gap_downloads/music_candidates/` | 菜单 / 战斗前中段循环候选 | OpenGameArt `Space Dungeon` | `CC0` |
+| `opengameart_space_echo.ogg` | `assets/sfx/music/menu_loop_space_echo.ogg` | 菜单循环 / 低存在感外层氛围 | OpenGameArt `Space Echo` | `CC0` |
+| `opengameart_scifi_background_noise.ogg` | `assets/sfx/ambient/battle_ambient_scifi_noise.ogg` | 战斗环境底噪 / 低音量 ambience | OpenGameArt `Sci-Fi Background noise` | `CC0` |
+| `opengameart_space_dungeon_bpm100.mp3` | `assets/sfx/music/battle_loop_space_dungeon_bpm100.mp3` | 菜单 / 战斗前中段循环候选 | OpenGameArt `Space Dungeon` | `CC0` |
 
 ### 3.3 本地许可页备份
 
