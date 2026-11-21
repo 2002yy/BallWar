@@ -8,7 +8,8 @@ Role: engineering architecture reference / 工程架构参考
 ```
 Main.gd (top-level orchestration)
   ├─ SaveFlowController     — prepare_* / apply_* continue flow
-  ├─ RestorePlan            — active restore planning data
+  ├─ RestorePlan            — validated save-state projection
+  ├─ BulletRestoreQueue     — transient bullet restore backlog and frame cursor
   ├─ GameStateCoordinator   — gameplay state transitions
   ├─ SaveGameCodec          — validate & normalize save data
   ├─ SaveStateApplier       — apply cleaned data to runtime objects
@@ -22,7 +23,8 @@ Main.gd (top-level orchestration)
 - **`ControlChamber`**, **`Turret`**, **`Bullet`** — each owns `restore_from_state(...)` for their internal restore mutation.
 - **`SaveGameCodec`** — validates and normalizes save data only. Does not mutate runtime objects.
 - **`SaveStateApplier`** — applies cleaned data to runtime objects and systems.
-- **`Bullet` restore** — still needs deferred handling due to pool, trail, and pressure behavior.
+- **`BulletRestoreQueue`** — filters/limits pending bullet states and advances the per-frame cursor; it does not create nodes or own the bullet pool.
+- **`Main.gd` bullet restore** — retains runtime prerequisites, clearing active bullets, and spawning via the pool (or the existing fallback). Deferred restoration is required to avoid frame spikes.
 
 ## Runtime-Heavy Systems / 运行时重系统
 
