@@ -24,6 +24,8 @@ extends SceneTree
 #   CAPTURE_SEED      match seed; set a fixed one when comparing before/after
 #                     performance on the same match (default -1 = random)
 #   CAPTURE_PERF      "1" writes perf.json with frame-time statistics
+#   CAPTURE_RESIZE_AT battle second at which to resize the window
+#   CAPTURE_RESIZE_TO "WxH" target for CAPTURE_RESIZE_AT
 #   CAPTURE_NO_VSYNC  "1" disables vsync. Frame-time comparison needs this:
 #                     with vsync the renderer is pinned to the display refresh
 #                     (240 Hz here) and both builds report the same 4.166 ms,
@@ -60,6 +62,11 @@ func _run() -> void:
 		print("[Capture] vsync disabled for frame-time measurement")
 	_out_dir = _env_string("CAPTURE_OUT", ProjectSettings.globalize_path("user://captures"))
 	_max_seconds = _env_float("CAPTURE_SECONDS", 60.0)
+	_resize_at = _env_float("CAPTURE_RESIZE_AT", -1.0)
+	var resize_str: String = _env_string("CAPTURE_RESIZE_TO", "")
+	if resize_str.contains("x"):
+		var parts: PackedStringArray = resize_str.split("x")
+		_resize_to = Vector2i(int(parts[0]), int(parts[1]))
 	_grid = _env_int("CAPTURE_GRID", 40)
 	_palette = _env_string("CAPTURE_PALETTE", "经典")
 	_time_limit = maxi(1, _env_int("CAPTURE_TIME_LIMIT", 1))
@@ -138,6 +145,23 @@ func _run() -> void:
 
 # Advances until the in-game clock passes `target`. Returns false if the match
 # ended or the capture cap was hit first.
+var _resize_at: float = -1.0
+var _resize_to: Vector2i = Vector2i.ZERO
+var _resize_done: bool = false
+
+
+# Live-resize test: changing the window while a match runs must re-apply the
+# layout without restarting the match.
+func _maybe_resize(elapsed: float) -> void:
+	if _resize_done or _resize_at < 0.0 or _resize_to == Vector2i.ZERO:
+		return
+	if elapsed < _resize_at:
+		return
+	_resize_done = true
+	DisplayServer.window_set_size(_resize_to)
+	print("[Capture] resized window to %dx%d at %.2fs" % [_resize_to.x, _resize_to.y, elapsed])
+
+
 func _wait_battle_time(target: float) -> bool:
 	var guard: int = 0
 	var last_usec: int = Time.get_ticks_usec()
@@ -149,6 +173,7 @@ func _wait_battle_time(target: float) -> bool:
 			return false
 		if bool(_main.is_game_over):
 			return false
+		_maybe_resize(float(_main.game_elapsed_time))
 		if float(_main.game_elapsed_time) >= target:
 			return true
 		if float(_main.game_elapsed_time) >= _max_seconds:
