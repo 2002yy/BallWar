@@ -501,6 +501,8 @@ func _create_control_chambers() -> void:
 		var ch = runtime.chambers[fid]
 		if ch == null or not is_instance_valid(ch):
 			continue
+		if runtime.reserve_economy != null:
+			ch.reserve_conversion = runtime.reserve_economy.convert_pending.bind(fid)
 		for pair in [
 			["release_requested", "_on_release_sfx"],
 			["ball_landed", "_on_ball_landed_sfx"],
@@ -599,19 +601,9 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 
 	if runtime.turrets.has(faction_id):
 		var turret: Turret = runtime.turrets[faction_id]
-		var firepower := int(bullet_count)
-		if runtime.reserve_economy != null:
-			if runtime.chambers.get(faction_id) != chamber or turret.burst_remaining > 0:
-				return
-			if not turret.can_start_burst() or firepower <= 0:
-				chamber.set_locked(false)
-				_refresh_add_ball_button(faction_id)
-				return
-			firepower = mini(firepower, GameConfig.get_max_pending_count())
-			firepower = runtime.reserve_economy.convert_release(faction_id, firepower)
 		# 火力 → 弹种分配。P0 只解锁普通弹，分配总发数等于火力值，和旧行为一致；
 		# P2 起弹种真正进入弹幕时，只需改这里的发射方式，不动分配与配置。
-		var volley: Dictionary = _build_volley(firepower)
+		var volley: Dictionary = _build_volley(int(bullet_count))
 		var shot_count: int = WeaponRuleset.total_shots(volley)
 		if shot_count <= 0:
 			chamber.set_locked(false)

@@ -39,19 +39,22 @@ const CONTROL_BALL_MAX_STAY_TIME: float = 14.0
 const MAX_RESTORE_CONTROL_BALLS: int = 8
 
 var faction_id: int = GameConfig.Faction.BLUE
-var pending_count: int = 1
-var locked_remaining: int = 0
 var chamber_state: ChamberState = ChamberState.new()
+var pending_count: int:
+	get:
+		return chamber_state.pending_count
+	set(value):
+		chamber_state.pending_count = value
+var locked_remaining: int = 0
+var reserve_conversion: Callable
 
 func _sync_shadow_fields() -> void:
-	pending_count = chamber_state.pending_count
 	is_locked = chamber_state.is_locked
 	locked_remaining = chamber_state.locked_remaining
 	jammed_time_left = chamber_state.jammed_time_left
 	queued_round_modifiers = chamber_state.queued_round_modifiers
 
 func _sync_state_from_shadow() -> void:
-	chamber_state.pending_count = pending_count
 	chamber_state.is_locked = is_locked
 	chamber_state.locked_remaining = locked_remaining
 	chamber_state.jammed_time_left = jammed_time_left
@@ -207,7 +210,6 @@ func apply_pending_bonus(amount: int) -> void:
 		return
 	_sync_state_from_shadow()
 	chamber_state.apply_pending_bonus(amount, GameConfig.get_max_pending_count())
-	pending_count = chamber_state.pending_count
 	_update_label()
 	_force_visual_redraw()
 
@@ -216,7 +218,6 @@ func apply_pending_multiplier(multiplier: int) -> void:
 		return
 	_sync_state_from_shadow()
 	chamber_state.apply_pending_multiplier(multiplier, GameConfig.get_max_pending_count())
-	pending_count = chamber_state.pending_count
 	_update_label()
 	_force_visual_redraw()
 
@@ -285,7 +286,6 @@ func cancel_current_burst_with_refund(ratio: float) -> void:
 		return
 
 	chamber_state.unlock(maxi(1, floori(float(remaining) * ratio)))
-	pending_count = chamber_state.pending_count
 	is_locked = false
 	locked_remaining = 0
 	if release_ball != null and is_instance_valid(release_ball):
@@ -299,7 +299,6 @@ func _apply_queued_round_modifiers() -> void:
 	if not had_modifiers:
 		return
 	chamber_state.apply_queued_modifiers(GameConfig.get_max_pending_count())
-	pending_count = chamber_state.pending_count
 	queued_round_modifiers = chamber_state.queued_round_modifiers
 	if had_modifiers:
 		_update_label()
@@ -463,6 +462,7 @@ func _physics_process(delta: float) -> void:
 		"peg_collision_radii": peg_collision_radii,
 		"chamber_size": chamber_size,
 		"gate_x": x2_width,
+		"reserve_gate_x": _reserve_gate_x(x2_width),
 		"gate_divider_width": GATE_DIVIDER_WIDTH,
 		"gate_height": gate_height,
 		"gate_divider_rise": GATE_DIVIDER_RISE,
@@ -503,6 +503,8 @@ func _physics_process(delta: float) -> void:
 			ChamberBallPhysicsScript.GATE_RESULT_RIGHT:
 				_on_right_gate(ball)
 				break
+			ChamberBallPhysicsScript.GATE_RESULT_RESERVE:
+				_on_reserve_gate(ball)
 			_:
 				pass
 
@@ -511,6 +513,11 @@ func _on_left_gate(ball) -> void:
 	pending_count = clampi(pending_count * gate_multiplier, 1, GameConfig.get_max_pending_count())
 	_update_label()
 	gate_multiplier_applied.emit(faction_id, gate_multiplier, pending_count)
+	_relaunch_control_ball(ball)
+
+func _on_reserve_gate(ball) -> void:
+	pending_count = int(reserve_conversion.call(pending_count))
+	_update_label()
 	_relaunch_control_ball(ball)
 
 func _on_right_gate(ball) -> void:
@@ -545,7 +552,6 @@ func set_locked(locked: bool) -> void:
 		chamber_state.apply_queued_modifiers(GameConfig.get_max_pending_count())
 
 	is_locked = chamber_state.is_locked
-	pending_count = chamber_state.pending_count
 	locked_remaining = chamber_state.locked_remaining
 
 	if not is_locked:
@@ -615,11 +621,17 @@ func _current_x2_width() -> float:
 	var x2_ratio: float = 1.0 - release_ratio
 	return chamber_size.x * x2_ratio
 
+func _reserve_gate_x(multiplier_gate_end: float) -> float:
+	if not reserve_conversion.is_valid() or is_locked or is_damaged or is_jammed():
+		return -1.0
+	return lerpf(multiplier_gate_end, chamber_size.x, 0.5)
+
 func _build_draw_snapshot() -> Dictionary:
 	return ChamberDrawModelScript.build_snapshot({
 		"faction_color": GameConfig.faction_color(faction_id),
 		"chamber_size": chamber_size,
 		"gate_height": gate_height,
+		"reserve_gate_x": _reserve_gate_x(_current_x2_width()),
 		"peg_radius": peg_radius,
 		"pegs": pegs,
 		"is_damaged": is_damaged,
