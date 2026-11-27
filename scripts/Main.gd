@@ -14,6 +14,8 @@ extends Node2D
 
 const VIEW_W: float = 1120.0
 const VIEW_H: float = 720.0
+const DevSpeedPanelScript = preload("res://scripts/DevSpeedPanel.gd")
+const IsolatedUserProfile = preload("res://scripts/IsolatedUserProfile.gd")
 const LEGACY_SAVE_PATH: String = "user://ballwar_save.json"
 const LEGACY_SLOT_SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.json"
 const SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.save"
@@ -55,6 +57,8 @@ var chamber_scale: float = 1.0
 var bullet_restore_queue = BulletRestoreQueueScript.new()
 var perf_debug_update_timer: float = 0.0
 var hud_meta_update_timer: float = 0.0
+var win_check_timer: float = 0.0
+var dev_speed = null
 const PERF_DEBUG_UPDATE_INTERVAL: float = 0.25
 const HUD_META_UPDATE_INTERVAL: float = 0.25
 
@@ -91,6 +95,15 @@ func _sync_runtime_context(grid_size: int) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if "--ballwar-dev-speed" in OS.get_cmdline_user_args():
+		if not IsolatedUserProfile.is_fresh("BALLWAR_DEV_TOKEN", ".ballwar-dev-speed"):
+			printerr("[DEV-SPEED] Launch using tools/start_dev_speed.ps1 with a fresh profile.")
+			get_tree().quit(5)
+			return
+		dev_speed = DevSpeedPanelScript.new()
+		add_child(dev_speed)
+		dev_speed.setup(self)
+		dev_speed.clock.step_completed.connect(_flush_single_step_view)
 	if match_seed >= 0:
 		seed(match_seed)
 	else:
@@ -102,18 +115,26 @@ func _ready() -> void:
 	_create_background()
 	_create_start_menu()
 
-func _process(delta: float) -> void:
-	ui_time += delta
-
+func _physics_process(_delta: float) -> void:
 	if GameStateCoordinator.should_process_restore_queue(get_tree(), is_game_over, bullet_restore_queue.pending_count()):
 		_process_pending_bullet_restore()
 
-	if GameStateCoordinator.should_advance_gameplay(get_tree(), game_layer, is_game_over):
-		game_elapsed_time += delta
-		for chamber in runtime.chambers.values():
-			if chamber != null and is_instance_valid(chamber):
-				chamber.set_game_elapsed_time(game_elapsed_time)
+	if not GameStateCoordinator.should_advance_gameplay(get_tree(), game_layer, is_game_over):
+		return
+	game_elapsed_time += MatchClock.STEP_SECONDS
+	if dev_speed != null:
+		dev_speed.clock.ticks += 1
+	for chamber in runtime.chambers.values():
+		if is_instance_valid(chamber):
+			chamber.set_game_elapsed_time(game_elapsed_time)
 
+	win_check_timer -= MatchClock.STEP_SECONDS
+	if win_check_timer <= 0.0:
+		win_check_timer = HUD_META_UPDATE_INTERVAL
+		_check_winner()
+
+func _process(delta: float) -> void:
+	ui_time += delta
 	perf_debug_update_timer -= delta
 	if perf_debug_update_timer <= 0.0:
 		perf_debug_update_timer = PERF_DEBUG_UPDATE_INTERVAL
@@ -125,7 +146,6 @@ func _process(delta: float) -> void:
 	if hud_meta_update_timer <= 0.0:
 		hud_meta_update_timer = HUD_META_UPDATE_INTERVAL
 		RuntimeHudController.update_meta(_hud_ref("timer_label"), _hud_ref("stage_label"), _hud_ref("leader_label"), current_score_counts, game_elapsed_time)
-		_check_winner()
 
 	UIAnimationController.animate_menu_and_title(
 		ui_time,
@@ -197,6 +217,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	grid_size = LayoutProfiles.sanitize_grid_size(grid_size)
 	selected_grid_size = grid_size
 	game_elapsed_time = 0.0
+	win_check_timer = 0.0
 	is_game_over = false
 
 	if clear_save and _has_save_file(selected_save_slot):
@@ -235,6 +256,8 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	_create_ui()
 	_create_event_roulette_system()
 	_create_control_buttons()
+	if dev_speed != null:
+		dev_speed.begin_match()
 	if not suppress_banner:
 		_show_center_banner("领土战争", "开战！", Color(1.0, 0.94, 0.48), true)
 
@@ -358,9 +381,7 @@ func _check_winner() -> void:
 		return
 
 	var mode_name: String = GameConfig.get_game_mode_name()
-	var counts: Dictionary = current_score_counts
-	if counts.is_empty() and runtime.battlefield != null and is_instance_valid(runtime.battlefield):
-		counts = runtime.battlefield.count_cells_by_team()
+	var counts: Dictionary = runtime.battlefield.count_cells_by_team()
 
 	var time_expired: bool = mode_name == GameConfig.GAME_MODE_TIMED and game_elapsed_time >= GameConfig.get_time_limit_seconds()
 	var total_cells: int = _runtime_grid_size() * _runtime_grid_size()
@@ -381,6 +402,8 @@ func _finish_as_draw(sub_text: String) -> void:
 	GameStateCoordinator.finish_as_draw(self, _hud_ref("winner_label"), sub_text)
 
 func _stop_all_actions_for_game_over() -> void:
+	if dev_speed != null:
+		dev_speed.reset_match()
 	GameStateCoordinator.stop_actions_for_game_over(
 		runtime.turrets,
 		runtime.chambers,
@@ -424,7 +447,16 @@ func _sync_chamber_game_elapsed_time() -> void:
 			chamber.set_game_elapsed_time(game_elapsed_time)
 			chamber.queue_redraw()
 
+func _flush_single_step_view() -> void:
+	if is_instance_valid(runtime.battlefield):
+		runtime.battlefield.flush_visual_update()
+		runtime.battlefield.flush_score_emit()
+	if is_instance_valid(runtime.bullet_pool) and is_instance_valid(runtime.bullet_pool.trail_layer):
+		runtime.bullet_pool.trail_layer.queue_redraw()
+
 func _toggle_pause() -> void:
+	if dev_speed != null:
+		dev_speed.clock.cancel_step()
 	if GameStateCoordinator.should_ignore_pause(is_game_over, game_layer):
 		return
 	GameStateCoordinator.apply_pause_toggle(
@@ -555,8 +587,8 @@ func reset_menu_preferences() -> void:
 func _save_and_exit_to_menu() -> void:
 	if runtime.battlefield != null:
 		_save_game_progress()
-	get_tree().paused = false
 	_cleanup_game_layer()
+	get_tree().paused = false
 	_create_start_menu()
 
 func _cleanup_menu() -> void:
@@ -569,8 +601,11 @@ func _cleanup_menu() -> void:
 	menu_status_label = null
 
 func _cleanup_game_layer() -> void:
+	if dev_speed != null:
+		dev_speed.reset_match()
 	GameStateCoordinator.reset_pause_and_winner_state(_hud_ref("pause_overlay"), _hud_ref("pause_button"), _hud_ref("winner_label"))
 	if game_layer != null:
+		game_layer.process_mode = Node.PROCESS_MODE_DISABLED
 		game_layer.queue_free()
 		game_layer = null
 	runtime.reset()

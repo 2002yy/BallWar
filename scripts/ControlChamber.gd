@@ -101,12 +101,6 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	status_anim_t += delta
 
-	if chamber_state.tick(delta):
-		jammed_time_left = chamber_state.jammed_time_left
-		if not chamber_state.is_jammed():
-			_update_label()
-			_force_visual_redraw()
-
 	if is_damaged:
 		damage_anim_t += delta
 
@@ -444,7 +438,14 @@ func restore_from_state(state: Dictionary) -> void:
 	_update_label()
 	_force_visual_redraw()
 
-func _physics_process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
+	var delta: float = MatchClock.STEP_SECONDS
+	if chamber_state.tick(delta):
+		jammed_time_left = chamber_state.jammed_time_left
+		if not chamber_state.is_jammed():
+			_update_label()
+			_force_visual_redraw()
+
 	if is_damaged or is_locked:
 		return
 

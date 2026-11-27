@@ -52,7 +52,8 @@ func _ready() -> void:
 	z_index = 15
 	queue_redraw()
 
-func _process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
+	var delta: float = MatchClock.STEP_SECONDS
 	if not is_destroyed:
 		sweep_phase += delta * sweep_speed
 		rotation = center_angle + sin(sweep_phase) * sweep_amplitude
@@ -60,13 +61,13 @@ func _process(delta: float) -> void:
 	if burst_remaining > 0 and not is_destroyed:
 		burst_timer -= delta
 		burst_progress_emit_timer -= delta
-		var shots_this_frame: int = 0
-		var frame_budget: int = _max_shots_this_frame()
-		while burst_remaining > 0 and burst_timer <= 0.0 and shots_this_frame < frame_budget:
+		var shots_this_step: int = 0
+		var step_budget: int = _max_shots_this_step()
+		while burst_remaining > 0 and burst_timer <= 0.0 and shots_this_step < step_budget:
 			_spawn_bullet()
 			burst_remaining -= 1
 			burst_index += 1
-			shots_this_frame += 1
+			shots_this_step += 1
 			if burst_remaining > 0:
 				burst_timer += _next_burst_interval()
 			else:
@@ -74,12 +75,13 @@ func _process(delta: float) -> void:
 				_emit_burst_progress(true)
 				_set_burst_locked(false)
 
-		if shots_this_frame > 0 and burst_remaining > 0:
+		if shots_this_step > 0 and burst_remaining > 0:
 			_emit_burst_progress(false)
 
 		if burst_remaining > 0 and burst_timer < -0.10:
 			burst_timer = 0.0
 
+func _process(delta: float) -> void:
 	if damage_flash > 0.0:
 		damage_flash = maxf(0.0, damage_flash - delta * 3.0)
 		queue_redraw()
@@ -186,7 +188,7 @@ func _burst_interval_multiplier() -> float:
 
 	return clampf(mul, 1.0, 4.50)
 
-func _max_shots_this_frame() -> int:
+func _max_shots_this_step() -> int:
 	var queue_total: int = _current_total_queue()
 	if queue_total >= 1000:
 		return 1
