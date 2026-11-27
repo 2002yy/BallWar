@@ -8,6 +8,9 @@ static func default_settings() -> Dictionary:
 		"show_performance_info": OS.is_debug_build(),
 		"low_effect_mode": false,
 		"show_event_log": true,
+		"master_volume": 0.7,
+		"sfx_volume": 0.55,
+		"music_volume": 0.6,
 	}
 
 static func load_settings() -> Dictionary:
@@ -55,7 +58,17 @@ static func sanitize_settings(settings: Dictionary) -> Dictionary:
 		"show_performance_info": _coerce_bool(settings.get("show_performance_info", defaults["show_performance_info"]), bool(defaults["show_performance_info"])),
 		"low_effect_mode": _coerce_bool(settings.get("low_effect_mode", defaults["low_effect_mode"]), bool(defaults["low_effect_mode"])),
 		"show_event_log": _coerce_bool(settings.get("show_event_log", defaults["show_event_log"]), bool(defaults["show_event_log"])),
+		"master_volume": _coerce_unit(settings.get("master_volume", defaults["master_volume"]), float(defaults["master_volume"])),
+		"sfx_volume": _coerce_unit(settings.get("sfx_volume", defaults["sfx_volume"]), float(defaults["sfx_volume"])),
+		"music_volume": _coerce_unit(settings.get("music_volume", defaults["music_volume"]), float(defaults["music_volume"])),
 	}
+
+
+static func _coerce_unit(value, default_value: float) -> float:
+	var n: float = float(value) if (value is float or value is int) else default_value
+	if not is_finite(n):
+		return clampf(default_value, 0.0, 1.0)
+	return clampf(n, 0.0, 1.0)
 
 static func _coerce_bool(value, default_value: bool) -> bool:
 	if value is bool:

@@ -41,9 +41,12 @@ const BOARD_SIDE_PAD: float = 10.0
 
 const BoardChassisScript = preload("res://scripts/render/BoardChassis.gd")
 const ArtStyleScript = preload("res://scripts/render/ArtStyle.gd")
+const AudioManagerScript = preload("res://scripts/AudioManager.gd")
 
 var board_root: CanvasLayer = null
 var board_chassis: Node2D = null
+var audio_manager = null
+var _hit_watch: Dictionary = {}
 var _board_layout: Dictionary = {}
 
 
@@ -218,6 +221,10 @@ func _ready() -> void:
 	_view_size = _resolve_view_size()
 	is_mobile_layout = _detect_mobile_layout()
 	player_settings = PlayerSettingsStore.load_settings()
+	audio_manager = AudioManagerScript.new()
+	audio_manager.name = "AudioManager"
+	add_child(audio_manager)
+	_apply_audio_settings()
 	_apply_performance_setting()
 	_load_menu_preferences()
 	_create_background()
@@ -268,6 +275,7 @@ func _process(delta: float) -> void:
 			if chamber != null and is_instance_valid(chamber):
 				chamber.set_game_elapsed_time(game_elapsed_time)
 
+	_poll_hit_sfx()
 	perf_debug_update_timer -= delta
 	if perf_debug_update_timer <= 0.0:
 		perf_debug_update_timer = PERF_DEBUG_UPDATE_INTERVAL
@@ -419,6 +427,42 @@ func _create_battlefield(grid_size: int) -> void:
 	runtime.bullet_pool = scene_nodes.get("bullet_container", null)
 	chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
 
+func _on_release_sfx(_faction_id = null, _count = null, _chamber = null) -> void:
+	if audio_manager != null:
+		audio_manager.play("release")
+
+
+func _on_turret_destroyed_sfx(_faction_id = null) -> void:
+	if audio_manager != null:
+		audio_manager.play("destroy")
+
+
+# Turret has no damage signal yet, so this watches the public visual timer
+# instead. Read-only observation of presentation state: it cannot change the
+# outcome, and it goes away the moment the core exposes a signal.
+func _poll_hit_sfx() -> void:
+	if audio_manager == null:
+		return
+	for fid in runtime.turrets.keys():
+		var t = runtime.turrets[fid]
+		if t == null or not is_instance_valid(t):
+			continue
+		var now_flash: float = float(t.damage_flash)
+		var prev: float = float(_hit_watch.get(fid, 0.0))
+		if now_flash > 0.85 and prev <= 0.85:
+			audio_manager.play("hit")
+		_hit_watch[fid] = now_flash
+
+
+func _apply_audio_settings() -> void:
+	if audio_manager == null:
+		return
+	audio_manager.apply_volumes(
+		float(player_settings.get("master_volume", 0.85)),
+		float(player_settings.get("sfx_volume", 0.9)),
+		float(player_settings.get("music_volume", 0.6)))
+
+
 func _refresh_chassis() -> void:
 	if board_chassis == null or not is_instance_valid(board_chassis):
 		return
@@ -427,11 +471,23 @@ func _refresh_chassis() -> void:
 
 func _create_turrets() -> void:
 	runtime.turrets = GameSceneBuilder.create_turrets(self, board_root, runtime.battlefield, runtime.bullet_pool, _board_layout)
+	for fid in runtime.turrets.keys():
+		var t = runtime.turrets[fid]
+		if t != null and is_instance_valid(t) and t.has_signal("destroyed"):
+			var cb: Callable = Callable(self, "_on_turret_destroyed_sfx")
+			if not t.destroyed.is_connected(cb):
+				t.destroyed.connect(cb)
 	if runtime.bullet_pool != null and is_instance_valid(runtime.bullet_pool) and runtime.bullet_pool.has_method("set_tracked_turrets"):
 		runtime.bullet_pool.set_tracked_turrets(runtime.turrets)
 
 func _create_control_chambers() -> void:
 	runtime.chambers = GameSceneBuilder.create_control_chambers(self, board_root, runtime.battlefield, runtime.turrets, _board_layout, chamber_scale, BOARD_SPACE)
+	for fid in runtime.chambers.keys():
+		var ch = runtime.chambers[fid]
+		if ch != null and is_instance_valid(ch) and ch.has_signal("release_requested"):
+			var cb2: Callable = Callable(self, "_on_release_sfx")
+			if not ch.release_requested.is_connected(cb2):
+				ch.release_requested.connect(cb2)
 	_sync_chamber_game_elapsed_time()
 
 func _create_ui() -> void:
@@ -770,6 +826,7 @@ func _cleanup_game_layer() -> void:
 		game_layer = null
 	board_root = null
 	board_chassis = null
+	_hit_watch.clear()
 	runtime.reset()
 	bullet_restore_queue.reset()
 

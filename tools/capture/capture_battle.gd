@@ -377,6 +377,8 @@ func _parse_plan(raw: String) -> Array:
 
 func _finish() -> void:
 	_write_perf()
+	if _env_string("CAPTURE_DIAG", "") == "1" and _main != null and is_instance_valid(_main) and _main.audio_manager != null:
+		print("[Capture] audio_played = ", _main.audio_manager.play_counts())
 	print("[Capture] done, %d shots" % _shot_count)
 	quit(_exit_code)
 
