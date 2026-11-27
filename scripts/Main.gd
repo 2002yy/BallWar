@@ -151,6 +151,7 @@ var is_game_over: bool = false
 # Negative keeps the historical behavior (time-based randomization).
 # A non-negative value seeds the global RNG so a match can be replayed.
 var match_seed: int = -1
+var reserve_lab_enabled: bool = false
 
 var menu_title_label
 var menu_start_button
@@ -218,13 +219,14 @@ func _sync_runtime_context(grid_size: int) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	reserve_lab_enabled = _reserve_lab_requested()
 	if match_seed >= 0:
 		seed(match_seed)
 	else:
 		randomize()
 	_view_size = _resolve_view_size()
 	is_mobile_layout = _detect_mobile_layout()
-	player_settings = PlayerSettingsStore.load_settings()
+	player_settings = PlayerSettingsStore.default_settings() if reserve_lab_enabled else PlayerSettingsStore.load_settings()
 	presentation_events = PresentationEventsScript.new()
 	audio_manager = AudioManagerScript.new()
 	audio_manager.name = "AudioManager"
@@ -232,12 +234,30 @@ func _ready() -> void:
 	audio_manager.bind_presentation(presentation_events)
 	_apply_audio_settings()
 	_apply_performance_setting()
-	_load_menu_preferences()
+	if not reserve_lab_enabled:
+		_load_menu_preferences()
 	_create_background()
-	_create_start_menu()
+	if reserve_lab_enabled:
+		_start_reserve_lab_match()
+	else:
+		_create_start_menu()
 	var size_cb: Callable = Callable(self, "_on_viewport_resized")
 	if not get_viewport().size_changed.is_connected(size_cb):
 		get_viewport().size_changed.connect(size_cb)
+
+func _reserve_lab_requested() -> bool:
+	return ReserveLab.is_requested(OS.is_debug_build(), OS.get_cmdline_user_args())
+
+func _start_reserve_lab_match() -> void:
+	if match_seed < 0:
+		match_seed = 7341
+	seed(match_seed)
+	selected_palette_name = "经典"
+	_start_game(selected_grid_size, true, false, true)
+	var lab := ReserveLab.new()
+	lab.name = "ReserveLab"
+	lab.controller = self
+	game_layer.add_child(lab)
 
 
 # Live resize. The board itself needs nothing but a new transform: its layout is
@@ -320,6 +340,8 @@ func _detect_mobile_layout() -> bool:
 	return false
 
 func _toggle_settings_panel() -> void:
+	if reserve_lab_enabled:
+		return
 	var settings_panel = _hud_ref("settings_panel")
 	if settings_panel == null or not is_instance_valid(settings_panel):
 		return
@@ -521,11 +543,16 @@ func _create_ui() -> void:
 	var game_hud: CanvasLayer = GameHUDScene.instantiate()
 	game_hud.name = "UICanvas"
 	game_hud.layer = 3
+	game_hud.settings_panel_enabled = not reserve_lab_enabled
 	game_layer.add_child(game_hud)
 	game_hud.setup_static(self, _view_size, runtime.current_layout, is_mobile_layout)
 	var hud_nodes: Dictionary = game_hud.get_static_parts()
 
 	runtime.set_hud_parts(hud_nodes)
+	if reserve_lab_enabled:
+		game_hud.exit_button.text = "退出"
+		game_hud.save_exit_button.text = "退出实验"
+		game_hud.pause_panel.get_node("PauseHintLabel").text = "实验局不保存进度。"
 	var settings_panel = _hud_ref("settings_panel")
 	var settings_changed := Callable(self, "_on_player_settings_changed")
 	if settings_panel != null and settings_panel.has_signal("settings_changed"):
@@ -725,7 +752,7 @@ func _toggle_pause() -> void:
 		get_tree(),
 		_hud_ref("pause_overlay"),
 		_hud_ref("pause_button"),
-		Callable(self, "_save_game_progress")
+		Callable() if reserve_lab_enabled else Callable(self, "_save_game_progress")
 	)
 	# Pausing must not leave battle sounds ringing, and resuming must not replay
 	# a backlog: events are played immediately, so stopping is the whole story.
@@ -854,6 +881,9 @@ func reset_menu_preferences() -> void:
 	_create_start_menu()
 
 func _save_and_exit_to_menu() -> void:
+	if reserve_lab_enabled:
+		get_tree().quit()
+		return
 	if runtime.battlefield != null:
 		_save_game_progress()
 	get_tree().paused = false
