@@ -22,6 +22,7 @@ func _run() -> void:
 	t.that(not chamber._build_draw_snapshot().reserve_rect.has_area(), "classic has no third gate")
 	_land(chamber, 400, _reserve_lane_center(chamber))
 	t.eq(main.runtime.turrets[BLUE].burst_remaining, 400, "classic right edge still releases all 400 shots")
+	t.eq(chamber.get_pending_count(), 1, "classic burst-lock retains its original pending state")
 
 	var slot_path := main._get_save_path(main.selected_save_slot)
 	var slot_hash := FileAccess.get_sha256(slot_path) if FileAccess.file_exists(slot_path) else ""
@@ -47,6 +48,7 @@ func _run() -> void:
 	var release_x := _release_lane_center(chamber)
 	_land(chamber, chamber.get_pending_count(), release_x)
 	t.eq(turret.burst_remaining, 306, "normal gate releases all remaining ready shots")
+	t.eq(chamber.get_pending_count(), 306, "experimental burst-lock retains the authoritative pending value")
 	t.eq(economy.balance(BLUE), 101, "ordinary fire does not add to reserve")
 	_drop(chamber, _reserve_lane_center(chamber))
 	t.eq(economy.balance(BLUE), 101, "locked chamber does not run the reserve gate")

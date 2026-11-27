@@ -40,21 +40,29 @@ const MAX_RESTORE_CONTROL_BALLS: int = 8
 
 var faction_id: int = GameConfig.Faction.BLUE
 var chamber_state: ChamberState = ChamberState.new()
+var reserve_conversion: Callable
+# Classic keeps its existing pending value through the burst-lock transition.
+var _classic_pending_count: int = 1
 var pending_count: int:
 	get:
-		return chamber_state.pending_count
+		return chamber_state.pending_count if reserve_conversion.is_valid() else _classic_pending_count
 	set(value):
-		chamber_state.pending_count = value
+		if reserve_conversion.is_valid():
+			chamber_state.pending_count = value
+		else:
+			_classic_pending_count = value
 var locked_remaining: int = 0
-var reserve_conversion: Callable
 
 func _sync_shadow_fields() -> void:
+	_classic_pending_count = chamber_state.pending_count
 	is_locked = chamber_state.is_locked
 	locked_remaining = chamber_state.locked_remaining
 	jammed_time_left = chamber_state.jammed_time_left
 	queued_round_modifiers = chamber_state.queued_round_modifiers
 
 func _sync_state_from_shadow() -> void:
+	if not reserve_conversion.is_valid():
+		chamber_state.pending_count = _classic_pending_count
 	chamber_state.is_locked = is_locked
 	chamber_state.locked_remaining = locked_remaining
 	chamber_state.jammed_time_left = jammed_time_left
@@ -210,6 +218,7 @@ func apply_pending_bonus(amount: int) -> void:
 		return
 	_sync_state_from_shadow()
 	chamber_state.apply_pending_bonus(amount, GameConfig.get_max_pending_count())
+	_classic_pending_count = chamber_state.pending_count
 	_update_label()
 	_force_visual_redraw()
 
@@ -218,6 +227,7 @@ func apply_pending_multiplier(multiplier: int) -> void:
 		return
 	_sync_state_from_shadow()
 	chamber_state.apply_pending_multiplier(multiplier, GameConfig.get_max_pending_count())
+	_classic_pending_count = chamber_state.pending_count
 	_update_label()
 	_force_visual_redraw()
 
@@ -286,6 +296,7 @@ func cancel_current_burst_with_refund(ratio: float) -> void:
 		return
 
 	chamber_state.unlock(maxi(1, floori(float(remaining) * ratio)))
+	_classic_pending_count = chamber_state.pending_count
 	is_locked = false
 	locked_remaining = 0
 	if release_ball != null and is_instance_valid(release_ball):
@@ -299,6 +310,7 @@ func _apply_queued_round_modifiers() -> void:
 	if not had_modifiers:
 		return
 	chamber_state.apply_queued_modifiers(GameConfig.get_max_pending_count())
+	_classic_pending_count = chamber_state.pending_count
 	queued_round_modifiers = chamber_state.queued_round_modifiers
 	if had_modifiers:
 		_update_label()
@@ -552,6 +564,7 @@ func set_locked(locked: bool) -> void:
 		chamber_state.apply_queued_modifiers(GameConfig.get_max_pending_count())
 
 	is_locked = chamber_state.is_locked
+	_classic_pending_count = chamber_state.pending_count
 	locked_remaining = chamber_state.locked_remaining
 
 	if not is_locked:
