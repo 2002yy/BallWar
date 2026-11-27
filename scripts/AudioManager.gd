@@ -229,7 +229,11 @@ func _set_bus_linear(bus_name: String, linear: float) -> void:
 
 
 func play(kind: String) -> bool:
-	if not _enabled or sfx_volume <= 0.001:
+	# Master at zero already silences the whole graph through the bus, so starting
+	# a player would buy nothing and still pay for it. Returning here is what makes
+	# "master down" mean "no SFX work at all" instead of "muted but still paying".
+	# The same reasoning covers SFX at zero, which was already handled.
+	if not _enabled or master_volume <= 0.001 or sfx_volume <= 0.001:
 		return false
 	if not _streams.has(kind):
 		return false

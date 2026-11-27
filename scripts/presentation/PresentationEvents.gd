@@ -18,6 +18,11 @@ class_name PresentationEvents
 # relay, not a new subsystem. Nothing here should be prepared before the mechanic
 # that raises it exists.
 
+# `count` is the firepower value the chamber released, NOT the number of bullets
+# that will leave the turret: since the P0 volley allocation, one release can be
+# split across ammo types. Presentation must not care - it is one sound per
+# release - but anything reading the payload as a shot count would be wrong from
+# the moment ammo types actually fire.
 signal released(faction_id: int, count: int)
 signal damaged(faction_id: int, amount: int)
 signal destroyed(faction_id: int)

@@ -11,8 +11,9 @@ extends SceneTree
 #
 # Two kinds of checks, deliberately kept apart:
 #   PASS - the event fires in a real match
-#   PATH - the event and its sound work when the entry point is called, but the
-#          current rules never reach that entry point in a real match. These are
+#   PATH - the event and its sound work when the entry point is called, but no
+#          hit happened in THIS sample, which is not the same as "the rules make
+#          it unreachable". These are
 #          reported with the measurement that shows why, instead of being forced
 #          green or left as a permanent red that teaches everyone to ignore it.
 #
@@ -84,7 +85,7 @@ func _run() -> void:
 	if not reachable:
 		_note_gap(
 			"damaged / destroyed",
-			"no bullet came within %.1f px of an enemy turret in three match minutes (hit radius %.1f px), so `take_damage` is unreachable under current rules" % [
+			"no bullet came within %.1f px of an enemy turret in three match minutes (hit radius %.1f px); this run cannot show whether the hit path is reachable in normal play, and the likeliest cause is territory depth in front of the turret" % [
 				_min_enemy_turret_distance, GameConfig.TURRET_HIT_RADIUS])
 
 	_check_damage_path(reachable)
@@ -118,7 +119,7 @@ func _check_damage_path(naturally_reachable: bool) -> void:
 	_check(after_events > before_events, "damaged fires when a turret takes damage")
 	_check(after_plays > before_plays, "hit sound plays when a turret takes damage")
 	if not naturally_reachable:
-		_note_gap("damaged", "entry point verified directly; no real bullet reaches it (see distance above)")
+		_note_gap("damaged", "entry point verified directly; no hit occurred in this sample (see distance above)")
 
 
 func _check_destroy_path(naturally_reachable: bool) -> void:
@@ -133,7 +134,7 @@ func _check_destroy_path(naturally_reachable: bool) -> void:
 	_check(after_events > before_events, "destroyed fires when a turret dies")
 	_check(after_plays > before_plays, "destroy sound plays when a turret dies")
 	if not naturally_reachable:
-		_note_gap("destroyed", "same unreachable hit path as damaged")
+		_note_gap("destroyed", "same hit path as damaged; no hit happened in this sample")
 
 
 func _fill_chambers() -> void:
@@ -226,6 +227,19 @@ func _check_mute() -> void:
 	_check(_main.audio_manager.play("release"), "unmuting resumes playback")
 	for i in 3:
 		await process_frame
+
+	# Master at zero must skip the work, not just mute the bus. Checked on the
+	# return value because that is what tells a caller whether a player was
+	# started: bus muting alone would still have paid for play().
+	var saved_master: float = _main.audio_manager.master_volume
+	_main.audio_manager.apply_volumes(0.0, _main.audio_manager.sfx_volume, _main.audio_manager.music_volume)
+	var played_at_zero: bool = _main.audio_manager.play("release")
+	_main.audio_manager.apply_volumes(saved_master, _main.audio_manager.sfx_volume, _main.audio_manager.music_volume)
+	_check(not played_at_zero, "master at zero skips playback instead of muting the bus")
+	# Real time, not frames: the per-kind throttle is wall-clock based, and the
+	# check above just consumed this kind's slot if it got as far as a player.
+	OS.delay_msec(150)
+	_check(_main.audio_manager.play("release"), "master back up resumes playback")
 
 
 func _trigger_release() -> void:
