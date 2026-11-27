@@ -40,7 +40,7 @@ static func create_battlefield(owner, game_layer: Node, grid_size: int, current_
         "chamber_scale": current_layout.get("chamber_scale", 0.80),
     }
 
-static func create_turrets(owner, game_layer: Node, battlefield, bullet_container, current_layout: Dictionary = {}) -> Dictionary:
+static func create_turrets(owner, game_layer: Node, battlefield, bullet_container, current_layout: Dictionary = {}, random_streams: MatchRandom = null) -> Dictionary:
     var turrets: Dictionary = {}
     var positions: Dictionary = current_layout.get("turret_positions", {})
     if positions.is_empty():
@@ -56,6 +56,9 @@ static func create_turrets(owner, game_layer: Node, battlefield, bullet_containe
 
     for faction_id in positions.keys():
         var turret = Turret.new()
+        if random_streams != null:
+            turret.sweep_random = random_streams.get_stream(MatchRandom.Stream.TURRET, faction_id)
+            turret.projectile_random = random_streams.get_stream(MatchRandom.Stream.PROJECTILE, faction_id)
         turret.setup(faction_id, positions[faction_id], battlefield, bullet_container)
         turret.name = "Turret_%s" % GameConfig.faction_name(faction_id)
         turret.destroyed.connect(Callable(owner, "_on_turret_destroyed"))
@@ -69,7 +72,7 @@ static func create_turrets(owner, game_layer: Node, battlefield, bullet_containe
 
     return turrets
 
-static func create_control_chambers(owner, game_layer: Node, battlefield, turrets: Dictionary, current_layout: Dictionary, chamber_scale: float, view_size: Vector2) -> Dictionary:
+static func create_control_chambers(owner, game_layer: Node, battlefield, turrets: Dictionary, current_layout: Dictionary, chamber_scale: float, view_size: Vector2, random_streams: MatchRandom = null) -> Dictionary:
     var chambers: Dictionary = {}
     var probe_chamber = ControlChamber.new()
     var scaled_size: Vector2 = probe_chamber.chamber_size * chamber_scale
@@ -120,6 +123,8 @@ static func create_control_chambers(owner, game_layer: Node, battlefield, turret
 
     for faction_id in chamber_positions.keys():
         var chamber = ControlChamber.new()
+        if random_streams != null:
+            chamber.random_source = random_streams.get_stream(MatchRandom.Stream.CHAMBER, faction_id)
         chamber.setup(faction_id, chamber_positions[faction_id])
         chamber.set_linked_turret(turrets.get(faction_id, null))
         chamber.scale = Vector2.ONE * chamber_scale

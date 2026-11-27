@@ -108,7 +108,7 @@ func _run() -> void:
 	_main.name = "ProbeMain"
 	_main.match_seed = _seed_used
 	_main.selected_grid_size = GRID_SIZE
-	_main.selected_palette_name = "经典"
+	_main.selected_palette_name = _env_string("BALLWAR_TEST_PALETTE", "经典")
 	_main.selected_quality_name = GameConfig.QUALITY_MEDIUM
 	_main.selected_game_mode_name = GameConfig.GAME_MODE_BASIC
 	_main.selected_time_limit_minutes = 5
@@ -306,7 +306,11 @@ func _sim_state() -> Dictionary:
 			1 if bool(controller.is_presenting_event) else 0
 		]
 
-		event_rules = [controller.next_event_time_left, controller._presentation_time_left, controller._pending_payload]
+		var pending: Dictionary = controller._pending_payload
+		event_rules = [
+			controller.next_event_time_left, controller._presentation_time_left,
+			pending.get("faction_id", -1), pending.get("final_effect", ""), pending.get("effect_sequence", [])
+		]
 
 	var turret_h: int = hash([turret_sig, turret_rules])
 	var chamber_h: int = hash([chamber_sig, chamber_rules])
@@ -314,7 +318,8 @@ func _sim_state() -> Dictionary:
 	var event_h: int = hash([event_sig, event_rules])
 	var payload: Array = [
 		owners_hash, turret_h, chamber_h, bullet_h, event_h,
-		_main.game_elapsed_time, _main.win_check_timer, _main.is_game_over
+		_main.game_elapsed_time, _main.win_check_timer, _main.is_game_over,
+		_main.runtime.match_random.simulation_states()
 	]
 	return {
 		"sim_hash": hash(payload),
@@ -418,7 +423,7 @@ func _assert_config() -> bool:
 	if failures.is_empty():
 		print("[Probe] CONFIG_OK quality=%s mode=%s grid=%d palette=%s" % [
 			GameConfig.get_quality_name(), GameConfig.get_game_mode_name(),
-			int(_main.runtime.battlefield.grid_size), _main.selected_palette_name
+			int(_main.runtime.battlefield.grid_size), GameConfig.get_palette_name()
 		])
 		return true
 
