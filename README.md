@@ -32,7 +32,8 @@ A **Godot 4.7 + GDScript** 2D territory-control arcade prototype — four factio
 
 ## Download Latest Release / 下载最新版本
 
-> **v2.1.11.1 (Latest Stable)** — [Windows zip](https://github.com/2002yy/BallWar/releases/tag/v2.1.11.1) · [Android APK](https://github.com/2002yy/BallWar/releases/tag/v2.1.11.1)  
+> **Latest tagged release / 最新标签：** [v2.1.11.1](https://github.com/2002yy/BallWar/releases/tag/v2.1.11.1) — source snapshot; no attached game packages / 无游戏安装包附件。  
+> **Latest downloadable game packages / 最新可下载游戏包：** [v2.1.11 Windows ZIP & Android trial APK](https://github.com/2002yy/BallWar/releases/tag/v2.1.11) — these do not include the v2.1.11.1 hotfix. Android installation/signature status has not been revalidated.  
 > All releases: [github.com/2002yy/BallWar/releases](https://github.com/2002yy/BallWar/releases)
 
 ## Tech Highlights / 技术亮点

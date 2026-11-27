@@ -1,5 +1,11 @@
 # Android Export / Android 导出
 
+## Environment / 环境
+
+Use the Godot version pinned in [CI](../.github/workflows/test.yml) and its matching export templates. Install/configure the Android SDK and JDK for that version using the [official Android export guide](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html).
+
+The checked-in `Android` preset currently targets arm64-v8a, uses the default non-Gradle APK path, and has `package/signed=false`. These are development settings, not a completed distribution configuration.
+
 ## Required Setting / 必须设置
 
 `project.godot` must have ETC2/ASTC texture compression enabled:
@@ -9,39 +15,40 @@
 textures/vram_compression/import_etc2_astc=true
 ```
 
-Without this, Godot Android Export shows:
-> 目标平台需要 ETC2/ASTC 纹理压缩。请在项目设置中启用"导入 ETC2 ASTC"。
-
-## Troubleshooting Order / 排错顺序
-
-1. Export Debug APK first (not Release)
-2. Use English preset name (e.g., `Android`)
-3. Use English output path (e.g., `C:\Builds\BallWar_debug.apk`)
-4. `package/signed=false`
-5. `script_export_mode=0`
-6. `gradle_build/use_gradle_build=false`
-7. Confirm `Import ETC2 ASTC` is in `project.godot`
-8. Open Godot, wait for resource reimport, then export
-
-## Pre-Flight Check / 导出前检查
+Run the existing preflight (it checks texture compression only):
 
 ```powershell
 .\tools\check_android_export_config.ps1
 ```
 
-## Auto-Fix / 自动修复
+If the setting is missing, use the editor or `.\tools\fix_android_export_config.ps1` in a dedicated checkout, then reimport resources.
+
+## Trial build / 试玩包
+
+Start with a debug export. Configure a local debug signing key and enable signing in the export preset used for the build if the APK will be installed. Keep secrets outside Git.
 
 ```powershell
-.\tools\fix_android_export_config.ps1
+& $godot --headless --editor --import --path . --quit
+& $godot --headless --path . --export-debug "Android" "C:\Builds\BallWar_debug.apk"
 ```
 
-## Command-Line Export / 命令行导出
+Set `$godot` to the console executable and create the output directory first. Check the logs and exit status of both commands. An unsigned APK is not an installable trial package.
+
+## Release build / 正式包
+
+For a signed release, configure a persistent release key locally and enable signing. Do not commit the key, passwords or private editor credentials. Preserve the package identity and signing key for upgrades; increment Android versionCode relative to the previous distributed build and align versionName with the game release.
 
 ```powershell
-<godot_console> --headless --path "<project_path>" --export-release "Android" "C:\Builds\BallWar_vX.Y.Z.apk"
+& $godot --headless --path . --export-release "Android" "C:\Builds\BallWar_vX.Y.Z.apk"
 ```
 
-## Notes / 说明
+Use Android SDK build-tools `apksigner verify --print-certs <apk>` and `aapt dump badging <apk>` (or equivalent SDK tooling) to inspect the resulting artifact. Verify package name, version code/name, supported ABI and signature; then test installation and actual gameplay on a supported Android device. Verify update installation from the previous package when claiming upgrade compatibility.
 
-The current public APK is a **debug build**. Treat it as a trial package, not a signed store/release package.  
-当前公开 APK 为 debug 构建，仅作试玩用途。
+## Troubleshooting / 排错
+
+- Confirm the engine/template versions, SDK/JDK settings and ETC2/ASTC import.
+- Use the exact preset name `Android` and an existing output directory.
+- If a debug APK exports but will not install, inspect its signature and compare the installed application's signing identity and versionCode. Do not automatically uninstall a player's existing app or erase their data.
+- Only enable Gradle/custom templates if a concrete Android feature requires them.
+
+The last documented public APK (v2.1.11) was described as a debug/trial build. Its actual signature and installation status have not been revalidated by this documentation update. See [RELEASE_PROCESS.md](RELEASE_PROCESS.md) for the release gate.
