@@ -162,29 +162,15 @@ func restore_from_state(state: Dictionary) -> void:
 	queue_redraw()
 
 func _next_burst_interval() -> float:
-	# v1.9.29：高倍率发射队列优化。
-	# 基础节拍保留 v1.9.28 的回调值；实际间隔会根据 FPS 和剩余队列自动放慢。
-	# 低 FPS 时不再硬追赶发射，避免生成/命中/回收集中在少数帧里把帧率压垮。
+	# Preserve the original high-FPS cadence. Only queue pressure changes it.
 	var pulse_pattern: Array = [0.028, 0.032, 0.030, 0.038, 0.031, 0.036, 0.033, 0.040]
 	var idx: int = burst_index % pulse_pattern.size()
 	return float(pulse_pattern[idx]) * _burst_interval_multiplier()
 
 func _burst_interval_multiplier() -> float:
-	var fps: int = floori(Engine.get_frames_per_second())
 	var mul: float = 1.0
 	var queue_total: int = _current_total_queue()
 
-	if fps > 0:
-		if fps < 10:
-			mul = 4.25
-		elif fps < 16:
-			mul = 3.25
-		elif fps < 24:
-			mul = 2.50
-		elif fps < 35:
-			mul = 1.70
-		elif fps < 50:
-			mul = 1.20
 
 	if burst_remaining >= 1536:
 		mul *= 1.28
@@ -201,13 +187,7 @@ func _burst_interval_multiplier() -> float:
 	return clampf(mul, 1.0, 4.50)
 
 func _max_shots_this_frame() -> int:
-	var fps: int = floori(Engine.get_frames_per_second())
 	var queue_total: int = _current_total_queue()
-	if fps > 0:
-		if fps < 24:
-			return 1
-		if fps < 40:
-			return 2
 	if queue_total >= 1000:
 		return 1
 	if queue_total >= 500:
