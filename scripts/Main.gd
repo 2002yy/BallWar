@@ -42,7 +42,7 @@ const BOARD_SIDE_PAD: float = 10.0
 const BoardChassisScript = preload("res://scripts/render/BoardChassis.gd")
 const ArtStyleScript = preload("res://scripts/render/ArtStyle.gd")
 
-var board_root: Node2D = null
+var board_root: CanvasLayer = null
 var board_chassis: Node2D = null
 var _board_layout: Dictionary = {}
 
@@ -85,6 +85,10 @@ func _board_transform(layout: Dictionary = {}) -> Transform2D:
 	var base: float = _fit_scale(_board_avail_rect(BOARD_SPACE), content)
 	var raw: float = _fit_scale(_board_avail_rect(_view_size), content)
 	var s: float = 1.0 if base <= 0.0 else clampf(raw / base, 1.0, 1.45)
+	# Test-only override, used by the display-scale invariance regression.
+	var forced: String = OS.get_environment("BALLWAR_BOARD_SCALE").strip_edges()
+	if forced != "":
+		s = clampf(float(forced), 0.5, 3.0)
 	var avail: Rect2 = _board_avail_rect(_view_size)
 	var origin: Vector2 = avail.position + (avail.size - content.size * s) * 0.5 - content.position * s
 	return Transform2D(0.0, Vector2(s, s), 0.0, origin)
@@ -384,8 +388,16 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	board_chassis.name = "BoardChassis"
 	game_layer.add_child(board_chassis)
 
-	board_root = Node2D.new()
+	# CanvasLayer, not Node2D: a Node2D parent's scale changes what children
+	# report as global_position, and Bullet/Turret/SaveGameCodec all work in
+	# global space (measured: at scale 1.45 a +3 px global step became 2.07 px of
+	# local movement, i.e. the simulation ran 1.45x slower). A CanvasLayer
+	# transform is applied when drawing, so global_position stays in the design
+	# space and the simulation is untouched - verified with
+	# tools/tests/coord_semantics_probe.gd.
+	board_root = CanvasLayer.new()
 	board_root.name = "BoardRoot"
+	board_root.layer = 1
 	game_layer.add_child(board_root)
 	_apply_board_transform()
 
