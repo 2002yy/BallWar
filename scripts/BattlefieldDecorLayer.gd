@@ -18,7 +18,9 @@ func mark_dirty() -> void:
 
 func apply_visual_settings() -> void:
 	var new_grid_alpha := GameConfig.get_grid_line_alpha()
-	var new_emblem_alpha := GameConfig.get_emblem_alpha_mul()
+	# 大面积阵营水印盖住领土与单位，是战斗画面层级最大的问题。表现层直接停用，
+	# 不引入跨模块依赖；徽记改由控制仓标题、顶部阵营卡与结算页承载。
+	var new_emblem_alpha: float = 0.0
 
 	if (
 		is_equal_approx(new_grid_alpha, _cached_grid_line_alpha)
@@ -51,8 +53,8 @@ func _draw() -> void:
 	if emblem_alpha_mul > 0.01:
 		_draw_emblems(size)
 
-	draw_line(Vector2(half_size, 0), Vector2(half_size, size), Color.BLACK, 2)
-	draw_line(Vector2(0, half_size), Vector2(size, half_size), Color.BLACK, 2)
+	# 固定十字分割线已移除：领土易主后仍把战场切成四块，且无规则含义。
+	# 后续改为随归属变化的动态边界。
 	draw_rect(Rect2(0, 0, size, size), Color(0, 0, 0, 0.95), false, 4)
 
 	for i in range(grid_size + 1):
