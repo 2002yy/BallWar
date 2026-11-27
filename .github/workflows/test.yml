@@ -81,6 +81,7 @@ jobs:
               BoardCoordinatesTestRunner.gd
               AudioIsolationTestRunner.gd
               ReserveEconomyTestRunner.gd
+              LuckyBlastTestRunner.gd
     steps:
       - uses: actions/checkout@v4
       - name: Restore cached Godot

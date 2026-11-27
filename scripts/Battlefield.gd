@@ -131,16 +131,22 @@ func is_inside(cell: Vector2i) -> bool:
 func apply_bullet(cell: Vector2i, faction_id: int) -> String:
 	if not is_inside(cell):
 		return "OUTSIDE"
+	return "HIT_ENEMY_CELL" if _claim_inside_cell(cell, faction_id) else "SAME_CELL"
+
+func claim_cell(cell: Vector2i, faction_id: int) -> bool:
+	return owner_counts.has(faction_id) and is_inside(cell) and _claim_inside_cell(cell, faction_id)
+
+func _claim_inside_cell(cell: Vector2i, faction_id: int) -> bool:
 	var old: int = owners[cell.x][cell.y]
 	if old == faction_id:
-		return "SAME_CELL"
+		return false
 	owners[cell.x][cell.y] = faction_id
 	owner_counts[old] -= 1
 	owner_counts[faction_id] += 1
 	_paint_cached_cell(cell, faction_id)
 	_request_visual_update()
 	_request_score_emit()
-	return "HIT_ENEMY_CELL"
+	return true
 
 func count_cells_by_team() -> Dictionary:
 	return owner_counts.duplicate()
