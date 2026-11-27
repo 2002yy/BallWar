@@ -265,11 +265,13 @@ static func get_safe_screen_size() -> Vector2i:
 
 	return DisplayServer.screen_get_size()
 
-static func set_random_palette() -> void:
+static func set_random_palette(random_source: RandomNumberGenerator = null) -> void:
 	var names: Array = get_palette_names()
 	if names.is_empty():
 		return
-	set_palette_by_name(str(names[randi() % names.size()]))
+	if random_source == null:
+		random_source = RandomNumberGenerator.new()
+	set_palette_by_name(str(names[random_source.randi() % names.size()]))
 
 static func set_palette_by_name(name: String) -> void:
 	var normalized: String = _normalize_palette_name(name)

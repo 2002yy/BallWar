@@ -1,6 +1,8 @@
 extends Node2D
 class_name BulletPool
 
+var match_random: MatchRandom
+
 var inactive_bullets: Array = []
 var active_bullets: Array = []
 var active_bullet_indices: Dictionary = {}
@@ -89,7 +91,10 @@ func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, targ
 		recycle_bullet(oldest_bullet)
 
 	var bullet = _obtain_bullet_with_visual_profile()
-	bullet.setup(faction_id, pos, dir, battlefield, target_turrets)
+	var random_source: RandomNumberGenerator = null
+	if match_random != null:
+		random_source = match_random.get_stream(MatchRandom.Stream.PROJECTILE, faction_id)
+	bullet.setup(faction_id, pos, dir, battlefield, target_turrets, random_source)
 	bullet.activate()
 	return _finalize_spawned_bullet(bullet)
 

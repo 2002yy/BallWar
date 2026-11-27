@@ -28,7 +28,7 @@ var last_trail_position: Vector2 = Vector2.INF
 func get_trail_segment_count() -> int:
 	return maxi(0, trail_points.size() - 1)
 
-func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, new_battlefield, new_target_turrets = {}) -> void:
+func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, new_battlefield, new_target_turrets = {}, random_source: RandomNumberGenerator = null) -> void:
 	var previous_segments: int = get_trail_segment_count()
 	faction_id = new_faction_id
 	global_position = new_position
@@ -42,7 +42,9 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
 	speed = GameConfig.BULLET_SPEED
 	last_cell = Vector2i(-999, -999)
 	age = 0.0
-	turret_hit_check_timer = randf_range(0.0, GameConfig.TURRET_HIT_CHECK_INTERVAL)
+	if random_source == null:
+		random_source = RandomNumberGenerator.new()
+	turret_hit_check_timer = random_source.randf_range(0.0, GameConfig.TURRET_HIT_CHECK_INTERVAL)
 	trail_sample_timer = 0.0
 	last_trail_position = global_position
 	trail_points.clear()

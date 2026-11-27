@@ -15,6 +15,8 @@ var battlefield
 var bullet_container
 var all_turrets = {}
 
+var sweep_random := RandomNumberGenerator.new()
+var projectile_random: RandomNumberGenerator
 var sweep_phase: float = 0.0
 var sweep_speed: float = 0.95
 var center_angle: float = 0.0
@@ -55,7 +57,7 @@ func set_all_turrets(turret_map: Dictionary) -> void:
 
 func _ready() -> void:
 	center_angle = _inward_center_angle()
-	sweep_phase = randf_range(0.0, TAU)
+	sweep_phase = sweep_random.randf_range(0.0, TAU)
 	rotation = center_angle
 	z_index = 15
 	queue_redraw()
@@ -254,7 +256,7 @@ func _spawn_bullet() -> void:
 		bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
 	else:
 		var bullet = Bullet.new()
-		bullet.setup(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
+		bullet.setup(faction_id, spawn_position, shot_direction, battlefield, all_turrets, projectile_random)
 		bullet_container.add_child(bullet)
 
 func _current_burst_shot_angle() -> float:

@@ -64,6 +64,7 @@ var gravity: float = 420.0
 var pegs: Array = []
 var peg_collision_radii: Array = []
 var peg_radius: float = PEG_RADIUS
+var random_source := RandomNumberGenerator.new()
 var stuck_states: Dictionary = {}
 var ball_stay_times: Dictionary = {}
 var jammed_time_left: float = 0.0
@@ -331,8 +332,8 @@ func _relaunch_control_ball(ball) -> void:
 	if ball == null:
 		return
 	ball.radius = CONTROL_BALL_RADIUS
-	var start_x: float = randf_range(18.0, chamber_size.x - 18.0)
-	ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-54.0, 54.0), randf_range(24.0, 82.0)))
+	var start_x: float = random_source.randf_range(18.0, chamber_size.x - 18.0)
+	ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(random_source.randf_range(-54.0, 54.0), random_source.randf_range(24.0, 82.0)))
 	_reset_stuck_state(ball)
 	_reset_ball_stay_time(ball)
 
@@ -477,7 +478,8 @@ func _physics_process(_delta: float) -> void:
 			delta,
 			physics_input,
 			stuck_states.get(ball_id, {}),
-			float(ball_stay_times.get(ball_id, 0.0))
+			float(ball_stay_times.get(ball_id, 0.0)),
+			random_source
 		)
 		var ball_state_update: Dictionary = step_result.get("ball_state_update", {})
 		ball.position = ball_state_update.get("position", ball.position)

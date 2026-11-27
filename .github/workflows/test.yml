@@ -65,6 +65,7 @@ jobs:
           - label: Core UI and gameplay
             scripts: |
               SmokeTestRunner.gd
+              MatchRandomTestRunner.gd
               StartMenuSceneTestRunner.gd
               GameHUDSceneTestRunner.gd
               EventRouletteSceneTestRunner.gd
