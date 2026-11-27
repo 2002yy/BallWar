@@ -435,6 +435,7 @@ func _create_control_chambers() -> void:
 func _create_ui() -> void:
 	var game_hud: CanvasLayer = GameHUDScene.instantiate()
 	game_hud.name = "UICanvas"
+	game_hud.layer = 3
 	game_layer.add_child(game_hud)
 	game_hud.setup_static(self, _view_size, runtime.current_layout, is_mobile_layout)
 	var hud_nodes: Dictionary = game_hud.get_static_parts()

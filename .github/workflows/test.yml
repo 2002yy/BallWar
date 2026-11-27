@@ -78,6 +78,7 @@ jobs:
               LayoutSanityTestRunner.gd
               SettingsAndResultTestRunner.gd
               EndToEndContinueMainTestRunner.gd
+              BoardCoordinatesTestRunner.gd
     steps:
       - uses: actions/checkout@v4
       - name: Restore cached Godot
