@@ -1,15 +1,21 @@
 extends CanvasLayer
 class_name StartMenu
 
-# 主菜单：一块机械控制台，左侧约 30% 操作区，右侧约 70% 真实战场预览台。
+# 主菜单：一台机械控制台的正面。
 #
-# 四页导航（PAGE_*）：主菜单 → 选择玩法 → 对局配置 → 开始；继续游戏单独一页。
-# 拆页之后旧的长路径绑定（RootPanel/MainVBox/ConfigPanel/ConfigVBox/...）全部
-# 换成了场景唯一名（%Name），节点挪位置不再改脚本。
+# 结构（对齐 M01-R02 主参考图）：
+#   左栏（约 30%，常驻）= 品牌锁形 + 标语 + 五项主导航 + 当前配置摘要
+#   右栏（约 70%）= 页面宿主。主菜单页是整台战场预览，其余页是各自的设置面板
+#   底部通栏状态条 = 存档槽提示 / 平台说明 / 版本号
+#
+# 为什么导航常驻而不是把"继续游戏 / 设置 / 说明 / 退出"塞进某一页：
+# 参考图的左栏是一排全宽导航条，占满整列高度；旧版左栏只有两个按钮，
+# 下半部分必然空出一大块。导航常驻之后左栏是满的，右栏也只剩真正的战场。
 #
 # 展示层边界：这里只读 GameConfig / Main 的已选值，只调用它们的公开入口
-# （_start_game / _continue_saved_game / _select_save_slot / _save_menu_preferences）。
-# 不碰 Bullet、BulletPool、武器行为或物理步规则，也不解释任何战斗数值。
+# （_start_game / _continue_saved_game / _select_save_slot / _save_menu_preferences /
+# _has_save_file / reset_menu_preferences）。不碰 Bullet、BulletPool、武器行为
+# 或物理步规则，也不解释任何战斗数值。
 
 const PreviewScene = preload("res://scenes/ui/PreviewScene.tscn")
 const MechThemeScript = preload("res://scripts/ui/MechTheme.gd")
@@ -17,7 +23,12 @@ const MechThemeScript = preload("res://scripts/ui/MechTheme.gd")
 const PAGE_MAIN := "main"
 const PAGE_MODE := "mode"
 const PAGE_CONFIG := "config"
+const PAGE_HELP := "help"
 const PAGE_CONTINUE := "continue"
+
+# 退出时的平台惯例：桌面直接退出；安卓/iOS 先确认，且**只有**在根页按返回键
+# 才询问退出 —— 内页的返回键一律先回上一级（见 _handle_back）。
+const MOBILE_PLATFORMS := ["Android", "iOS"]
 
 # 地图显示名。MatchConfig 目前只有一张图，这里也就只有一条：
 # 数据接口先留好，但不为还不存在的地图摆一排灰色按钮。
@@ -34,28 +45,54 @@ static var _remembered_page: String = PAGE_MAIN
 @onready var columns: Control = %Columns
 @onready var action_column: VBoxContainer = $RootPanel/Columns/ActionColumn
 
-@onready var title_label: Label = $RootPanel/Columns/ActionColumn/TitleLabel
-@onready var subtitle_label: Label = $RootPanel/Columns/ActionColumn/SubtitleLabel
-@onready var page_host: Control = $RootPanel/Columns/ActionColumn/PageHost
-@onready var main_menu_page: VBoxContainer = $RootPanel/Columns/ActionColumn/PageHost/MainMenuPage
-@onready var mode_select_page: VBoxContainer = $RootPanel/Columns/ActionColumn/PageHost/ModeSelectPage
-@onready var match_config_page: VBoxContainer = $RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage
-@onready var continue_page: VBoxContainer = $RootPanel/Columns/ActionColumn/PageHost/ContinuePage
+@onready var brand_title: Label = $RootPanel/Columns/ActionColumn/LogoBlock/BrandTitle
+@onready var tagline_label: Label = $RootPanel/Columns/ActionColumn/TaglinePill/TaglineLabel
+@onready var sub_tagline_label: Label = $RootPanel/Columns/ActionColumn/SubTagline
 
-@onready var start_button: Button = %StartButton
-@onready var continue_entry_button: Button = %ContinueEntryButton
-@onready var menu_hint_label: Label = %MenuHintLabel
-@onready var version_label: Label = %VersionLabel
+@onready var nav_start_button: Button = %NavStartButton
+@onready var nav_continue_button: Button = %NavContinueButton
+@onready var nav_config_button: Button = %NavConfigButton
+@onready var nav_help_button: Button = %NavHelpButton
+@onready var nav_quit_button: Button = %NavQuitButton
+
 @onready var main_mode_value: Label = %MainModeValue
 @onready var main_map_value: Label = %MainMapValue
 @onready var main_quality_value: Label = %MainQualityValue
 
+@onready var stage_column: Control = %StageColumn
+@onready var page_host: Control = %PageHost
+@onready var main_menu_page: Control = %MainMenuPage
+@onready var mode_select_page: PanelContainer = %ModeSelectPage
+@onready var match_config_page: PanelContainer = %MatchConfigPage
+@onready var help_page: PanelContainer = %HelpPage
+@onready var continue_page: PanelContainer = %ContinuePage
+
+@onready var stage_chrome: Control = %StageChrome
+@onready var stage_header_title: Label = %StageHeaderTitle
+@onready var stage_header_sub: Label = %StageHeaderSub
+@onready var preview_container: Control = %PreviewContainer
+@onready var chamber_preview: Node2D = %ChamberPreview
+@onready var preview_chip: PanelContainer = %PreviewChip
+@onready var chip_tags: Label = %ChipTags
+
 @onready var mode_card_host: VBoxContainer = %ModeCardHost
+@onready var mode_page_hint: Label = %ModePageHint
 @onready var mode_tip_label: Label = %ModeTipLabel
+@onready var mode_detail_summary: Label = %ModeDetailSummary
+@onready var mode_compare_label: Label = %ModeCompareLabel
 @onready var mode_back_button: Button = %ModeBackButton
 @onready var mode_next_button: Button = %ModeNextButton
 
 @onready var match_summary_label: Label = %MatchSummaryLabel
+@onready var config_mode_value: Label = %ConfigModeValue
+@onready var config_map_value: Label = %ConfigMapValue
+@onready var config_quality_value: Label = %ConfigQualityValue
+@onready var config_slot_value: Label = %ConfigSlotValue
+@onready var config_time_value: Label = %ConfigTimeValue
+@onready var config_palette_value: Label = %ConfigPaletteValue
+@onready var config_version_value: Label = %ConfigVersionValue
+@onready var config_platform_value: Label = %ConfigPlatformValue
+@onready var config_rule_label: Label = %ConfigRuleLabel
 @onready var size_option: OptionButton = %GridSizeOption
 @onready var quality_option: OptionButton = %QualityOption
 @onready var time_spin: SpinBox = %TimeSpin
@@ -64,18 +101,21 @@ static var _remembered_page: String = PAGE_MAIN
 @onready var config_back_button: Button = %ConfigBackButton
 @onready var start_match_button: Button = %StartMatchButton
 
+@onready var help_back_button: Button = %HelpBackButton
+@onready var help_start_button: Button = %HelpStartButton
+
 @onready var save_title: Label = %SaveTitle
+@onready var slot_detail_label: Label = %SlotDetailLabel
 @onready var slot_grid: GridContainer = %SlotGrid
 @onready var continue_back_button: Button = %ContinueBackButton
 @onready var continue_button: Button = %ContinueButton
 
+@onready var footer_bar: PanelContainer = %FooterBar
 @onready var menu_status_label: Label = %MenuStatusLabel
-@onready var mobile_hint_label: Label = $RootPanel/Columns/ActionColumn/MobileHint
-@onready var stage_column: Control = $RootPanel/Columns/StageColumn
-@onready var stage_chrome: Control = %StageChrome
-@onready var preview_container: Control = %PreviewContainer
-@onready var chamber_preview: Node2D = %ChamberPreview
-@onready var stage_caption: Label = %StageCaption
+@onready var mobile_hint_label: Label = %MobileHint
+@onready var version_label: Label = %VersionLabel
+
+@onready var quit_dialog: ConfirmationDialog = %QuitDialog
 
 var _owner
 var _menu_layout: Dictionary = {}
@@ -134,25 +174,40 @@ static func build_status_text(slot: int) -> String:
 
 
 static func build_start_button_label(_slot: int, _has_save_data: bool = false) -> String:
-	return "\u5f00\u59cb\u65b0\u6e38\u620f"
+	return "开始新游戏"
 
 
 static func build_status_label(slot: int, has_save_data: bool) -> String:
 	if has_save_data:
-		return "\u5df2\u9009\u62e9\u5b58\u6863\u69fd %d\uff0c\u65b0\u6e38\u620f\u4f1a\u8986\u76d6\u8fd9\u91cc\u7684\u5b58\u6863" % slot
-	return "\u5df2\u9009\u62e9\u7a7a\u5b58\u6863\u69fd %d\uff0c\u65b0\u6e38\u620f\u4f1a\u4fdd\u5b58\u5728\u8fd9\u91cc" % slot
+		return "已选择存档槽 %d，新游戏会覆盖这里的存档" % slot
+	return "已选择空存档槽 %d，新游戏会保存在这里" % slot
 
 
 static func build_mode_tip_text(mode_name: String, time_limit_minutes: int) -> String:
 	match mode_name:
 		GameConfig.GAME_MODE_BASIC:
-			return "\u57fa\u7840\uff1a\u6d88\u706d\u6240\u6709\u5bf9\u624b\u70ae\u53f0\u5373\u53ef\u83b7\u80dc"
+			return "基础：消灭所有对手炮台即可获胜"
 		GameConfig.GAME_MODE_OCCUPATION:
-			return "\u5360\u9886\uff1a\u8fbe\u5230 75% \u9886\u571f\u5373\u53ef\u83b7\u80dc"
+			return "占领：达到 75% 领土即可获胜"
 		GameConfig.GAME_MODE_TIMED:
-			return "\u9650\u65f6\uff1a%d \u5206\u949f\u5012\u8ba1\u65f6\u7ed3\u675f\u540e\uff0c\u9886\u5730\u6700\u591a\u65b9\u83b7\u80dc" % time_limit_minutes
+			return "限时：%d 分钟倒计时结束后，领地最多方获胜" % time_limit_minutes
 		GameConfig.GAME_MODE_WILD:
-			return "\u72c2\u91ce\uff1a\u5168\u5c40 x3 \u500d\u7387\uff0c\u5355\u6b21\u4e0a\u9650\u66f4\u9ad8\uff0c\u4e8b\u4ef6\u66f4\u9891\u7e41"
+			return "狂野：全局 x3 倍率，单次上限更高，事件更频繁"
+		_:
+			return ""
+
+
+static func build_mode_rule_text(mode_name: String) -> String:
+	# 模式卡片上的第二行：一句话说清胜负条件，不重复玩法名。
+	match mode_name:
+		GameConfig.GAME_MODE_BASIC:
+			return "消灭所有对手炮台"
+		GameConfig.GAME_MODE_OCCUPATION:
+			return "领土达到 75% 即胜"
+		GameConfig.GAME_MODE_TIMED:
+			return "时间到，领土最多者胜"
+		GameConfig.GAME_MODE_WILD:
+			return "全局 x3 倍率，事件更频繁"
 		_:
 			return ""
 
@@ -162,8 +217,8 @@ static func build_mode_tip_text(mode_name: String, time_limit_minutes: int) -> S
 func get_parts() -> Dictionary:
 	return {
 		"menu_layer": self,
-		"menu_title_label": title_label,
-		"menu_start_button": start_button,
+		"menu_title_label": brand_title,
+		"menu_start_button": nav_start_button,
 		"menu_continue_button": continue_button,
 		"menu_save_slot_buttons": _slot_buttons.duplicate(),
 		"menu_status_label": menu_status_label,
@@ -180,6 +235,8 @@ func setup(p_owner, view_size: Vector2, save_summaries: Array, current_layout: D
 	# 挂在 RootPanel 上而不是自己身上 —— CanvasLayer 不是 Control，没有 theme；
 	# 挂在面板根节点后，所有 Control 后代都会继承。
 	root_panel.theme = MechThemeScript.build()
+	# 退出确认框是 Window，不是 Control 后代，不会继承 RootPanel 的主题，得单独挂。
+	quit_dialog.theme = root_panel.theme
 
 	_view_size = view_size
 	_apply_layout(view_size)
@@ -189,12 +246,15 @@ func setup(p_owner, view_size: Vector2, save_summaries: Array, current_layout: D
 	_init_options()
 	_init_slot_buttons()
 	_init_mode_cards()
+	_init_nav_group()
 	_init_decor()
 	_sync_options_from_owner()
 	refresh_slots(save_summaries)
 	menu_status_label.text = StartMenu.build_status_text(_owner.selected_save_slot)
 	_refresh_menu_status_label(_owner._has_save_file(_owner.selected_save_slot))
 	version_label.text = "v%s" % str(ProjectSettings.get_setting("application/config/version", ""))
+	config_version_value.text = version_label.text
+	config_platform_value.text = "安卓 / iOS" if _is_mobile_platform() else "桌面"
 	_connect_signals()
 	show_page(_remembered_page)
 	# setup 跑在"刚 add_child、还没排过版"的那一帧：自动换行标签此刻宽度是 0，
@@ -221,6 +281,7 @@ func show_page(page_key: String) -> void:
 		if is_instance_valid(node):
 			node.visible = key == target
 	_on_page_shown(target)
+	_sync_nav_state(target)
 	_fit_pages()
 	# 刚显示的页面在这一帧里还没排过版（子节点宽度为 0），下一帧再铺一次。
 	call_deferred("_refit_pages_next_frame")
@@ -237,7 +298,7 @@ func _refit_pages_next_frame() -> void:
 #
 # 还要接住 resized：页面是容器，它的最小尺寸取决于子节点，而子节点又取决于
 # 宽度。隐藏期间子节点宽度是 0，自动换行标签的最小高度会被算成一行一个字，
-# 页面最小高度能飙到 757；一旦 set_size 被这个假值夹住就不会自己缩回来。
+# 页面最小高度能飙到上千；一旦 set_size 被这个假值夹住就不会自己缩回来。
 # 等子节点排完版、最小尺寸回落，resized 会再进来一次，这次就能压回目标值。
 func _fit_pages() -> void:
 	if _fitting or not is_instance_valid(page_host):
@@ -260,22 +321,18 @@ func _fit_pages() -> void:
 # set_size 被夹住，就算最小高度后来恢复正常，尺寸也不会自己缩回来。
 # 这里先按已知的列宽把宽度定死，再在下一帧补一次完整重排。
 func _fix_wrapped_label_widths(width: float) -> void:
-	for label in _wrapped_labels():
+	for label in _left_wrapped_labels():
 		if label == null or not is_instance_valid(label):
 			continue
 		label.custom_minimum_size = Vector2(width, label.custom_minimum_size.y)
 		label.size = Vector2(width, maxf(label.size.y, label.custom_minimum_size.y))
 
 
-func _wrapped_labels() -> Array:
+func _left_wrapped_labels() -> Array:
+	# 只列左栏这层"永远可见"的换行标签。右栏页面里的换行标签由 _fit_pages
+	# 的 resized 回路收敛，不能在这里按左栏宽度去钉 —— 那会把它们压扁。
 	return [
-		subtitle_label,
-		menu_hint_label,
-		mode_tip_label,
-		match_summary_label,
-		save_title,
-		menu_status_label,
-		mobile_hint_label,
+		sub_tagline_label,
 	]
 
 
@@ -295,57 +352,96 @@ func _apply_layout(view_size: Vector2) -> void:
 
 	# 遮罩永远是整屏：它盖的是真实视口，不是设计画布。
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.color = Color(0.0156863, 0.027451, 0.0431373, 0.9)
+	shade.color = Color(0.0117647, 0.0215686, 0.0333333, 0.92)
 
-	var panel_size := Vector2(963.0, 634.0)
-	var panel_rect: Rect2 = layout.get("root_panel_rect", Rect2((view_size - panel_size) * 0.5, panel_size))
+	var panel_size := view_size - Vector2(52.0, 52.0)
+	var panel_rect: Rect2 = layout.get("root_panel_rect", Rect2(Vector2(26.0, 26.0), panel_size))
 	root_panel.position = panel_rect.position
 	root_panel.size = panel_rect.size
+
+	var pad := float(layout.get("panel_pad", 16.0))
+	var columns_rect: Rect2 = layout.get(
+		"columns_rect",
+		Rect2(Vector2(pad, pad), panel_rect.size - Vector2(pad * 2.0, pad * 2.0))
+	)
+	columns.position = columns_rect.position
+	columns.size = columns_rect.size
 
 	# 两栏都按布局给的矩形摆，不用 HBox 协商：容器会按子节点最小宽重新分配，
 	# 一旦某个按钮文字变长，预览台就会被挤窄，而预览的缩放是按布局算的，
 	# 两者不同步就会露出重叠。显式矩形没有这个自由度。
-	var margin: Vector2 = layout.get("columns_margin", Vector2(22.0, 18.0))
-	var margin_bottom: float = float(layout.get("columns_margin_bottom", margin.y))
-	columns.position = margin
-	columns.size = (panel_rect.size - Vector2(margin.x * 2.0, margin.y + margin_bottom)).max(Vector2(64.0, 64.0))
-
-	var action_rect: Rect2 = layout.get("action_column_rect", Rect2(Vector2.ZERO, Vector2(columns.size.x * 0.30, columns.size.y)))
+	var action_rect: Rect2 = layout.get(
+		"action_column_rect",
+		Rect2(Vector2.ZERO, Vector2(columns_rect.size.x * 0.30, columns_rect.size.y))
+	)
 	# 先钉标签宽度，再定列尺寸 —— 顺序反了就会被那张假的最小尺寸夹住。
 	_fix_wrapped_label_widths(action_rect.size.x)
 	action_column.position = action_rect.position
 	action_column.size = action_rect.size
 
-	var stage_rect: Rect2 = layout.get("stage_rect", Rect2(Vector2(action_rect.size.x + 18.0, 0.0), Vector2(columns.size.x - action_rect.size.x - 18.0, columns.size.y)))
+	var gap: float = float(layout.get("column_gap", 16.0))
+	var stage_rect: Rect2 = layout.get(
+		"stage_rect",
+		Rect2(
+			Vector2(action_rect.size.x + gap, 0.0),
+			Vector2(columns_rect.size.x - action_rect.size.x - gap, columns_rect.size.y)
+		)
+	)
 	stage_column.position = stage_rect.position
 	stage_column.size = stage_rect.size
 
-	var header_height: float = float(layout.get("preview_header_height", 36.0))
-	var footer_height: float = float(layout.get("preview_footer_height", 32.0))
-	var side_pad: float = float(layout.get("preview_side_pad", 16.0))
+	var footer_height: float = float(layout.get("footer_height", 26.0))
+	var footer_rect: Rect2 = layout.get(
+		"footer_rect",
+		Rect2(
+			Vector2(pad, pad + columns_rect.size.y + 8.0),
+			Vector2(columns_rect.size.x, footer_height)
+		)
+	)
+	footer_bar.position = footer_rect.position
+	footer_bar.size = footer_rect.size
+
+	var header_height: float = float(layout.get("preview_header_height", 34.0))
+	var stage_footer: float = float(layout.get("preview_footer_height", 12.0))
+	var side_pad: float = float(layout.get("preview_side_pad", 10.0))
 	var preview_size: Vector2 = layout.get(
 		"preview_size",
 		Vector2(
 			maxf(80.0, stage_rect.size.x - side_pad * 2.0),
-			maxf(60.0, stage_rect.size.y - header_height - footer_height)
+			maxf(60.0, stage_rect.size.y - header_height - stage_footer)
 		)
 	)
 
 	stage_chrome.set("header_height", header_height)
-	stage_chrome.set("footer_height", footer_height)
+	stage_chrome.set("footer_height", stage_footer)
 	stage_chrome.set("side_pad", side_pad)
 	if stage_chrome.has_method("queue_redraw"):
 		stage_chrome.queue_redraw()
+
+	# 表头：标题贴左，副标跟在后面。右侧留给 MechStage 画的档位刻度。
+	stage_header_title.position = Vector2(side_pad + 4.0, 0.0)
+	stage_header_title.size = Vector2(146.0, header_height - 3.0)
+	var sub_x: float = side_pad + 4.0 + 150.0
+	stage_header_sub.position = Vector2(sub_x, 0.0)
+	stage_header_sub.size = Vector2(
+		maxf(60.0, stage_rect.size.x - sub_x - side_pad - 56.0),
+		header_height - 3.0
+	)
 
 	preview_container.position = Vector2(side_pad, header_height)
 	preview_container.size = preview_size
 	preview_container.clip_contents = true
 
-	chamber_preview.scale = layout.get("preview_scale", Vector2(0.4, 0.4))
+	chamber_preview.scale = layout.get("preview_scale", Vector2(0.96, 0.96))
 	chamber_preview.position = layout.get("preview_center", preview_size * 0.5)
 
-	stage_caption.position = Vector2(side_pad, header_height + preview_size.y + 4.0)
-	stage_caption.size = Vector2(preview_size.x, maxf(16.0, footer_height - 8.0))
+	# 浮标压在机器左下角，和参考图一致：不占布局，只盖在预览台上。
+	var chip_size := Vector2(206.0, preview_chip.get_combined_minimum_size().y)
+	preview_chip.size = chip_size
+	preview_chip.position = Vector2(
+		side_pad + 16.0,
+		header_height + preview_size.y - chip_size.y - 10.0
+	)
 
 
 # ------------------------------------------------------------------ 构建
@@ -355,6 +451,7 @@ func _bind_pages() -> void:
 	_page_nodes[PAGE_MAIN] = main_menu_page
 	_page_nodes[PAGE_MODE] = mode_select_page
 	_page_nodes[PAGE_CONFIG] = match_config_page
+	_page_nodes[PAGE_HELP] = help_page
 	_page_nodes[PAGE_CONTINUE] = continue_page
 	for key in _page_nodes:
 		var node: Control = _page_nodes[key]
@@ -391,11 +488,12 @@ func _init_slot_buttons() -> void:
 		button.toggle_mode = true
 		button.button_group = group
 		button.theme_type_variation = &"SlotButton"
-		button.custom_minimum_size = Vector2(0.0, 40.0)
+		button.custom_minimum_size = Vector2(0.0, 44.0)
 		# clip_text 会让按钮不再把文字宽度算进最小宽度，于是单列 GridContainer
 		# 会把列宽压到内边距那么宽（实测 20px）。必须显式 EXPAND_FILL 撑满整列。
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.clip_text = true
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		slot_grid.add_child(button)
 		button.pressed.connect(Callable(self, "_on_slot_pressed").bind(slot))
 		_slot_buttons[slot] = button
@@ -414,10 +512,29 @@ func _init_mode_cards() -> void:
 		card.toggle_mode = true
 		card.button_group = group
 		card.theme_type_variation = &"ModeCard"
-		card.custom_minimum_size = Vector2(0.0, 46.0)
+		card.custom_minimum_size = Vector2(0.0, 92.0)
+		card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.text = str(mode_name)
+		card.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		card.clip_text = true
 		card.tooltip_text = StartMenu.build_mode_tip_text(str(mode_name), int(_owner.selected_time_limit_minutes))
+
+		# 卡片第二行：胜负条件。用子 Label 而不是把两行塞进 Button.text ——
+		# Button 只有一种字号，而且 text 要留给玩法名做断言匹配。
+		var rule := Label.new()
+		rule.name = "Rule"
+		rule.theme_type_variation = &"HintLabel"
+		rule.text = StartMenu.build_mode_rule_text(str(mode_name))
+		rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rule.clip_text = true
+		rule.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		rule.offset_left = 17.0
+		rule.offset_right = -16.0
+		rule.offset_top = -32.0
+		rule.offset_bottom = -13.0
+		card.add_child(rule)
+
 		mode_card_host.add_child(card)
 		card.toggled.connect(Callable(self, "_on_mode_card_toggled").bind(str(mode_name)))
 		# 悬停就先给规则提示，不用点了才知道这个玩法是什么。
@@ -425,6 +542,15 @@ func _init_mode_cards() -> void:
 		card.mouse_exited.connect(Callable(self, "_on_mode_card_hover").bind(str(mode_name), false))
 		_mode_cards[str(mode_name)] = card
 		index += 1
+
+
+func _init_nav_group() -> void:
+	# 三个可选中导航项共用一个 ButtonGroup：同一时刻只能有一项是"当前页"。
+	# 开始游戏和退出游戏是动作，不是页，所以不进组、也不 toggle。
+	var group := ButtonGroup.new()
+	for button in [nav_continue_button, nav_config_button, nav_help_button]:
+		button.button_group = group
+		button.toggle_mode = true
 
 
 func _init_decor() -> void:
@@ -519,12 +645,23 @@ func _refresh_slots(save_summaries: Array) -> void:
 
 	_refresh_action_labels(bool(selected_summary.get("is_playable", false)))
 	_refresh_menu_status_label(bool(selected_summary.get("has_data", false)))
+	_refresh_slot_detail(selected_summary)
+	# 槽位变了，设置页概要里的"存档槽"也要跟着变。
+	_refresh_match_summary()
+
+
+func _refresh_slot_detail(summary: Dictionary) -> void:
+	var detail: String = str(summary.get("detail", "点击选择此槽"))
+	slot_detail_label.text = "槽 %d · %s" % [int(_owner.selected_save_slot), detail]
+	slot_detail_label.tooltip_text = detail
 
 
 func _refresh_action_labels(has_selected_save: bool) -> void:
-	start_button.text = StartMenu.build_start_button_label(_owner.selected_save_slot, has_selected_save)
 	continue_button.text = StartMenu.build_continue_button_text(_owner.selected_save_slot)
 	continue_button.disabled = not has_selected_save
+	# 主导航的"开始游戏"是常驻入口，不随槽位改文案；覆盖语义交给底部状态条
+	# 和"继续游戏"页的槽位列表说明，避免一个按钮同时承担两件事。
+	nav_start_button.tooltip_text = "选择玩法后开局（存档槽 %d）" % int(_owner.selected_save_slot)
 
 
 func _refresh_menu_status_label(has_save_data: bool) -> void:
@@ -546,15 +683,41 @@ func _refresh_match_summary() -> void:
 	match_summary_label.text = "%s · %d × %d · %s · %s画质" % [
 		map_name, grid, grid, mode_label, quality_label
 	]
-	# 主菜单页只读摘要：玩家不进配置页也能确认自己要开的是哪一局。
+	# 左栏摘要是三张小卡，位置只够放短值；完整地图名留给设置页的概要面板。
 	main_mode_value.text = mode_label
-	main_map_value.text = "%s %d × %d" % [map_name, grid, grid]
-	main_quality_value.text = "%s画质" % quality_label
+	main_map_value.text = "%d × %d" % [grid, grid]
+	main_quality_value.text = quality_label
+
+	# 设置页 / 选择玩法页的概要由同一份 owner 状态生成，避免两处各写一套数字。
+	var full_map: String = "%s %d × %d" % [map_name, grid, grid]
+	var slot: int = int(_owner.selected_save_slot)
+	config_mode_value.text = str(_owner.selected_game_mode_name)
+	config_map_value.text = full_map
+	config_quality_value.text = "%s画质" % quality_label
+	config_slot_value.text = "槽 %d" % slot
+	config_time_value.text = "%d 分钟" % int(_owner.selected_time_limit_minutes)
+	config_palette_value.text = str(_owner.selected_palette_name)
+	config_rule_label.text = "%s\n地图：%s" % [
+		StartMenu.build_mode_tip_text(
+			str(_owner.selected_game_mode_name),
+			int(_owner.selected_time_limit_minutes)
+		),
+		full_map
+	]
+	mode_detail_summary.text = "战场：%s\n画质：%s · 配色：%s\n存档槽：%d" % [
+		full_map, quality_label, str(_owner.selected_palette_name), slot
+	]
+	# 玩法一览由 GameConfig 长出来，选中的那一行打箭头，不硬写四个名字。
+	var compare_lines: PackedStringArray = PackedStringArray()
+	for mode_name in GameConfig.get_game_mode_names():
+		var marker: String = "▶ " if str(mode_name) == str(_owner.selected_game_mode_name) else "   "
+		compare_lines.append(marker + str(mode_name))
+	mode_compare_label.text = "\n".join(compare_lines)
 
 
 func _refresh_stage_caption() -> void:
 	var grid: int = int(_owner.selected_grid_size)
-	stage_caption.text = "实时战场预览 · %d × %d" % [grid, grid]
+	chip_tags.text = "◆ 4 人对战   ◆ %d × %d" % [grid, grid]
 
 
 func _is_default_config() -> bool:
@@ -578,6 +741,14 @@ func _compact_mode_name(mode_name: String) -> String:
 	return StartMenu.compact_slot_title(mode_name)
 
 
+func _sync_nav_state(page_key: String) -> void:
+	_syncing = true
+	nav_continue_button.button_pressed = page_key == PAGE_CONTINUE
+	nav_config_button.button_pressed = page_key == PAGE_CONFIG
+	nav_help_button.button_pressed = page_key == PAGE_HELP
+	_syncing = false
+
+
 func _on_page_shown(page_key: String) -> void:
 	match page_key:
 		PAGE_CONFIG:
@@ -585,6 +756,10 @@ func _on_page_shown(page_key: String) -> void:
 			_refresh_match_summary()
 			_refresh_stage_caption()
 			_update_reset_button_state()
+			_update_mode_tip()
+		PAGE_MODE:
+			var grid: int = int(_owner.selected_grid_size)
+			mode_page_hint.text = "四种玩法共用同一张 %d × %d 战场 —— 规则不同，胜负条件不同。" % [grid, grid]
 			_update_mode_tip()
 		PAGE_CONTINUE:
 			_refresh_action_labels(_owner._has_save_file(_owner.selected_save_slot))
@@ -604,10 +779,17 @@ func _connect_signals() -> void:
 	if not palette_option.item_selected.is_connected(_on_palette_option_selected):
 		palette_option.item_selected.connect(_on_palette_option_selected)
 
-	if not start_button.pressed.is_connected(_on_start_pressed):
-		start_button.pressed.connect(_on_start_pressed)
-	if not continue_entry_button.pressed.is_connected(_on_continue_entry_pressed):
-		continue_entry_button.pressed.connect(_on_continue_entry_pressed)
+	if not nav_start_button.pressed.is_connected(_on_nav_start_pressed):
+		nav_start_button.pressed.connect(_on_nav_start_pressed)
+	if not nav_continue_button.pressed.is_connected(_on_nav_continue_pressed):
+		nav_continue_button.pressed.connect(_on_nav_continue_pressed)
+	if not nav_config_button.pressed.is_connected(_on_nav_config_pressed):
+		nav_config_button.pressed.connect(_on_nav_config_pressed)
+	if not nav_help_button.pressed.is_connected(_on_nav_help_pressed):
+		nav_help_button.pressed.connect(_on_nav_help_pressed)
+	if not nav_quit_button.pressed.is_connected(_on_nav_quit_pressed):
+		nav_quit_button.pressed.connect(_on_nav_quit_pressed)
+
 	if not mode_back_button.pressed.is_connected(_on_mode_back_pressed):
 		mode_back_button.pressed.connect(_on_mode_back_pressed)
 	if not mode_next_button.pressed.is_connected(_on_mode_next_pressed):
@@ -616,6 +798,10 @@ func _connect_signals() -> void:
 		config_back_button.pressed.connect(_on_config_back_pressed)
 	if not continue_back_button.pressed.is_connected(_on_continue_back_pressed):
 		continue_back_button.pressed.connect(_on_continue_back_pressed)
+	if not help_back_button.pressed.is_connected(_on_help_back_pressed):
+		help_back_button.pressed.connect(_on_help_back_pressed)
+	if not help_start_button.pressed.is_connected(_on_nav_start_pressed):
+		help_start_button.pressed.connect(_on_nav_start_pressed)
 	if not start_match_button.pressed.is_connected(_on_start_match_pressed):
 		start_match_button.pressed.connect(_on_start_match_pressed)
 	if not reset_button.pressed.is_connected(_on_reset_pressed):
@@ -623,15 +809,26 @@ func _connect_signals() -> void:
 	if not continue_button.pressed.is_connected(Callable(_owner, "_continue_saved_game")):
 		continue_button.pressed.connect(Callable(_owner, "_continue_saved_game"))
 
+	if not quit_dialog.confirmed.is_connected(_on_quit_confirmed):
+		quit_dialog.confirmed.connect(_on_quit_confirmed)
+
 
 # ------------------------------------------------------------------ 页面导航
 
-func _on_start_pressed() -> void:
+func _on_nav_start_pressed() -> void:
 	show_page(PAGE_MODE)
 
 
-func _on_continue_entry_pressed() -> void:
+func _on_nav_continue_pressed() -> void:
 	show_page(PAGE_CONTINUE)
+
+
+func _on_nav_config_pressed() -> void:
+	show_page(PAGE_CONFIG)
+
+
+func _on_nav_help_pressed() -> void:
+	show_page(PAGE_HELP)
 
 
 func _on_mode_back_pressed() -> void:
@@ -650,11 +847,74 @@ func _on_continue_back_pressed() -> void:
 	show_page(PAGE_MAIN)
 
 
+func _on_help_back_pressed() -> void:
+	show_page(PAGE_MAIN)
+
+
 func _on_start_match_pressed() -> void:
 	# 真正开局仍然走 Main 的既有入口，参数也只有网格大小，和旧实现一致。
 	_owner._save_menu_preferences()
 	_remembered_page = PAGE_MAIN
 	_owner._start_game(int(_owner.selected_grid_size))
+
+
+# ------------------------------------------------------------------ 退出
+
+func _on_nav_quit_pressed() -> void:
+	_request_quit()
+
+
+func _request_quit() -> void:
+	# 平台惯例：桌面与移动端都先确认一次。移动端不提供"直接杀掉"的快捷键 ——
+	# 安卓/iOS 上用户的习惯是用系统手势退到后台，我们只在这个显式入口里退出。
+	if _is_mobile_platform():
+		quit_dialog.dialog_text = "确定要退出游戏吗？安卓上也可以直接从最近任务上滑关闭。"
+	else:
+		quit_dialog.dialog_text = "确定要退出游戏吗？进行中的对局会保存到当前槽位。"
+	quit_dialog.popup_centered()
+
+
+func _on_quit_confirmed() -> void:
+	# 先落一次偏好，再退出：玩家在设置页改过的选项不该因为退出而丢。
+	if _owner != null and _owner.has_method("_save_menu_preferences"):
+		_owner._save_menu_preferences()
+	get_tree().quit()
+
+
+func _is_mobile_platform() -> bool:
+	return OS.get_name() in MOBILE_PLATFORMS
+
+
+func _notification(what: int) -> void:
+	# 安卓返回键 / Esc：内页先回上一级，只有停在主菜单页时才询问退出。
+	# 这才是安卓的惯例 —— 返回键不等于"杀进程"。
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_handle_back()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if _handle_back():
+			get_viewport().set_input_as_handled()
+
+
+func _handle_back() -> bool:
+	match _current_page:
+		PAGE_MODE:
+			show_page(PAGE_MAIN)
+			return true
+		PAGE_CONFIG:
+			show_page(PAGE_MODE)
+			return true
+		PAGE_HELP:
+			show_page(PAGE_MAIN)
+			return true
+		PAGE_CONTINUE:
+			show_page(PAGE_MAIN)
+			return true
+		_:
+			_request_quit()
+			return true
 
 
 # ------------------------------------------------------------------ 配置项
@@ -713,7 +973,7 @@ func _on_mode_card_hover(mode_name: String, entered: bool) -> void:
 
 func _on_reset_pressed() -> void:
 	# Main 的 reset_menu_preferences 会重建整层菜单；靠 _remembered_page
-	# 把玩家留在"对局配置"页，而不是被弹回主菜单。
+	# 把玩家留在"对局设置"页，而不是被弹回主菜单。
 	_owner.reset_menu_preferences()
 
 

@@ -75,6 +75,20 @@ static func _focus_ring(color: Color) -> StyleBoxFlat:
 	return sb
 
 
+static func _top_rule(bg: Color, line: Color, width: int, pad_h: float, pad_v: float) -> StyleBoxFlat:
+	# 只有上缘一条线的面板：通栏状态条用。四边都描边会读成"又一张卡片"。
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = line
+	sb.border_width_top = width
+	sb.content_margin_left = pad_h
+	sb.content_margin_right = pad_h
+	sb.content_margin_top = pad_v
+	sb.content_margin_bottom = pad_v
+	sb.anti_aliasing = true
+	return sb
+
+
 static func _register_button_variant(theme: Theme, type_name: String,
 		normal: StyleBoxFlat, hover: StyleBoxFlat, pressed: StyleBoxFlat,
 		disabled: StyleBoxFlat, focus: Color,
@@ -92,6 +106,18 @@ static func _register_button_variant(theme: Theme, type_name: String,
 	theme.set_color("font_focus_color", type_name, font_hover)
 	theme.set_color("font_disabled_color", type_name, font_disabled)
 	theme.set_font_size("font_size", type_name, font_size)
+
+
+static func _register_icon_colors(theme: Theme, type_name: String,
+		normal: Color, hover: Color, pressed: Color, disabled: Color, max_width: int) -> void:
+	# 图标颜色要跟着文字状态一起走，否则悬停时"字亮图不亮"。
+	theme.set_color("icon_normal_color", type_name, normal)
+	theme.set_color("icon_hover_color", type_name, hover)
+	theme.set_color("icon_pressed_color", type_name, pressed)
+	theme.set_color("icon_focus_color", type_name, hover)
+	theme.set_color("icon_disabled_color", type_name, disabled)
+	theme.set_constant("icon_max_width", type_name, max_width)
+	theme.set_constant("h_separation", type_name, 12)
 
 
 static func _register_label_variant(theme: Theme, type_name: String, color: Color, font_size: int,
@@ -122,6 +148,21 @@ static func build() -> Theme:
 		GOLD_HI,
 		GOLD_TEXT, GOLD_TEXT, Color("#0d0a04"), Color("#7a6f57"),
 		18)
+	# 金底上的图标压深色，否则白图标在金色上糊成一片。
+	_register_icon_colors(theme, "PrimaryButton", GOLD_TEXT, GOLD_TEXT, Color("#0d0a04"), Color("#7a6f57"), 20)
+
+	# 主导航条：全宽深蓝钢条。常态暗、悬停亮、选中（toggle）整圈金边 ——
+	# 靠 ButtonGroup 保证同时只有一项被选中。
+	# 圆角收到 4：比次级按钮的 6 更方，读作"机台按键"而不是网页按钮。
+	_register_button_variant(theme, "NavButton",
+		_padded(PLATE_HI, EDGE, 1, 16.0, 12.0, 4),
+		_padded(BLUE, EDGE_HI, 1, 16.0, 12.0, 4),
+		_padded(BLUE_LO, GOLD, 2, 16.0, 12.0, 4),
+		_padded(PLATE_LO, EDGE_LO, 1, 16.0, 12.0, 4),
+		CYAN,
+		TEXT, Color("#ffffff"), GOLD_HI, TEXT_FAINT,
+		17)
+	_register_icon_colors(theme, "NavButton", TEXT_DIM, Color("#ffffff"), GOLD_HI, TEXT_FAINT, 20)
 
 	# 次级操作：深蓝钢。
 	_register_button_variant(theme, "SecondaryButton",
@@ -153,15 +194,33 @@ static func build() -> Theme:
 		TEXT, TEXT, GOLD, TEXT_FAINT,
 		14)
 
-	# 模式卡片：比槽位大一号，选中态用金色左边条 + 亮底。
+	# 模式卡片：比槽位大一号，选中态用金边 + 亮底。主菜单右侧改成 2×2 大卡，
+	# 所以内边距给足，文字左对齐（居中会跟下方规则说明错开）。
 	_register_button_variant(theme, "ModeCard",
-		_padded(PLATE_HI, EDGE, 1, 14.0, 11.0),
-		_padded(BLUE, EDGE_HI, 1, 14.0, 11.0),
-		_padded(BLUE, GOLD, 2, 14.0, 11.0),
-		_padded(PLATE_LO, EDGE_LO, 1, 14.0, 11.0),
+		_padded(PLATE_HI, EDGE, 1, 16.0, 14.0, 4),
+		_padded(BLUE, EDGE_HI, 1, 16.0, 14.0, 4),
+		_padded(BLUE, GOLD, 2, 16.0, 14.0, 4),
+		_padded(PLATE_LO, EDGE_LO, 1, 16.0, 14.0, 4),
 		GOLD_HI,
-		TEXT, TEXT, GOLD, TEXT_FAINT,
-		17)
+		TEXT, TEXT, GOLD_HI, TEXT_FAINT,
+		19)
+
+	# 页面外板：右栏承载"选择玩法 / 对局设置 / 玩法说明 / 继续游戏"。
+	# 内边距比普通 PanelContainer 大，页面才有"一整屏"的呼吸感。
+	theme.set_type_variation("PagePanel", "PanelContainer")
+	theme.set_stylebox("panel", "PagePanel", _padded(Color("#0d151d"), EDGE, 1, 22.0, 18.0, 8))
+
+	# 摘要小卡：主菜单左下角三格（玩法 / 地图 / 画质）。
+	theme.set_type_variation("CardPanel", "PanelContainer")
+	theme.set_stylebox("panel", "CardPanel", _padded(PLATE_HI, EDGE, 1, 9.0, 8.0, 4))
+
+	# 通栏状态条：只有上缘一条线，不四边描边。
+	theme.set_type_variation("FooterPanel", "PanelContainer")
+	theme.set_stylebox("panel", "FooterPanel", _top_rule(Color("#080f15"), EDGE, 1, 8.0, 3.0))
+
+	# 预览台左下的"对战预览"浮标：压在机器下缘上，所以要半透明。
+	theme.set_type_variation("ChipPanel", "PanelContainer")
+	theme.set_stylebox("panel", "ChipPanel", _padded(Color(0.03, 0.06, 0.09, 0.82), Color(CYAN, 0.35), 1, 10.0, 7.0, 4))
 
 	# ------------------------------------------------------------ OptionButton
 	# OptionButton 是 Button 的子类，但主题里必须单独注册，不会继承变体。
@@ -194,5 +253,30 @@ static func build() -> Theme:
 	_register_label_variant(theme, "ValueLabel", TEXT, 15)
 	_register_label_variant(theme, "StageCaptionLabel", TEXT_DIM, 13)
 	_register_label_variant(theme, "ModeTipLabel", TEXT_DIM, 13)
+
+	# 品牌锁形：中文主标走金属金字 + 深描边，拉丁副标拉开字距压在绶带下方。
+	_register_label_variant(theme, "LogoWordLabel", Color("#ffe9a8"), 38, 9, Color("#04070b"))
+	_register_label_variant(theme, "LogoLatinLabel", Color("#eef5fb"), 15, 4, Color("#04070b"))
+	_register_label_variant(theme, "LogoKickerLabel", Color("#8fb4cf"), 10, 2, Color("#04070b"))
+
+	# 左栏辅助文字
+	_register_label_variant(theme, "TaglineLabel", Color("#d5e4f2"), 13)
+	_register_label_variant(theme, "SummaryCaptionLabel", TEXT_FAINT, 10)
+	_register_label_variant(theme, "SummaryValueLabel", TEXT, 13)
+
+	# 右侧页面
+	_register_label_variant(theme, "PageHeadLabel", Color("#e8f2fb"), 22, 4, Color("#05080c"))
+	_register_label_variant(theme, "FieldCaptionLabel", TEXT_DIM, 14)
+	_register_label_variant(theme, "HelpHeadLabel", GOLD, 15)
+	_register_label_variant(theme, "HelpBodyLabel", TEXT_DIM, 14)
+
+	# 预览台浮标
+	_register_label_variant(theme, "ChipTitleLabel", GOLD, 11)
+	_register_label_variant(theme, "ChipDescLabel", Color("#a9c2d6"), 11)
+	_register_label_variant(theme, "ChipTagLabel", Color("#7fa8c4"), 10)
+
+	# 通栏状态条
+	_register_label_variant(theme, "FooterLabel", Color("#8ea7bc"), 12)
+	_register_label_variant(theme, "FooterStrongLabel", Color("#c8dced"), 12)
 
 	return theme

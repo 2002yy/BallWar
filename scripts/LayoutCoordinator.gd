@@ -262,65 +262,66 @@ static func _calculate_roulette(grid_size: int, viewport_size: Vector2, is_mobil
 	stage_y = clampf(stage_y, 92.0, 126.0)
 	return Rect2(Vector2((viewport_size.x - stage_size.x) * 0.5, stage_y), stage_size)
 
-# PreviewScene 的内容包围盒：X 从 -364 到 356，Y 从 -170 到 240。
-# 这两个常数只用于把预览台居中，不参与任何战场坐标换算 —— 战场坐标仍然
-# 只在 Main / 模拟层里算，菜单只摆放一张已经画好的节点树。
-const START_MENU_PREVIEW_CONTENT := Vector2(720.0, 410.0)
-const START_MENU_PREVIEW_CONTENT_CENTER := Vector2(-4.0, 35.0)
+# PreviewScene 的内容包围盒：机身 672×540（含上下仪表带、左右散热带、
+# 四控制仓、四炮台），节点原点就是机身中心。这两个常数只用于把预览台居中，
+# 不参与任何战场坐标换算 —— 战场坐标仍然只在 Main / 模拟层里算。
+const START_MENU_PREVIEW_CONTENT := Vector2(672.0, 540.0)
+const START_MENU_PREVIEW_CONTENT_CENTER := Vector2.ZERO
 
 
 static func _calculate_start_menu_layout(viewport_size: Vector2, is_mobile: bool) -> Dictionary:
-	# 主菜单 = 一块机械控制台：左侧约 30% 操作区，右侧约 70% 战场预览台。
+	# 主菜单 = 一块机械控制台，整屏利用率优先。
 	#
-	# 面板随视口长，但有上下限：1120×720 上是 963×634，4K 上到 1400×820 就停。
-	# 不设上限会让一块卡片飘在大画布正中；不随视口长则 4K 下登录面板小得像缩略图。
-	var root_panel_size := Vector2(
-		clampf(viewport_size.x * 0.86, 960.0, 1400.0),
-		clampf(viewport_size.y * 0.88, 600.0, 820.0)
-	)
-	root_panel_size.x = minf(root_panel_size.x, viewport_size.x - 48.0)
-	root_panel_size.y = minf(root_panel_size.y, viewport_size.y - 36.0)
-	var vertical_offset: float = 6.0 if is_mobile else 8.0
-	var root_panel_pos := Vector2(
-		(viewport_size.x - root_panel_size.x) * 0.5,
-		clampf(
-			(viewport_size.y - root_panel_size.y) * 0.5 + vertical_offset,
-			12.0,
-			maxf(12.0, viewport_size.y - root_panel_size.y - 12.0)
-		)
-	)
+	# 旧的算法把面板缩到视口的 86%×88% 并夹在 1400×820 以内，结果 1120×720 上
+	# 四边各留 78px 纯黑，中心棋盘只剩 291px —— 读作"飘在背景上的一张卡片"，
+	# 而不是一台占满屏幕的机器。现在外留白只留一圈机框：桌面 26px、手机 14px，
+	# 面板直接等于视口减两倍留白，不再设上限。
+	var outer_margin: float = 14.0 if is_mobile else 26.0
+	outer_margin = clampf(outer_margin, 8.0, minf(viewport_size.x, viewport_size.y) * 0.06)
+	var panel_size := (viewport_size - Vector2(outer_margin, outer_margin) * 2.0).max(Vector2(480.0, 360.0))
+	panel_size.x = minf(panel_size.x, viewport_size.x - outer_margin * 2.0)
+	panel_size.y = minf(panel_size.y, viewport_size.y - outer_margin * 2.0)
 
-	# 双栏：内边距 → 30% 操作区 → 缝 → 70% 预览台。
-	# 下边距比上边距大：操作区最后一行是状态栏/版本号，贴着钢板底边会看起来被切掉。
-	var columns_margin := Vector2(22.0, 18.0)
-	var columns_margin_bottom: float = 22.0 if is_mobile else 30.0
-	var column_gap: float = 12.0 if is_mobile else 18.0
+	var pad: float = 14.0 if is_mobile else 16.0
+	var footer_h: float = 22.0 if is_mobile else 26.0
+	var footer_gap: float = 8.0
 	var inner := Vector2(
-		root_panel_size.x - columns_margin.x * 2.0,
-		root_panel_size.y - columns_margin.y - columns_margin_bottom
+		maxf(320.0, panel_size.x - pad * 2.0),
+		maxf(240.0, panel_size.y - pad * 2.0)
 	)
-	var action_width: float = clampf(round(inner.x * 0.30), 248.0, 420.0)
-	var stage_width: float = maxf(220.0, inner.x - action_width - column_gap)
-	var action_column_rect := Rect2(Vector2.ZERO, Vector2(action_width, inner.y))
-	var stage_rect := Rect2(Vector2(action_width + column_gap, 0.0), Vector2(stage_width, inner.y))
+	# 双栏之上再切一条通栏状态条：版本号、操作提示、平台说明都归它，
+	# 不再挤在左栏最底部（那正是旧版左下角空一大块的原因之一）。
+	var columns_h: float = maxf(200.0, inner.y - footer_h - footer_gap)
 
-	# 预览台内部再切出监控窗：上面留表头（阵营色标），下面留表脚（刻度条）。
-	var header_height: float = 30.0 if is_mobile else 36.0
-	var footer_height: float = 26.0 if is_mobile else 32.0
-	var side_pad: float = 12.0 if is_mobile else 16.0
+	# 左栏约 30%，右栏吃掉剩下的全部。不设 1400 上限之后这里不用再防"太宽"。
+	var action_width: float = clampf(round(inner.x * 0.30), 248.0, 420.0)
+	var column_gap: float = 12.0 if is_mobile else 16.0
+	var stage_width: float = maxf(240.0, inner.x - action_width - column_gap)
+
+	var columns_rect := Rect2(Vector2(pad, pad), Vector2(inner.x, columns_h))
+	var footer_rect := Rect2(
+		Vector2(pad, pad + columns_h + footer_gap),
+		Vector2(inner.x, footer_h)
+	)
+	var action_column_rect := Rect2(Vector2.ZERO, Vector2(action_width, columns_h))
+	var stage_rect := Rect2(Vector2(action_width + column_gap, 0.0), Vector2(stage_width, columns_h))
+
+	# 预览台内部：表头放标题，底部只留一条细刻度（全局状态条已经承担了版本号）。
+	var header_height: float = 30.0 if is_mobile else 34.0
+	var footer_height: float = 10.0 if is_mobile else 12.0
+	var side_pad: float = 8.0 if is_mobile else 10.0
 	var preview_size := Vector2(
 		maxf(80.0, stage_width - side_pad * 2.0),
-		maxf(60.0, inner.y - header_height - footer_height)
+		maxf(60.0, columns_h - header_height - footer_height)
 	)
 
-	# 预览缩放由监控窗决定，保证整张战场完整可见再留一点气口。
+	# 预览缩放由监控窗决定，保证整台机器完整可见再留一点气口。
 	var fit: float = minf(
 		preview_size.x / START_MENU_PREVIEW_CONTENT.x,
 		preview_size.y / START_MENU_PREVIEW_CONTENT.y
 	)
-	var preview_scale_value: float = clampf(fit * 0.97, 0.30, 1.05)
-	# 让内容包围盒的中心落在监控窗中心，而不是让节点原点落在中心：
-	# 这张预览的内容本来就不以原点对称，直接把原点放中心会歪。
+	var preview_scale_value: float = clampf(fit * 0.97, 0.30, 2.20)
+	# 内容包围盒以机身中心为原点，所以直接把原点放到监控窗中心即可。
 	var preview_center := Vector2(
 		preview_size.x * 0.5 - START_MENU_PREVIEW_CONTENT_CENTER.x * preview_scale_value,
 		preview_size.y * 0.5 - START_MENU_PREVIEW_CONTENT_CENTER.y * preview_scale_value
@@ -328,9 +329,14 @@ static func _calculate_start_menu_layout(viewport_size: Vector2, is_mobile: bool
 
 	return {
 		"shade_rect": Rect2(Vector2.ZERO, viewport_size),
-		"root_panel_rect": Rect2(root_panel_pos, root_panel_size),
-		"columns_margin": columns_margin,
-		"columns_margin_bottom": columns_margin_bottom,
+		"root_panel_rect": Rect2(Vector2(outer_margin, outer_margin), panel_size),
+		"outer_margin": outer_margin,
+		"panel_pad": pad,
+		"columns_rect": columns_rect,
+		"footer_rect": footer_rect,
+		"footer_height": footer_h,
+		"columns_margin": columns_rect.position,
+		"columns_margin_bottom": footer_h + footer_gap,
 		"column_gap": column_gap,
 		"action_column_rect": action_column_rect,
 		"stage_rect": stage_rect,

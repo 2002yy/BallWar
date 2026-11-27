@@ -35,6 +35,7 @@ const PAGES := {
 	"main": "main",
 	"mode": "mode",
 	"config": "config",
+	"help": "help",
 	"continue": "continue",
 }
 

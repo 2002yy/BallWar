@@ -1,23 +1,25 @@
 extends Control
 
-# 战场预览台的外框：监控窗式切削框 + 四角锁扣 + 阵营色标 + 底部刻度条。
+# 战场预览台的外框：监控窗式切削框 + 四角锁扣 + 表头分隔 + 底部刻度。
 #
 # 它画在 PreviewContainer 下面（同一父节点、先入树），所以中间那块留给
 # 真实战场预览，只有外圈这层是画出来的。这样"右侧 70% 是真实动态战场"
 # 不会被一张静态美术图顶替 —— 静态的只有框。
 #
+# 表头的文字不在这里画：标题和副标是场景里的原生 Label，由 StartMenu 按
+# 布局摆放。这里只负责分隔线、色标和刻度，避免"文字位置有两个来源"。
+#
 # header_height / footer_height / side_pad 由 StartMenu 从 LayoutCoordinator
-# 的 start_menu_layout 写进来，保证"框画在哪"和"预览放在哪"只有一个来源，
-# 不会两边各写一套数字然后慢慢漂移。
+# 的 start_menu_layout 写进来，保证"框画在哪"和"预览放在哪"只有一个来源。
 #
 # 纯展示层：不读也不写任何玩法状态。
 
 const MechThemeScript = preload("res://scripts/ui/MechTheme.gd")
 
-@export var corner_cut: float = 18.0
-@export var header_height: float = 36.0
-@export var footer_height: float = 32.0
-@export var side_pad: float = 16.0
+@export var corner_cut: float = 16.0
+@export var header_height: float = 34.0
+@export var footer_height: float = 12.0
+@export var side_pad: float = 10.0
 
 
 func _ready() -> void:
@@ -46,6 +48,13 @@ func _closed(points: PackedVector2Array) -> PackedVector2Array:
 	return out
 
 
+func _window_rect() -> Rect2:
+	return Rect2(
+		Vector2(side_pad, header_height),
+		Vector2(size.x - side_pad * 2.0, size.y - header_height - footer_height)
+	)
+
+
 func _draw() -> void:
 	if size.x < 24.0 or size.y < 24.0:
 		return
@@ -55,24 +64,17 @@ func _draw() -> void:
 	var plate: PackedVector2Array = _chamfer_rect(stage, cut)
 
 	draw_colored_polygon(plate, Color("#070d13"))
-	_draw_scanlines(cut)
+	_draw_scanlines()
 	draw_polyline(_closed(plate), MechThemeScript.EDGE, 2.0, true)
-	draw_polyline(_closed(_chamfer_rect(stage.grow(-6.0), cut * 0.8)), MechThemeScript.EDGE_LO, 1.0, true)
+	draw_polyline(_closed(_chamfer_rect(stage.grow(-7.0), cut * 0.8)), MechThemeScript.EDGE_LO, 1.0, true)
 
 	var window := _window_rect()
+	_draw_header_rule(window)
 	_draw_brackets(window)
-	_draw_header(window)
 	_draw_footer(window)
 
 
-func _window_rect() -> Rect2:
-	return Rect2(
-		Vector2(side_pad, header_height),
-		Vector2(size.x - side_pad * 2.0, size.y - header_height - footer_height)
-	)
-
-
-func _draw_scanlines(cut: float) -> void:
+func _draw_scanlines() -> void:
 	# 空域扫掠线：只在预览窗的空余处能看见，读作 CRT 监控窗，不干扰战场。
 	var window := _window_rect()
 	var y: float = window.position.y + 4.0
@@ -80,9 +82,26 @@ func _draw_scanlines(cut: float) -> void:
 		draw_line(
 			Vector2(window.position.x, y),
 			Vector2(window.position.x + window.size.x, y),
-			Color(MechThemeScript.CYAN, 0.030), 1.0
+			Color(MechThemeScript.CYAN, 0.026), 1.0
 		)
 		y += 6.0
+
+
+func _draw_header_rule(window: Rect2) -> void:
+	# 表头下缘：整条暗线 + 左端一段金色。金色段就是标题的"下划线"，
+	# 让标题区自己成立，不需要再画一个框。
+	var y: float = header_height - 1.0
+	draw_line(Vector2(window.position.x - 4.0, y), Vector2(window.position.x + window.size.x + 4.0, y),
+		Color(MechThemeScript.EDGE, 0.95), 1.0, true)
+	draw_line(Vector2(window.position.x - 4.0, y), Vector2(window.position.x + minf(148.0, window.size.x * 0.4), y),
+		Color(MechThemeScript.GOLD, 0.9), 2.0, true)
+
+	# 右上角三格"窗口刻度"，读作机器上的档位标记。
+	var right: float = window.position.x + window.size.x + 2.0
+	for i in range(3):
+		var x: float = right - 4.0 - float(i) * 11.0
+		draw_rect(Rect2(Vector2(x - 6.0, 12.0), Vector2(6.0, 6.0)),
+			Color(MechThemeScript.EDGE_HI, 0.75 if i == 0 else 0.4), true)
 
 
 func _draw_brackets(window: Rect2) -> void:
@@ -108,42 +127,23 @@ func _draw_brackets(window: Rect2) -> void:
 		)
 
 
-func _draw_header(window: Rect2) -> void:
-	# 阵营色标：和 PreviewScene 里四个炮台的颜色一一对应，让观众先认出这是
-	# 四阵营战场，而不是一块抽象方块。
-	var colors: Array = [
-		MechThemeScript.FACTION_RED,
-		MechThemeScript.FACTION_YELLOW,
-		MechThemeScript.FACTION_GREEN,
-		MechThemeScript.FACTION_BLUE,
-	]
-	var x: float = window.position.x + 4.0
-	var y: float = header_height * 0.5
-	for c in colors:
-		draw_rect(Rect2(Vector2(x, y - 4.0), Vector2(9.0, 9.0)), c, true)
-		draw_rect(Rect2(Vector2(x, y - 4.0), Vector2(9.0, 9.0)), Color(0, 0, 0, 0.55), false, 1.0)
-		x += 15.0
-
-	# 右侧状态刻线：三短一长，读作"信号在线"，纯装饰。
-	var right: float = window.position.x + window.size.x - 4.0
-	draw_line(Vector2(right - 54.0, y), Vector2(right - 20.0, y), Color(MechThemeScript.CYAN, 0.45), 2.0, true)
-	draw_line(Vector2(right - 14.0, y), Vector2(right, y), Color(MechThemeScript.GOLD, 0.55), 2.0, true)
-
-
 func _draw_footer(window: Rect2) -> void:
-	var y: float = window.position.y + window.size.y + 8.0
+	# 底部刻度条：每 1/12 一格，每三格加长。给下面那条通栏状态条一个过渡。
+	if footer_height < 6.0:
+		return
+	var y: float = window.position.y + window.size.y + 3.0
 	draw_line(
 		Vector2(window.position.x, y),
 		Vector2(window.position.x + window.size.x, y),
 		Color(MechThemeScript.EDGE, 0.9), 1.0, true
 	)
-	# 刻度：每 1/12 一格，中间几格加长。给底部留一条"仪表盘"的底噪。
 	var ticks: int = 12
+	var steps: float = float(ticks)
 	for i in range(ticks + 1):
-		var tx: float = window.position.x + window.size.x * float(i) / float(ticks)
+		var tx: float = window.position.x + window.size.x * float(i) / steps
 		var long: bool = i % 3 == 0
 		draw_line(
-			Vector2(tx, y + 2.0),
-			Vector2(tx, y + (9.0 if long else 5.0)),
-			Color(MechThemeScript.EDGE_HI, 0.7 if long else 0.35), 1.0, true
+			Vector2(tx, y + 1.0),
+			Vector2(tx, y + (5.0 if long else 3.0)),
+			Color(MechThemeScript.EDGE_HI, 0.7 if long else 0.32), 1.0, true
 		)

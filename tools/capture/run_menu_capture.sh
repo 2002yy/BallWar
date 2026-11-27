@@ -70,7 +70,8 @@ run_capture() {
 	return 0
 }
 
-ALL_PAGES="main,mode,config,continue"
+# 四页是用户裁定的验收截图；玩法说明是本轮新增的导航项，一起拍进去供复核。
+ALL_PAGES="main,mode,config,help,continue"
 fail=0
 echo "out : $OUT"
 
