@@ -1,5 +1,9 @@
 # README v2.0.3 — Test Audit
 
+> **Historical record / 历史记录**：本文件描述 `v2.0.3`（2026-05-04）的测试状态，不作为当前依据。
+> 当时的 3 脚本分工已扩为 12 个 runner；文末运行命令里的 `C:\Users\96967\...`、`E:\Godot\...` 是旧环境路径，不可直接复制。
+> 当前测试真相见 [`../TESTING.md`](../TESTING.md)。
+
 日期: 2026-05-04 (final, verified 107/107 PASS)
 
 ## 修复记录

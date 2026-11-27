@@ -1,7 +1,16 @@
 # AI_HANDOFF_CURRENT
 
-Last updated: 2026-11-20
+Last updated: 2026-11-27
 Role / 作用: handoff card only / 仅作快速接管卡片
+
+### 2026-11-27 Docs/source fact consistency / 文档与源码一致性收口
+
+- **已纠正的错误声明**：`v2.1.10` 起文档声称“存档大小限制 1MB + 路径穿越过滤”。核对 `main@3153d11` 源码：两者**都不存在**（无 `get_length()`、无路径校验），也从未在 git 历史中出现过。`docs/SAVE_SYSTEM.md` 已改为逐项实测行为表，`CHANGELOG.md` v2.1.10 条目已改写并保留更正说明。
+- **路径不可外部控制（已核实，故不新增过滤层）**：路径来自 `Main.gd` 常量模板 `user://ballwar_save_slot_%d.save`，slot 被 `clampi(1..5)`；存档内容里的 `save_slot` 在 `Main.gd:501` 同样夹取。没有外部可控路径入口。
+- **版本门是前缀制**：接受 `1.9*` 与 `2.0*`，不是“必须等于当前 `2.0.0`”。哈希不一致与缺哈希均 fail-open（`ok: true`）。文档已按此改写。
+- **已知缺口（记录不修）**：读取无体积上限，异常大文件会在校验前被完整读入；`owners` 损坏时字段被丢弃、地图静默回落默认象限归属，不报错。加限制前须先测量真实高压存档大小。
+- `docs/ROADMAP.md` runner 数 10→12（与 CI matrix 一致）；删除“已补充 `ChamberBallPhysicsTestRunner.gd`”的表述——该文件不存在。
+- 本批未改玩法、存档 schema、UI，未新增任何安全功能。
 
 ### 2026-11-20 Legacy UI fallback retirement (candidate; CI pending)
 
@@ -58,13 +67,13 @@ Role / 作用: handoff card only / 仅作快速接管卡片
 ## 1. Current Version / 当前版本
 
 - Current line: `v2.1.x`
-- Latest documented milestone: `v2.1.9`
+- Latest Stable release: `v2.1.11.1`
+- Latest documented milestone: `v2.1.11.1` (stage notes in `docs/history/`)
 - Last stable structural baseline: `v2.1.4`
 - Current theme:
-  - settings system + result panel + statistics
-  - decor-layer event-driven cleanup
-  - chamber-state extraction
-  - repo entrance and history-doc cleanup
+  - UI hotfix release (complete)
+  - docs/source fact consistency pass (2026-11-27, complete)
+  - next: asset integration, audio pass, Android device layout
 
 ## 2. Current Status / 当前状态
 

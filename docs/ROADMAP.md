@@ -64,7 +64,7 @@ This file is the single place for project direction and phase status.
 ### Public repository hardening / 公开仓库收口
 
 - README 顶部重构：面向玩家/招聘官，30 秒看懂项目价值
-- GitHub Actions CI workflow：validate + 10 测试并行 matrix，日志 artifact
+- GitHub Actions CI workflow：validate + 12 个 runner 分两批并行，日志 artifact
 - Android 导出脚本去本机绝对路径（`$PSScriptRoot` 相对路径）
 - `export_presets.cfg` 三处不对齐修复（preset 名称、script_export_mode、version）
 - 版本叙事三处统一（README / CHANGELOG / Releases 页面）
@@ -80,7 +80,7 @@ This file is the single place for project direction and phase status.
 ### Chamber refactor phase 2 / 控制仓第二阶段拆分
 
 - 当前已完成状态外提与 `ChamberBallPhysics.gd` 初步拆分
-- 配套补充 `ChamberBallPhysicsTestRunner.gd`
+- 尚未补充 `ChamberBallPhysicsTestRunner.gd`（当前无该文件，物理拆分靠 Smoke/Integration 间接覆盖）
 - 后续再继续拆出几何、绘制和保存适配边界
 
 ### Public repo hygiene / 公开仓库整理
@@ -125,7 +125,7 @@ This file is the single place for project direction and phase status.
 - `docs/ARCHITECTURE.md`
   - 系统分层、归属规则、架构原则
 - `docs/TESTING.md`
-  - 10 个测试 runner、分类说明、运行建议
+  - 12 个测试 runner、分类说明、运行建议
 - `docs/PERFORMANCE.md`
   - 性能探针概览与基线摘要
 - `docs/SAVE_SYSTEM.md`
