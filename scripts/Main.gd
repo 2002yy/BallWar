@@ -590,6 +590,17 @@ func _add_ball_to_chamber(faction_id: int) -> void:
 func _on_ball_count_changed(faction_id: int, _count: int) -> void:
 	_refresh_add_ball_button(faction_id)
 
+func _buy_lucky_blast(faction_id: int) -> int:
+	if runtime.reserve_economy == null or runtime.battlefield == null or is_game_over:
+		return 0
+	var chamber: ControlChamber = runtime.chambers.get(faction_id)
+	if chamber == null or chamber.is_damaged:
+		return 0
+	var changed: int = runtime.reserve_economy.try_buy_lucky_blast(faction_id, runtime.battlefield)
+	if changed > 0:
+		_show_center_banner("幸运爆炸", "夺取 %d 格领土" % changed, GameConfig.faction_color(faction_id), true)
+	return changed
+
 func _refresh_add_ball_button(faction_id: int) -> void:
 	GameHudView.refresh_add_ball_button(faction_id, _ui_runtime_ref("add_ball_buttons", {}), runtime.chambers)
 
