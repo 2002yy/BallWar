@@ -3,7 +3,7 @@
 A **Godot 4.7 + GDScript** 2D territory-control arcade prototype — four factions fight for grid dominance in a chaotic bullet arena.
 一个基于 **Godot 4.7 + GDScript** 的 2D 四阵营领土争夺街机原型。
 
-**Engine:** Godot 4.7 · **Language:** GDScript · **Tests:** 12 runners · GitHub Actions CI · **Platforms:** Windows / Android
+**Engine:** Godot 4.7 · **Language:** GDScript · **Tests:** 14 runners · GitHub Actions CI · **Platforms:** Windows / Android
 
 4.7迁移使用4.7.1验证；导出模板必须匹配4.7.x，不能复用4.6模板。当前迁移/设置验证见 `docs/technical/AI_HANDOFF_CURRENT.md`。
 

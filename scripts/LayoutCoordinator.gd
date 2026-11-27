@@ -203,16 +203,21 @@ static func _calculate_hud_positions(
 		)
 	)
 
-	var settings_panel_size: Vector2 = Vector2(278.0, 92.0) if is_mobile else Vector2(286.0, 96.0)
+	# Tall enough for the three volume rows added in A4. The panel hangs below the
+	# exit button, so the size is bounded by the viewport height rather than by a
+	# fixed constant.
+	var settings_panel_size: Vector2 = Vector2(278.0, 236.0) if is_mobile else Vector2(300.0, 244.0)
 	var exit_button_pos: Vector2 = side_button_positions.get("exit", Vector2.ZERO)
 	var settings_panel_x: float = clampf(
 		exit_button_pos.x - settings_panel_size.x + side_button_size.x,
 		SAFE_MARGIN,
 		viewport_size.x - settings_panel_size.x - SAFE_MARGIN
 	)
+	var settings_panel_top: float = exit_button_pos.y + side_button_size.y + 10.0
+	var settings_panel_height: float = minf(settings_panel_size.y, viewport_size.y - settings_panel_top - SAFE_MARGIN)
 	var settings_panel_rect := Rect2(
-		Vector2(settings_panel_x, exit_button_pos.y + side_button_size.y + 10.0),
-		settings_panel_size
+		Vector2(settings_panel_x, settings_panel_top),
+		Vector2(settings_panel_size.x, maxf(settings_panel_height, 120.0))
 	)
 
 	var event_log_rect := Rect2(

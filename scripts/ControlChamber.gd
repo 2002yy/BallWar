@@ -8,6 +8,10 @@ const ChamberSaveAdapterScript = preload("res://scripts/ChamberSaveAdapter.gd")
 
 signal release_requested(faction_id, bullet_count, chamber)
 signal ball_count_changed(faction_id, count)
+# Presentation events. Same rule as Turret.damaged: emitted after the state
+# change, carrying no handle the simulation could read back.
+signal ball_landed(faction_id, ball_count)
+signal gate_multiplier_applied(faction_id, multiplier, pending)
 
 const CONTROL_BALL_RADIUS: float = 5.4
 const PEG_RADIUS: float = 7.0
@@ -188,6 +192,10 @@ func _add_control_ball_internal(should_emit_ball_count_signal: bool) -> bool:
 	_relaunch_control_ball(ball)
 	if should_emit_ball_count_signal:
 		ball_count_changed.emit(faction_id, balls.size())
+		# The silent path is the one ball the match starts with; it must stay
+		# silent, otherwise every match opens with a drop sound before the
+		# player has done anything.
+		ball_landed.emit(faction_id, balls.size())
 		_update_label()
 	return true
 
@@ -499,8 +507,10 @@ func _physics_process(delta: float) -> void:
 				pass
 
 func _on_left_gate(ball) -> void:
-	pending_count = clampi(pending_count * GameConfig.get_gate_multiplier(), 1, GameConfig.get_max_pending_count())
+	var gate_multiplier: int = GameConfig.get_gate_multiplier()
+	pending_count = clampi(pending_count * gate_multiplier, 1, GameConfig.get_max_pending_count())
 	_update_label()
+	gate_multiplier_applied.emit(faction_id, gate_multiplier, pending_count)
 	_relaunch_control_ball(ball)
 
 func _on_right_gate(ball) -> void:

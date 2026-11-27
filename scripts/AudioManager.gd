@@ -1,9 +1,10 @@
 extends Node
 class_name AudioManager
 
-# Presentation-only audio. Nothing here may influence simulation: it is fed by
-# signals and by one read-only poll of a public visual timer, and it never writes
-# back into gameplay state.
+# Presentation-only audio. Nothing here may influence simulation: it subscribes
+# to PresentationEvents, which Main fills from simulation signals, and it never
+# writes back into gameplay state. There is no polling of gameplay or visual
+# state anywhere in this file.
 #
 # Buses are created here instead of in project.godot so the audio graph is
 # reviewable in one place and the project file stays untouched.
@@ -18,6 +19,17 @@ const SFX_BUS := "SFX"
 const MUSIC_BUS := "Music"
 
 const POOL_SIZE := 8
+
+# Event name (PresentationEvents) -> sound kind. This table is the extension
+# point: a new mechanic adds its event and one line here, and nothing else in
+# the audio path changes.
+const KIND_BY_EVENT := {
+	"released": "release",
+	"damaged": "hit",
+	"destroyed": "destroy",
+	"ball_landed": "ball_land",
+	"multiplier_applied": "multiplier",
+}
 
 # Per-kind minimum spacing in milliseconds. Dense bursts collapse into one sound
 # instead of turning into noise, and the CPU cost stays flat.
@@ -72,6 +84,7 @@ var _enabled: bool = true
 # Own RNG stream. Drawing from the global one would shift the sequence that
 # Bullet's hit-check jitter depends on, i.e. audio would change the match.
 var _rng := RandomNumberGenerator.new()
+var _events = null
 
 
 func _ready() -> void:
@@ -123,6 +136,77 @@ func _apply_sfx_lowpass() -> void:
 
 func set_enabled(value: bool) -> void:
 	_enabled = value
+	if not value:
+		# Muting has to be immediate: sounds already in flight would otherwise
+		# keep playing for up to a second after the switch.
+		stop_all()
+
+
+# Pausing the match must not leave a tail of battle sounds ringing, and it must
+# not queue anything up either - events are played immediately, so there is
+# nothing to drain on resume.
+func on_pause_changed(paused: bool) -> void:
+	if paused:
+		stop_all()
+
+
+func stop_all() -> void:
+	for player in _pool:
+		if player != null and player.playing:
+			player.stop()
+
+
+# Bind once, from the composition root. Consumers receive normalised events and
+# never reach into simulation nodes.
+#
+# One handler per signal rather than a bound name argument: Callable.bind()
+# appends the bound values *after* the signal's own arguments, so a single
+# generic handler would read the event name from the wrong position whenever the
+# signal's arity differs from 3.
+func bind_presentation(events) -> void:
+	if events == null or _events == events:
+		return
+	_events = events
+	_connect_once(events.released, Callable(self, "_on_released"))
+	_connect_once(events.damaged, Callable(self, "_on_damaged"))
+	_connect_once(events.destroyed, Callable(self, "_on_destroyed"))
+	_connect_once(events.ball_landed, Callable(self, "_on_ball_landed"))
+	_connect_once(events.multiplier_applied, Callable(self, "_on_multiplier_applied"))
+
+
+func _connect_once(sig: Signal, cb: Callable) -> void:
+	if not sig.is_connected(cb):
+		sig.connect(cb)
+
+
+func _on_released(_faction_id = null, _count = null) -> void:
+	_play_event("released")
+
+
+func _on_damaged(_faction_id = null, _amount = null) -> void:
+	_play_event("damaged")
+
+
+func _on_destroyed(_faction_id = null) -> void:
+	_play_event("destroyed")
+
+
+func _on_ball_landed(_faction_id = null, _ball_count = null) -> void:
+	_play_event("ball_landed")
+
+
+func _on_multiplier_applied(_faction_id = null, _multiplier = null, _pending = null) -> void:
+	_play_event("multiplier_applied")
+
+
+func _play_event(event_name: String) -> void:
+	play(String(KIND_BY_EVENT.get(event_name, event_name)))
+
+
+func event_counts() -> Dictionary:
+	if _events != null and _events.has_method("snapshot"):
+		return _events.snapshot()
+	return {}
 
 
 # Volumes are linear 0..1. Master scales everything through the bus graph; the

@@ -1,0 +1,196 @@
+# A4 音频层 — 实现与验收报告
+
+最后更新：2026-11-27
+范围：`feat/audio-a4`（PR #30）。只做表现层；不改玩法、不改存档 schema、不重构模拟内核。
+
+---
+
+## 1. 结论摘要
+
+| 项 | 结果 |
+|---|---|
+| 单向表现事件层 | 已实现，`Main` 持有 `PresentationEvents`，音频订阅；表现层无任何回写路径 |
+| 五类音效接入 | release / hit / destroy / multiplier / ball_land 全部接在**真实来源信号**上，无轮询 |
+| 三个音量滑块 | 主/音效/音乐，拖动即时生效（不发存档写），停止拖动 0.35 s 后落盘 |
+| 音频是否引入模拟分歧 | **在固定 tick 率、同种子下 3600 tick 逐 tick 一致**（三种音频臂互比），且音频不消耗全局随机流 |
+| 单次发声成本 | 约 0.48 ms（Ogg playback 实例化）；被节流拒绝的调用约 0.0004 ms |
+| 帧时间对照 | 音频开/关差异（p50 0.31 ms、p95 1.11 ms）**小于同版本重复运行的离散度**，本机无法分辨 |
+| 原始音效资源 | 5 个 ogg 文件零改动（`git status assets/` 为空），所有调整都在播放期施加 |
+| 已知缺口 | `damaged` / `destroyed` 在**现有规则下实战不可达**（详见 §5），属玩法问题，未在本分支修复 |
+
+---
+
+## 2. 架构：表现层只消费
+
+```
+Turret.damaged / destroyed ─┐
+ControlChamber.release_requested / ball_landed / gate_multiplier_applied ─┤
+                                                                          ↓
+                                                          Main（组合根，只做转发）
+                                                                          ↓
+                                              PresentationEvents（单向广播，无返回值）
+                                                                          ↓
+                                              AudioManager（订阅；以后 FX / HUD 同样订阅）
+```
+
+- `PresentationEvents` 上每个 `emit_*` 返回 `void`，除 `counts` 计数器外不携带任何模拟可读状态；`counts` 只为测试证明"事件确实发生过"（音频可以因为节流或静音合法地不响，所以播放次数不能当作事件证据）。
+- 扩展方式是**加一个信号 + 加一条转发 + 在 `KIND_BY_EVENT` 表里加一行**，不是预写一堆没有调用方的接口。当前只实现已有的五个事件。
+- `AudioManager` 彻底删除了原先对 `damage_flash` 之类的**轮询**，改为纯信号驱动。
+
+`Callable.bind()` 会把绑定参数追加在信号参数**之后**，所以"一个通用 handler + 绑定事件名"在参数个数不等于 3 时读到的是错位的值 —— 因此每个信号各有一个显式 handler。
+
+---
+
+## 3. 五类音效（数值由 `tools/tests/audio_sfx_table.gd` 从运行时读出）
+
+默认主音量 0.70、音效 0.55，两者相乘 → 母线 −8.29 dB；每类再叠加各自的 trim：
+
+| 事件 | 文件 | 时长 | trim | 实际增益 | 节流 |
+|---|---|---|---|---|---|
+| released | bullet_fire_retro_01.ogg | 0.533 s | −9.0 dB | −17.29 dB | 95 ms |
+| damaged | chamber_gate_bong_01.ogg | 0.123 s | −7.0 dB | −15.29 dB | 130 ms |
+| destroyed | turret_destroy_explosion_01.ogg | 1.840 s | −3.0 dB | −11.29 dB | 140 ms |
+| multiplier_applied | chamber_gate_pluck_01.ogg | 0.102 s | −6.0 dB | −14.29 dB | 120 ms |
+| ball_landed | chamber_gate_drop_01.ogg | 0.110 s | −6.0 dB | −14.29 dB | 70 ms |
+
+另外两条全局处理：SFX 母线上一个 5200 Hz 低通（`SFX_LOWPASS_HZ`，设 0 即关闭），音高抖动 ±5%（`PITCH_JITTER`，走**私有** `RandomNumberGenerator`）。
+
+`destroyed` 音效 1.84 s 是探针里"结算画面 1700 ms 后彻底安静"的来源，不是循环播放。
+
+> 这五个文件是短促的一次性样本。是否"够不够响/还刺不刺耳"需要人耳判断，本报告只给出可复核的数值，不代替试听。
+
+---
+
+## 4. 验证证据
+
+四条独立证据，各自回答不同问题。缺任何一条结论都不完整。
+
+### 4.1 音频不改变模拟（`tools/tests/run_audio_determinism.sh`）
+
+固定 `--fixed-fps 60`、同种子、三个音频臂，逐 tick 比较模拟摘要：
+
+| 比较 | 含义 | 结果 |
+|---|---|---|
+| on_a vs on_b | 同版本重复运行（离散度地板） | 一致 |
+| on_a vs none_a | 音频节点整个释放，事件总线无订阅者 | 一致 |
+| on_a vs off_a | 静音，但事件与节流代码仍在跑 | 一致 |
+| on_a vs seedctl | **阳性对照**：换种子必须分歧 | 在 tick 0 分歧 ✓ |
+
+60 秒运行数据：`on` 臂发声 23 次、游戏发出 58 个事件；`off` / `none` 臂发声 0 次、同样 58 个事件。3600 个 tick 全部一致。
+
+- "换种子在 tick 0 就分歧"是合理的：控制仓小球初始位置和速度由种子决定，tick 0 就已经不同。这条对照的作用是证明**比较器不是瞎的** —— 没有它，上面三条"一致"可能只是比较器什么都没比。
+- 为什么只证到这一步：模拟目前仍混入墙钟量（由 #25 / #28 负责），因此不能声称"任意帧率下确定"。本报告只声称**音频没有引入新的分歧**，这也是本项验收的范围。
+
+### 4.2 音频不偷模拟随机数（`scripts/tests/AudioIsolationTestRunner.gd`，已进 CI 套件）
+
+`Bullet.gd` 用**全局** RNG 播种命中检测抖动，控制仓与事件轮盘同理。表现层只要多取一个全局随机数，后面每一个抽取都会错位，比赛随之改变。因此 `AudioManager` 持有**私有** `RandomNumberGenerator`。
+
+这条分成两块证据，各自说清自己是什么：
+
+- **静态护栏（本测试）**：扫描 `scripts/AudioManager.gd` 与 `scripts/presentation/*.gd`，断言不含裸的 `randf(` / `randi(` / `randf_range(` / `randi_range(` / `randomize(` / `seed(`。扫描前先剥掉注释与字符串，否则文档里提到 `randf()` 会被误报。带三条阳性对照：裸 `randf_range` 必须被抓到、`_rng.randf_range` 必须不被抓、`my_rng.randi()` 必须不被抓 —— 没有这些对照，"零命中"可能只是扫描器什么都不匹配。
+- **运行时证据（4.1 的对照）**：如果音频真的取了全局随机数，`Bullet` 的抖动序列会错位，`on` 臂的逐 tick 摘要必然在早期就分歧。实测 3600 tick 与 `none` / `off` 臂完全一致，所以运行时层面这条也成立。
+
+为什么不在这个测试里做"跑音频再看随机序列"的运行时版本：无头运行中一旦真的启动 Ogg 播放，引擎退出时会报 `resources still in use at exit`，而且是否出现取决于混音线程时序（本机实测两种结果都出现过）。CI 脚本把 `^ERROR:` 视为失败，这种偶发告警会让测试变成噪声。真实播放交给不进 CI 的 `audio_lifecycle_probe.gd`。**静态护栏比运行时证明弱**，这里按弱的方式陈述，不假装它是运行时证据。
+
+同一次测试还验证（B/C 两条，均带阳性对照）：对一局真实比赛连发 120 个表现事件，模拟签名（炮塔血量/爆发状态、控制仓计数、子弹坐标、事件轮盘状态、地图归属哈希）前后**完全相同**，且总线确实记下了全部 120 个事件；阳性对照 `take_damage(1)` 必须让签名变化。C 另外确认 `snapshot()` 返回副本，调用方改不动内部计数器。
+
+
+### 4.3 生命周期（`tools/tests/audio_lifecycle_probe.gd`，35 项 0 失败）
+
+驱动**正式** `Main.tscn`，走菜单同一条开局路径：
+
+- 真实玩法触发：release / ball_landed / multiplier_applied 各自在实战中触发并首次出现时间被记录（0.21 s / 2.04 s / 1.86 s）
+- 暂停 → 池内无残留播放；恢复 → 可继续
+- 静音 → 事件继续产生但**不排任何声音**（两侧都断言，避免"静音等于没测试"）
+- 再来一局 → 信号连接数不翻倍（只数**特定回调**，`release_requested` 本来就有第二个 Main 监听器）、计数器清零
+- **结算**：击毁 3 座炮塔 → `is_game_over`、胜利文案可见、`destroyed` 事件数+3、最后一次击杀有爆炸声、子弹清空、画面在 1700 ms 内自然安静且不再起新声、结算后音频仍可用、再来一局后旧胜利文案不残留
+
+### 4.4 稳定性回归
+
+`tools/tests/run_headless_suite.sh` 现在跑 14 个 runner（原 13 + `AudioIsolationTestRunner`），每个 runner 一个一次性 `APPDATA`，全部 exit 0 且无 `SCRIPT ERROR` / `ERROR` / `FAIL`。
+
+> 注意：**不要**用 `tools/run-win.sh` 包这层脚本 —— 它为了绕过被裁剪的环境硬编码了 `APPDATA`，会把测试写回真实玩家目录。
+
+---
+
+## 5. 已知缺口：命中音效在实战中不可达
+
+`hit` 与 `destroy` 音效已经接在真实信号上，入口也直接验证过（调用 `take_damage` 会触发事件并出声）。但在真实对局里**没有子弹能打到敌方炮台**：
+
+| 测量 | 值 |
+|---|---|
+| 三局各 3 分钟采样中子弹离敌方炮台最近距离 | 166.89 px / 434.26 px / 388.3 px / 347.3 px（不同运行） |
+| `GameConfig.TURRET_HIT_RADIUS` | 24.0 px |
+| 进入 24 px 的样本数 | 0（31 万次采样） |
+
+这是**玩法/弹道**事实，不是音频缺陷；按本窗口的约束（不改玩法规则、不另建模拟）未在此分支处理。它与路线图里的"特殊弹种"直接相关：在弹种能改变弹道或命中判定之前，`damaged`/`destroyed` 两条音频在真机上听不到。探针把这类情况单列为 `PATH` 缺口并附上测量值，而不是强行判绿或留成永久红灯。
+
+---
+
+## 6. 性能
+
+### 6.1 帧时间对照（`tools/tests/run_audio_perf_ab.sh`，3+3 次，同种子，vsync 关闭，控制仓填满）
+
+| 指标 | 音频开（中位） | 音频关（中位） | 差值 | 同版本离散度 | 判定 |
+|---|---|---|---|---|---|
+| p50 | 5.471 ms | 5.163 ms | 0.308 ms | 0.472 ms | 噪声内 |
+| p95 | 9.478 ms | 8.369 ms | 1.109 ms | 1.176 ms | 噪声内 |
+
+两臂都是同一份构建，只用 `CAPTURE_AUDIO` 切换。差值方向一致（开音频略慢），但**幅度小于同版本重复运行的离散度**，所以本机这套测量分辨不出来。这只说明"此处测不到"，不等于"成本为零"。
+
+### 6.2 单次成本（`tools/tests/audio_cost_probe.gd`）
+
+| 项 | 值 |
+|---|---|
+| 启动一次发声（含 Ogg playback 实例化） | 475 µs |
+| 被节流拒绝的调用 | 0.36 µs |
+| 静音时的调用 | 0.12 µs |
+| 节流表允许的上限频率 | 48 次/秒 |
+| 上限频率下的最坏开销 | 22.8 ms/秒 ≈ 1.37 个 60 Hz 帧/秒（约 2.3% 帧预算） |
+
+拆分测量显示成本几乎全在 `AudioStreamPlayer.play()`（约 400–475 µs），赋值 stream（1.1 µs）和设音高（0.2 µs）可忽略；Dummy 驱动与 WASAPI 驱动数值接近，所以不是无头驱动造成的假象。当前事件率约 1 次/秒、实际发声约 0.4 次/秒，因此现状成本可忽略；**如果将来弹种让事件密度上到每秒几十次，这个 0.48 ms/次会成为可见开销**，缓解手段是预建 playback 或对短音效改用 `AudioStreamWAV`（现在不做）。
+
+---
+
+## 7. 资源与可逆性
+
+- 5 个 ogg 全部未修改：`git status --porcelain assets/` 为空，sha256 见提交说明。
+- 所有处理（trim、低通、音高抖动、节流）都是**播放期**参数，改常量即可回到原声，没有对文件做任何不可逆处理。
+- 事件映射集中在 `AudioManager.KIND_BY_EVENT`，替换音效只需改 `SFX_PATHS`。
+
+---
+
+## 8. 复现
+
+```bash
+# 14 项回归（每 runner 独立 APPDATA，不碰真实存档）
+tools/tests/run_headless_suite.sh
+
+# 音频开关的同种子逐 tick 对照（含阳性对照）
+GODOT_BIN=/d/Godot/4.7.1/Godot_v4.7.1-stable_win64_console.exe \
+  tools/tests/run_audio_determinism.sh 60
+
+# 生命周期 / 结算 / 重开
+APPDATA=$(mktemp -d) $GODOT_BIN --headless --audio-driver Dummy --path . \
+  --script res://tools/tests/audio_lifecycle_probe.gd
+
+# 帧时间对照（需要真实窗口）
+GODOT_BIN=... tools/tests/run_audio_perf_ab.sh 3 20
+
+# 单次成本 / 音效表
+APPDATA=$(mktemp -d) $GODOT_BIN --headless --audio-driver Dummy --path . \
+  --script res://tools/tests/audio_cost_probe.gd
+APPDATA=$(mktemp -d) $GODOT_BIN --headless --audio-driver Dummy --path . \
+  --script res://tools/tests/audio_sfx_table.gd
+```
+
+---
+
+## 9. 本批不做的事
+
+- 不改任何玩法数值/规则（伤害、位移、碰撞、倍率、胜负、经济）
+- 不建第二套模拟；表现层不写回模拟
+- 不加背景音乐（`Music` 母线已建但本批没有音乐资源；用户明确不强制塞入）
+- 不接管 #25 / #26 / #28
+- 不重构模拟内核
+- 不启动 M01 主菜单
