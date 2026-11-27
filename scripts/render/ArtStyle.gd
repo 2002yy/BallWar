@@ -19,22 +19,51 @@ static var _style: String = ""
 static var _low_effect: bool = false
 
 
-static func resolve() -> String:
-	if _style == "":
-		var env: String = OS.get_environment("BALLWAR_ART_STYLE").strip_edges()
-		if env == PINBALL or env == "candy" or env == "pinball":
-			_style = PINBALL
-		else:
-			_style = MECHANIC
-	return _style
+# Per-slot style. The hybrid ruling is "C as the overall base, B as the battle
+# mechanical language", so style is resolved PER OBJECT, not globally:
+#   turret  -> MECHANIC  armour, energy core, barrel structure
+#   bullet  -> PINBALL   bright material, glass highlight, clear trajectory
+#   chamber -> PINBALL   precision pinball structure (mechanical frame added later)
+#   hud     -> console   military console, never a pinball panel
+# BALLWAR_ART_STYLE forces every slot to one style; that is for A/B comparison
+# capture runs only, not for shipping.
+const SLOT_TURRET: String = "turret"
+const SLOT_BULLET: String = "bullet"
+const SLOT_CHAMBER: String = "chamber"
+
+const _SLOT_DEFAULTS := {
+	"turret": MECHANIC,
+	"bullet": PINBALL,
+	"chamber": PINBALL,
+}
+
+static var _forced: String = ""
 
 
-static func set_style(id: String) -> void:
-	_style = PINBALL if id == PINBALL else MECHANIC
+static func _env_forced() -> String:
+	var env: String = OS.get_environment("BALLWAR_ART_STYLE").strip_edges()
+	if env == MECHANIC:
+		return MECHANIC
+	if env == PINBALL or env == "candy":
+		return PINBALL
+	return ""
 
 
-static func is_mechanic() -> bool:
-	return resolve() == MECHANIC
+static func slot_style(slot: String) -> String:
+	var forced: String = _forced if _forced != "" else _env_forced()
+	if forced != "":
+		return forced
+	return String(_SLOT_DEFAULTS.get(slot, PINBALL))
+
+
+static func set_forced_style(id: String) -> void:
+	_forced = PINBALL if id == PINBALL else (MECHANIC if id == MECHANIC else "")
+
+
+static func show_battlefield_emblems() -> bool:
+	# Large translucent faction emblems sit on top of territory and units and are
+	# the single biggest hierarchy problem on the battle screen; off by default.
+	return false
 
 
 static func low_effect() -> bool:

@@ -15,7 +15,7 @@ static func draw(c: CanvasItem, s: Dictionary) -> void:
 		_draw_wreck(c, s, radius)
 		return
 
-	if ArtStyle.is_mechanic():
+	if ArtStyle.slot_style(ArtStyle.SLOT_TURRET) == ArtStyle.MECHANIC:
 		_draw_mechanic(c, s, radius)
 	else:
 		_draw_pinball(c, s, radius)

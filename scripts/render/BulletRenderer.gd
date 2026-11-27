@@ -19,7 +19,7 @@ static func draw(c: CanvasItem, s: Dictionary) -> void:
 		return
 
 	var reduce: bool = bool(s.get("reduce", false)) or ArtStyle.low_effect()
-	if ArtStyle.is_mechanic():
+	if ArtStyle.slot_style(ArtStyle.SLOT_BULLET) == ArtStyle.MECHANIC:
 		_mechanic(c, color, radius, reduce)
 	else:
 		_pinball(c, color, radius, reduce)
