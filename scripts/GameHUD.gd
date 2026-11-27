@@ -28,6 +28,7 @@ const SettingsPanelScene = preload("res://scenes/ui/SettingsPanel.tscn")
 @onready var save_exit_button: Button = get_node("PauseOverlay/PausePanel/SaveExitButton")
 @onready var winner_label: Label = get_node("WinnerLabel")
 
+var settings_panel_enabled: bool = true
 var settings_panel: Control
 var top_bar_segments: Dictionary = {}
 var top_bar_labels: Dictionary = {}
@@ -39,7 +40,10 @@ var event_log_toggle_btn: Button
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_collect_top_bar_nodes()
-	_load_settings_panel()
+	if settings_panel_enabled:
+		_load_settings_panel()
+	else:
+		settings_button.hide()
 
 func setup_static(controller_ref, view_size: Vector2, current_layout: Dictionary = {}, mobile_mode: bool = false) -> void:
 	var layout: Dictionary = current_layout if not current_layout.is_empty() else LayoutProfiles.get_profile(40)
