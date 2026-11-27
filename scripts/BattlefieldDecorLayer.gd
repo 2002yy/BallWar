@@ -48,7 +48,6 @@ func configure(new_grid_size: int, new_cell_size: int) -> void:
 
 func _draw() -> void:
 	var size: float = grid_size * cell_size
-	var half_size: float = size * 0.5
 
 	if emblem_alpha_mul > 0.01:
 		_draw_emblems(size)

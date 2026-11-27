@@ -24,6 +24,10 @@ extends SceneTree
 #   CAPTURE_SEED      match seed; set a fixed one when comparing before/after
 #                     performance on the same match (default -1 = random)
 #   CAPTURE_PERF      "1" writes perf.json with frame-time statistics
+#   CAPTURE_NO_VSYNC  "1" disables vsync. Frame-time comparison needs this:
+#                     with vsync the renderer is pinned to the display refresh
+#                     (240 Hz here) and both builds report the same 4.166 ms,
+#                     which measures the cap, not the cost.
 #
 # Exit codes: 0 ok, 2 capture dir not writable, 3 no viewport image.
 
@@ -51,6 +55,9 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	if _env_string("CAPTURE_NO_VSYNC", "") == "1":
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		print("[Capture] vsync disabled for frame-time measurement")
 	_out_dir = _env_string("CAPTURE_OUT", ProjectSettings.globalize_path("user://captures"))
 	_max_seconds = _env_float("CAPTURE_SECONDS", 60.0)
 	_grid = _env_int("CAPTURE_GRID", 40)

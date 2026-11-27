@@ -15,7 +15,6 @@ extends RefCounted
 const MECHANIC: String = "mechanic"
 const PINBALL: String = "pinball"
 
-static var _style: String = ""
 static var _low_effect: bool = false
 
 
@@ -56,8 +55,6 @@ static func slot_style(slot: String) -> String:
 	return String(_SLOT_DEFAULTS.get(slot, PINBALL))
 
 
-static func set_forced_style(id: String) -> void:
-	_forced = PINBALL if id == PINBALL else (MECHANIC if id == MECHANIC else "")
 
 
 static func show_battlefield_emblems() -> bool:
@@ -66,8 +63,14 @@ static func show_battlefield_emblems() -> bool:
 	return false
 
 
+const _LOW_EFFECT_ENV: String = "BALLWAR_LOW_EFFECT"
+
+
 static func low_effect() -> bool:
-	return _low_effect
+	if _low_effect:
+		return true
+	var env: String = OS.get_environment(_LOW_EFFECT_ENV).strip_edges().to_lower()
+	return env == "1" or env == "true" or env == "on"
 
 
 static func set_low_effect(value: bool) -> void:
@@ -85,17 +88,13 @@ static func metal_mid() -> Color:
 static func metal_light() -> Color:
 	return Color(0.42, 0.47, 0.55)
 
-static func void_bg() -> Color:
-	return Color(0.035, 0.045, 0.06)
-
-
 # A cheap energy bloom: one low-alpha fill plus two thin stroke rings.
 # Filled stacked circles are avoided on purpose - they cost fill rate and
 # stack up fast with 4 turrets, 4 chambers and hundreds of bullets on screen.
 static func energy_ring(c: CanvasItem, center: Vector2, radius: float, color: Color, strength: float) -> void:
 	if strength <= 0.01:
 		return
-	if _low_effect:
+	if low_effect():
 		c.draw_arc(center, radius, 0.0, TAU, 24, Color(color, 0.55), 1.2, true)
 		return
 	c.draw_circle(center, radius * 0.55, Color(color, 0.10 * strength))
@@ -108,12 +107,3 @@ static func outlined_polygon(c: CanvasItem, points: PackedVector2Array, fill: Co
 	var closed: PackedVector2Array = points.duplicate()
 	closed.append(points[0])
 	c.draw_polyline(closed, edge, edge_width, true)
-
-
-# Armour plates as arcs with gaps: reads as machined metal without any texture.
-static func segmented_ring(c: CanvasItem, center: Vector2, radius: float, width: float, segments: int, color: Color, gap_ratio: float) -> void:
-	var step: float = TAU / float(maxi(1, segments))
-	var gap: float = step * clampf(gap_ratio, 0.0, 0.8)
-	for i in segments:
-		var a0: float = step * float(i) + gap * 0.5
-		c.draw_arc(center, radius, a0, a0 + step - gap, 8, color, width, true)
