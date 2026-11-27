@@ -156,17 +156,34 @@ tick 544 时的 fps 只有两种取值：`1`（仍在窗口内）或真实值（
 
 ## 十、复现方式
 
-```bash
-# 单轮：目录 runs_0a/<label>，含 trace_<label>.tsv 与可选 detail_<label>.tsv
-bash run-probe.sh r1 15 535 560
+仓库内两个脚本就能独立复现本报告的全部结论（不依赖任何临时文件）：
 
-# 首个分歧 tick（注意 trace 有 2 行表头，tick = 行号 - 3）
-bash cmp-traces.sh runs_0a/r1/.../trace_r1.tsv runs_0a/r2/.../trace_r2.tsv
+```bash
+export GODOT_BIN=/path/to/Godot_v4.7.1-stable_win64_console.exe
+
+# 每轮独立 user:// 根目录，默认写到仓库外的 ../determinism_runs/<label>
+bash scripts/tests/determinism_probe.sh t1 15
+bash scripts/tests/determinism_probe.sh t2 15
+
+# 首个分歧 tick（表头 2 行，tick = 行号 - 3；并已按较短文件截断）
+bash scripts/tests/compare_traces.sh \
+  ../determinism_runs/t1/Godot/app_userdata/*/trace_t1.tsv \
+  ../determinism_runs/t2/Godot/app_userdata/*/trace_t2.tsv
+```
+
+复现记录（本机 2026-11-27，用上面这两个脚本跑出，未用任何临时脚本）：
+
+```
+t1: tick 544 时 fps = 62   →  mul = 1.00
+t2: tick 544 时 fps =  1   →  mul = 4.25
+compare_traces.sh → DIVERGES at tick 544
 ```
 
 `trace` 列：`tick, sim_hash, owners_h, turret_h, chamber_h, bullet_h, event_h,
 bullets, leader, health_total, proc, phys, fps`。
 **前 10 列为状态，后 3 列为性能，不参与哈希。**
 
-> 踩过的坑：直接 `awk 'a[FNR]!=$2'` 比较两份 trace 时，越过较短文件末尾会把"数组为空"
-> 判成分歧，导致误报"在最后一个 tick 分歧"。`cmp-traces.sh` 已按 `min(lenA,lenB)` 截断。
+> 两个踩过的坑（已写进 `compare_traces.sh` 的注释）：
+> 一是表头有两行，直接用行号会把每个分歧都报晚一 tick；
+> 二是比较越过较短文件末尾时字段为空，朴素写法会把"数组为空"判成分歧，
+> 从而误报"在最后一个 tick 分歧"（本报告初稿就踩了这个，把 544 报成了 545）。
