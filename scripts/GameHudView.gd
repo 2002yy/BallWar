@@ -7,6 +7,7 @@ static func create_control_buttons(owner, game_layer: Node, chambers: Dictionary
 	var add_ball_button_base_positions: Dictionary = {}
 	var canvas := CanvasLayer.new()
 	canvas.name = "ControlButtons"
+	canvas.layer = 2
 	game_layer.add_child(canvas)
 
 	var energy_button_script = load("res://scripts/EnergyButton.gd")
