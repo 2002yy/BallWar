@@ -59,9 +59,9 @@ const SFX_PATHS := {
 	"ball_land": "res://assets/sfx/chamber/chamber_gate_drop_01.ogg",
 }
 
-var master_volume: float = 0.85
-var sfx_volume: float = 0.9
-var music_volume: float = 0.6
+var master_volume: float = 0.7
+var sfx_volume: float = 0.55
+var music_volume: float = 0.6  # must match PlayerSettingsStore defaults
 
 var _streams: Dictionary = {}
 var _pool: Array = []
