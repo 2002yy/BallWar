@@ -1,5 +1,10 @@
-﻿extends Node2D
+extends Node2D
 class_name Turret
+
+# Presentation lives in scripts/render/. Turret keeps ownership of state and
+# timing; it only hands a snapshot to the renderer, so art changes never touch
+# damage, cadence, rotation or win conditions.
+const TurretRendererScript = preload("res://scripts/render/TurretRenderer.gd")
 
 signal destroyed(faction_id)
 signal burst_lock_changed(faction_id, locked)
@@ -20,6 +25,9 @@ var health: int = GameConfig.TURRET_MAX_HEALTH
 var is_destroyed: bool = false
 var damage_flash: float = 0.0
 var destroy_anim_time: float = -1.0
+# Visual only: drives the muzzle flash in TurretRenderer. Never read by any
+# simulation logic.
+var muzzle_flash: float = 0.0
 
 var burst_remaining: int = 0
 var burst_total: int = 0
@@ -64,6 +72,7 @@ func _process(delta: float) -> void:
 		var frame_budget: int = _max_shots_this_frame()
 		while burst_remaining > 0 and burst_timer <= 0.0 and shots_this_frame < frame_budget:
 			_spawn_bullet()
+			muzzle_flash = 1.0 # visual only
 			burst_remaining -= 1
 			burst_index += 1
 			shots_this_frame += 1
@@ -82,6 +91,10 @@ func _process(delta: float) -> void:
 
 	if damage_flash > 0.0:
 		damage_flash = maxf(0.0, damage_flash - delta * 3.0)
+		queue_redraw()
+
+	if muzzle_flash > 0.0:
+		muzzle_flash = maxf(0.0, muzzle_flash - delta * 9.0)
 		queue_redraw()
 
 	if is_destroyed and destroy_anim_time >= 0.0:
@@ -307,55 +320,14 @@ func _draw() -> void:
 	var color: Color = GameConfig.faction_color(faction_id)
 	if is_destroyed:
 		color = Color(0.28, 0.28, 0.28)
-
-	if damage_flash > 0.0:
-		draw_circle(Vector2.ZERO, GameConfig.TURRET_RADIUS + 7.0, Color(1.0, 1.0, 1.0, 0.38 * damage_flash))
-
-	if is_destroyed and destroy_anim_time >= 0.0:
-		var pulse: float = minf(1.0, destroy_anim_time / 0.7)
-		draw_circle(Vector2.ZERO, GameConfig.TURRET_RADIUS + 24.0 * pulse, Color(1.0, 0.55, 0.18, 0.32 * (1.0 - pulse)))
-		draw_circle(Vector2.ZERO, GameConfig.TURRET_RADIUS + 12.0 + 18.0 * pulse, Color(1.0, 0.12, 0.08, 0.22 * (1.0 - pulse)))
-		for i in range(8):
-			var ang: float = TAU * float(i) / 8.0 + destroy_anim_time * 1.2
-			var start: Vector2 = Vector2.RIGHT.rotated(ang) * 10.0
-			var finish: Vector2 = Vector2.RIGHT.rotated(ang) * (20.0 + 16.0 * pulse)
-			draw_line(start, finish, Color(1.0, 0.72, 0.2, 0.90 * (1.0 - pulse)), 3.0)
-		for j in range(5):
-			var smoke_ang: float = TAU * float(j) / 5.0 + 0.5
-			var smoke_pos: Vector2 = Vector2.RIGHT.rotated(smoke_ang) * (12.0 + 6.0 * pulse)
-			draw_circle(smoke_pos, 5.0 + 6.0 * pulse, Color(0.15, 0.15, 0.15, 0.30 * (1.0 - pulse * 0.3)))
-
-	draw_circle(Vector2(2.4, 2.6), GameConfig.TURRET_RADIUS + 1.0, Color(0.0, 0.0, 0.0, 0.22))
-	draw_circle(Vector2.ZERO, GameConfig.TURRET_RADIUS, color)
-	draw_circle(Vector2(-4.0, -4.0), GameConfig.TURRET_RADIUS * 0.34, Color(1.0, 1.0, 1.0, 0.46))
-	draw_circle(Vector2.ZERO, GameConfig.TURRET_RADIUS, Color.BLACK, false, 2.2)
-
-	if not is_destroyed:
-		var barrel_poly: PackedVector2Array = PackedVector2Array([
-			Vector2(2, -5),
-			Vector2(31, -5),
-			Vector2(34, -1),
-			Vector2(34, 1),
-			Vector2(31, 5),
-			Vector2(2, 5)
-		])
-		draw_colored_polygon(barrel_poly, color.lightened(0.14))
-		draw_polyline(barrel_poly, Color.BLACK, 1.4, true)
-		draw_circle(Vector2(4, 0), 5.5, color.darkened(0.15))
-		draw_circle(Vector2(4, 0), 5.5, Color.BLACK, false, 1.2)
-	else:
-		draw_line(Vector2(-14, -12), Vector2(14, 12), Color.BLACK, 4.0)
-		draw_line(Vector2(-14, 12), Vector2(14, -12), Color.BLACK, 4.0)
-		draw_arc(Vector2.ZERO, 18.0, 0.1, PI - 0.1, 16, Color(0.05, 0.05, 0.05, 0.9), 3.0)
-
-	var bar_w: float = 48.0
-	var bar_h: float = 6.0
-	var bar_pos: Vector2 = Vector2(-bar_w * 0.5, GameConfig.TURRET_RADIUS + 10.0)
-	draw_rect(Rect2(bar_pos, Vector2(bar_w, bar_h)), Color(0.02, 0.02, 0.02, 0.9), true)
-	var ratio: float = float(health) / float(max_health)
-	var hp_color: Color = Color(0.25, 1.0, 0.25)
-	if ratio < 0.35:
-		hp_color = Color(1.0, 0.18, 0.18)
-	elif ratio < 0.65:
-		hp_color = Color(1.0, 0.75, 0.12)
-	draw_rect(Rect2(bar_pos, Vector2(bar_w * ratio, bar_h)), hp_color, true)
+	TurretRendererScript.draw(self, {
+		"color": color,
+		"radius": GameConfig.TURRET_RADIUS,
+		"health_ratio": float(health) / float(maxi(1, max_health)),
+		"destroyed": is_destroyed,
+		"damage_flash": damage_flash,
+		"destroy_time": destroy_anim_time,
+		"muzzle_flash": muzzle_flash,
+		"burst_ratio": float(burst_remaining) / float(maxi(1, burst_total)),
+		"locked": burst_locked,
+	})
