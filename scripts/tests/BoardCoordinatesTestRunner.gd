@@ -141,6 +141,7 @@ func _measure_projectiles(main) -> Dictionary:
 	var miss_probe: Bullet = pool.spawn_bullet(0, field.to_global(enemy_pos + Vector2(-26, 0)), Vector2.RIGHT, field, turrets)
 	var hit: bool = hit_probe._try_hit_enemy_turret()
 	var miss: bool = miss_probe._try_hit_enemy_turret()
+	turret.cancel_burst()
 	return {"travel": travel, "cell": cell, "muzzle": offset, "hit": hit, "miss": miss}
 
 

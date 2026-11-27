@@ -54,7 +54,7 @@ Verified against source at `main@3153d11` on 2026-11-27.
 |---|---|
 | Read size limit | **None.** `_read_save_dictionary()` reads the whole file before JSON parsing |
 | Path traversal filter | **None**, and none is reachable: the path is a constant template in `Main.gd` plus a slot index clamped to `1..5`, so no save content or user text reaches the path |
-| Version check | Prefix-based: `1.9*` and `2.0*` accepted; not an exact match against `2.0.0` |
+| Version check | Known families `1.9`, `2.0` and `2.1`, including their numeric patch versions |
 | Payload hash mismatch | Warning only — the save still loads (`ok: true`, status `mismatch`) |
 | Payload hash missing | Accepted silently (status `missing`, treated as usable) |
 | Nested validation | Per-field validation and clamping, not recursive traversal |
@@ -65,6 +65,10 @@ Verified against source at `main@3153d11` on 2026-11-27.
 Known gap, not yet addressed: there is no upper bound on save file size, so a pathological save would be read and parsed in full before any validation runs. Any future limit must be measured against real high-pressure saves rather than assumed.
 
 当前已知缺口：存档读取没有体积上限，异常大的文件会在校验之前被完整读入。若要加限制，应先测量真实高压对局的存档大小，再决定阈值与读写一致规则。
+
+### Projectile Coordinates / 炮弹坐标
+
+Schema `2.1.0` writes projectile positions and trail points in battlefield space. Entries carry `position_space: battlefield` and restore relative to the current battlefield. Untagged legacy entries retain simulation-world coordinates. Builds supporting only the `2.0` schema family reject new `2.1.0` saves.
 
 ### Integrity Model / 完整性模型
 
