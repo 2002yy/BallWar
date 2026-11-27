@@ -240,6 +240,7 @@ func _stop_advance(message: String, pause_match: bool) -> void:
 	_tools.cancel_goal()
 	clock.set_speed(1)
 	if pause_match:
+		clock.cancel_step()
 		if not get_tree().paused:
 			_main._toggle_pause()
 		_main._flush_battle_view()

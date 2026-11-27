@@ -36,6 +36,15 @@ func _run() -> void:
 	root.push_input(escape)
 	if not _check(not panel._tools.is_advancing() and not paused and clock.speed == 1, "Esc cancels advance while running"):
 		return
+	panel.start_advance(Goal.TIME, 400, -1)
+	main._toggle_pause()
+	main.game_elapsed_time = 400
+	var last_tick: int = clock.ticks
+	clock.request_step()
+	for i in range(4):
+		await physics_frame
+	if not _check(paused and clock.ticks == last_tick and not panel._tools.is_advancing(), "a reached goal wins over a queued single step"):
+		return
 
 	main._start_game(40, true, false)
 	main._toggle_pause()
