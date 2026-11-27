@@ -360,13 +360,14 @@ func _create_start_menu() -> void:
 		_show_menu_status(pending_menu_status_message)
 		pending_menu_status_message = ""
 
-func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool = true) -> void:
+func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool = true,
+		reserve_economy_enabled: bool = false) -> void:
 	grid_size = LayoutProfiles.sanitize_grid_size(grid_size)
 	selected_grid_size = grid_size
 	game_elapsed_time = 0.0
 	is_game_over = false
 
-	if clear_save and _has_save_file(selected_save_slot):
+	if clear_save and not reserve_economy_enabled and _has_save_file(selected_save_slot):
 		var save_path: String = _get_save_path(selected_save_slot)
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveFlowController.get_backup_path(save_path)))
@@ -389,7 +390,9 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	get_tree().paused = false
 	_sync_runtime_context(grid_size)
 	# 对局配置只在开局时快照一次：窗口缩放、UI 重建都不应该重新解释地图与武器规则。
-	runtime.set_match_config(MatchConfig.capture_current(grid_size, match_seed))
+	var match_config := MatchConfig.capture_current(grid_size, match_seed)
+	match_config.reserve_economy_enabled = reserve_economy_enabled
+	runtime.set_match_config(match_config)
 
 	game_layer = Node2D.new()
 	game_layer.name = "GameLayer"
@@ -575,7 +578,11 @@ func _create_control_buttons() -> void:
 func _add_ball_to_chamber(faction_id: int) -> void:
 	if not runtime.chambers.has(faction_id):
 		return
-	runtime.chambers[faction_id].add_control_ball()
+	var chamber: ControlChamber = runtime.chambers[faction_id]
+	if runtime.reserve_economy == null:
+		chamber.add_control_ball()
+	elif not is_game_over:
+		runtime.reserve_economy.try_buy_control_ball(chamber)
 	_refresh_add_ball_button(faction_id)
 
 func _on_ball_count_changed(faction_id: int, _count: int) -> void:
@@ -591,9 +598,20 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 		return
 
 	if runtime.turrets.has(faction_id):
+		var turret: Turret = runtime.turrets[faction_id]
+		var firepower := int(bullet_count)
+		if runtime.reserve_economy != null:
+			if runtime.chambers.get(faction_id) != chamber or turret.burst_remaining > 0:
+				return
+			if not turret.can_start_burst() or firepower <= 0:
+				chamber.set_locked(false)
+				_refresh_add_ball_button(faction_id)
+				return
+			firepower = mini(firepower, GameConfig.get_max_pending_count())
+			firepower = runtime.reserve_economy.convert_release(faction_id, firepower)
 		# 火力 → 弹种分配。P0 只解锁普通弹，分配总发数等于火力值，和旧行为一致；
 		# P2 起弹种真正进入弹幕时，只需改这里的发射方式，不动分配与配置。
-		var volley: Dictionary = _build_volley(int(bullet_count))
+		var volley: Dictionary = _build_volley(firepower)
 		var shot_count: int = WeaponRuleset.total_shots(volley)
 		if shot_count <= 0:
 			chamber.set_locked(false)
@@ -601,7 +619,7 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 			return
 		chamber.start_locked(shot_count)
 		_refresh_add_ball_button(faction_id)
-		runtime.turrets[faction_id].fire_burst(shot_count)
+		turret.fire_burst(shot_count)
 
 func _build_volley(fire: int) -> Dictionary:
 	if runtime.match_config != null and runtime.match_config.has_method("allocate_volley"):
@@ -918,6 +936,9 @@ func _process_pending_bullet_restore() -> void:
 			runtime.bullet_pool.add_child(bullet)
 
 func _save_game_progress() -> Dictionary:
+	if runtime.reserve_economy != null:
+		pending_menu_status_message = "储备实验未写入普通存档。"
+		return {"ok": false, "error_message": pending_menu_status_message}
 	var result: Dictionary = SaveFlowController.write_game_progress_result(
 		selected_save_slot,
 		SAVE_PATH_TEMPLATE,

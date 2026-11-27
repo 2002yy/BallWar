@@ -80,6 +80,7 @@ jobs:
               EndToEndContinueMainTestRunner.gd
               BoardCoordinatesTestRunner.gd
               AudioIsolationTestRunner.gd
+              ReserveEconomyTestRunner.gd
     steps:
       - uses: actions/checkout@v4
       - name: Restore cached Godot
