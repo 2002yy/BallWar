@@ -1,5 +1,9 @@
 # BallWar v2.1.3 - Restore Chain Audit
 
+> **Historical record / 历史记录**：本文件描述 `v2.1.3`（2026-05-06）的恢复链状态，不作为当前依据。
+> 文中 `Main.gd::_apply_chamber_state()` 与 `_apply_turret_state()` 已在 `v2.1.4` 移除，节点级恢复改由 `SaveStateApplier.apply_factions()` 调用 `ControlChamber/Turret.restore_from_state()`。
+> 当前边界见 [`../ARCHITECTURE.md`](../ARCHITECTURE.md) 与 [`../SAVE_SYSTEM.md`](../SAVE_SYSTEM.md)。
+
 Date: 2026-05-06
 Scope: audit only, no logic changes
 

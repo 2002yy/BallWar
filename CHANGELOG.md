@@ -39,12 +39,14 @@ Detailed stage notes now live under [docs/history/](docs/history/README.md).
 
 - Current Latest Stable / 推荐公开下载版本
 
-## `v2.1.10` / 安全加固与性能优化
+## `v2.1.10` / 存档校验与性能优化
 
-- Added save file size limits, path traversal filtering, and nested save-data validation / 增加存档文件大小限制、路径穿越过滤、嵌套数据校验
+- Added nested save-data validation and normalization (structure checks, range clamping, bullet and control-ball caps) / 增加存档数据校验与归一化：结构检查、范围夹取、子弹与控制球数量上限
 - Reduced turret queue, bullet map-size lookup, dictionary iteration, and bullet recycling hot-path costs / 优化炮台队列、子弹地图尺寸查询、字典遍历、回收热路径
 - Improved StartMenu button prominence, text contrast, and slot readability / 改进开始菜单按钮视觉、文字对比度和槽位可读性
 - Repacked Windows releases as `.exe + .pck` zip bundles / Windows 发布包改为 `.exe + .pck` 压缩包
+
+> **Correction 2026-11-27 / 更正**：本条目此前写作“存档文件大小限制、路径穿越过滤、嵌套数据校验”。逐项核对 `main@3153d11` 源码后确认：大小限制与路径过滤从未实现，嵌套校验存在。文字已按实际代码改写，当前真实行为见 [`docs/SAVE_SYSTEM.md`](docs/SAVE_SYSTEM.md)。
 
 ## `v2.1.9` / 设置系统与结算面板
 
