@@ -41,6 +41,10 @@ var selected_save_slot: int = 1
 var game_elapsed_time: float = 0.0
 var is_game_over: bool = false
 
+# Negative keeps the historical behavior (time-based randomization).
+# A non-negative value seeds the global RNG so a match can be replayed.
+var match_seed: int = -1
+
 var menu_title_label
 var menu_start_button
 var menu_continue_button
@@ -87,7 +91,10 @@ func _sync_runtime_context(grid_size: int) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	randomize()
+	if match_seed >= 0:
+		seed(match_seed)
+	else:
+		randomize()
 	is_mobile_layout = _detect_mobile_layout()
 	player_settings = PlayerSettingsStore.load_settings()
 	_apply_performance_setting()
