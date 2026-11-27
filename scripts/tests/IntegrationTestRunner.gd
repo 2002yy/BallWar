@@ -9,7 +9,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_assert = TestAssert.new()
-	print("[IntegrationTest] v2.0.4 — save / battlefield / win-condition / evaluator coverage")
+	print("[IntegrationTest] v2.0.4 — save / battlefield / win-condition / evaluator / match-config coverage")
 	await process_frame
 
 	_test_save_load_roundtrip()
@@ -17,6 +17,8 @@ func _run() -> void:
 	_test_battlefield_rules()
 	await _flush()
 	_test_win_conditions()
+	await _flush()
+	_test_match_config_and_volley()
 	await _flush()
 
 	_assert.report("[IntegrationTest]")
@@ -578,3 +580,67 @@ func _test_save_version_compatibility() -> void:
 
 	var cv2 := SaveGameCodec.validate_save_data(Fixtures.build_minimal_save_payload("2.0.0"))
 	_assert.that(not cv2.has("_invalid_reason"), "save compat: 2.0.0 passes")
+
+# ======================================================================
+# P4 — match config / weapon ruleset / fire conversion
+# ======================================================================
+
+func _test_match_config_and_volley() -> void:
+	print("  [P4] match config / weapon ruleset / volley allocation")
+
+	GameConfig.set_game_mode_by_name(GameConfig.GAME_MODE_TIMED)
+	GameConfig.set_quality_by_name(GameConfig.QUALITY_LOW)
+
+	var config := MatchConfig.capture_current(30, 777)
+	_assert.eq(config.map_id, MatchConfig.CLASSIC_MAP_ID, "match config: default map is classic")
+	_assert.eq(config.weapon_ruleset_id, WeaponRuleset.CLASSIC_ID, "match config: default ruleset is classic")
+	_assert.eq(config.grid_size, 30, "match config: keeps the grid it was given")
+	_assert.eq(config.seed_value, 777, "match config: keeps the seed")
+	_assert.eq(config.mode_name, GameConfig.GAME_MODE_TIMED, "match config: snapshots the current mode")
+	_assert.eq(config.quality_name, GameConfig.QUALITY_LOW, "match config: snapshots the current quality")
+	_assert.that(config.weapon_ruleset.is_unlocked(WeaponRuleset.BulletType.STANDARD), "classic ruleset: standard unlocked")
+	_assert.that(not config.weapon_ruleset.is_unlocked(WeaponRuleset.BulletType.PIERCING), "classic ruleset: piercing locked")
+
+	config.map_id = "unknown_map"
+	config.weapon_ruleset_id = "unknown_ruleset"
+	config.mode_name = "unknown_mode"
+	config.quality_name = "unknown_quality"
+	config.grid_size = 41
+	config.sanitize()
+	_assert.eq(config.map_id, MatchConfig.CLASSIC_MAP_ID, "match config sanitize: unknown map falls back to classic")
+	_assert.eq(config.weapon_ruleset_id, WeaponRuleset.CLASSIC_ID, "match config sanitize: unknown ruleset falls back to classic")
+	_assert.eq(config.mode_name, GameConfig.GAME_MODE_BASIC, "match config sanitize: unknown mode falls back to basic")
+	_assert.eq(config.quality_name, GameConfig.QUALITY_MEDIUM, "match config sanitize: unknown quality falls back to medium")
+	_assert.eq(config.grid_size, 40, "match config sanitize: invalid grid falls back to 40")
+
+	var classic := WeaponRuleset.classic()
+	var plain := classic.allocate(37)
+	_assert.eq(int(plain.get(WeaponRuleset.BulletType.STANDARD, 0)), 37, "classic volley: all fire becomes standard shots")
+	_assert.eq(WeaponRuleset.total_shots(plain), 37, "classic volley: no fire is lost")
+
+	var mixed := WeaponRuleset.with_unlocked([WeaponRuleset.BulletType.PIERCING])
+	_assert.that(mixed.is_unlocked(WeaponRuleset.BulletType.STANDARD), "mixed ruleset: standard is mandatory")
+	_assert.that(mixed.is_unlocked(WeaponRuleset.BulletType.PIERCING), "mixed ruleset: requested type is unlocked")
+
+	var split := mixed.allocate(100, {WeaponRuleset.BulletType.PIERCING: 50})
+	_assert.eq(int(split.get(WeaponRuleset.BulletType.PIERCING, 0)), 10, "allocation: 100 fire at 50% buys 10 piercing")
+	_assert.eq(int(split.get(WeaponRuleset.BulletType.STANDARD, 0)), 50, "allocation: the other 50 fire stays standard")
+	_assert.eq(WeaponRuleset.total_shots(split), 60, "allocation: 100 fire becomes 60 projectiles (10x5 + 50x1)")
+
+	var tiny := mixed.allocate(3, {WeaponRuleset.BulletType.PIERCING: 50})
+	_assert.eq(int(tiny.get(WeaponRuleset.BulletType.PIERCING, 0)), 0, "allocation: 1 fire cannot buy a 5-cost bullet")
+	_assert.eq(WeaponRuleset.total_shots(tiny), 3, "allocation: unspent fire returns to standard")
+
+	var locked := classic.allocate(10, {WeaponRuleset.BulletType.PIERCING: 100})
+	_assert.eq(int(locked.get(WeaponRuleset.BulletType.PIERCING, 0)), 0, "allocation: locked type is ignored")
+	_assert.eq(WeaponRuleset.total_shots(locked), 10, "allocation: locked type leaves all fire standard")
+
+	var overspend := mixed.allocate(10, {WeaponRuleset.BulletType.PIERCING: 100})
+	_assert.eq(int(overspend.get(WeaponRuleset.BulletType.PIERCING, 0)), 2, "allocation: 10 fire buys 2 piercing")
+	_assert.eq(int(overspend.get(WeaponRuleset.BulletType.STANDARD, 0)), 0, "allocation: no standard left when fire is fully spent")
+	_assert.eq(WeaponRuleset.total_shots(overspend), 2, "allocation: 10 fire cannot buy more than 2 piercing shots")
+
+	_assert.eq(WeaponRuleset.total_shots(classic.allocate(-5)), 0, "allocation: negative fire yields an empty volley")
+
+	var again := mixed.allocate(100, {WeaponRuleset.BulletType.PIERCING: 50})
+	_assert.eq(str(again), str(split), "allocation: same input produces the same volley")

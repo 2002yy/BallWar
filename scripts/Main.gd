@@ -375,6 +375,8 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	_cleanup_game_layer()
 	get_tree().paused = false
 	_sync_runtime_context(grid_size)
+	# 对局配置只在开局时快照一次：窗口缩放、UI 重建都不应该重新解释地图与武器规则。
+	runtime.set_match_config(MatchConfig.capture_current(grid_size, match_seed))
 
 	game_layer = Node2D.new()
 	game_layer.name = "GameLayer"
@@ -511,9 +513,22 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 		return
 
 	if runtime.turrets.has(faction_id):
-		chamber.start_locked(bullet_count)
+		# 火力 → 弹种分配。P0 只解锁普通弹，分配总发数等于火力值，和旧行为一致；
+		# P2 起弹种真正进入弹幕时，只需改这里的发射方式，不动分配与配置。
+		var volley: Dictionary = _build_volley(int(bullet_count))
+		var shot_count: int = WeaponRuleset.total_shots(volley)
+		if shot_count <= 0:
+			chamber.set_locked(false)
+			_refresh_add_ball_button(faction_id)
+			return
+		chamber.start_locked(shot_count)
 		_refresh_add_ball_button(faction_id)
-		runtime.turrets[faction_id].fire_burst(bullet_count)
+		runtime.turrets[faction_id].fire_burst(shot_count)
+
+func _build_volley(fire: int) -> Dictionary:
+	if runtime.match_config != null and runtime.match_config.has_method("allocate_volley"):
+		return runtime.match_config.allocate_volley(fire)
+	return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
 
 func _on_turret_burst_progress(faction_id, remaining) -> void:
 	if runtime.chambers.has(faction_id):
