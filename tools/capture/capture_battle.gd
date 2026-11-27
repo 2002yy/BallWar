@@ -272,9 +272,12 @@ func _maybe_force_fire(elapsed: float) -> void:
 	_next_force_fire_at = elapsed + _force_fire_interval
 	if _main == null or _main.runtime == null:
 		return
+	var volley: Dictionary = {WeaponRuleset.BulletType.STANDARD: _force_fire_count}
+	if _main.runtime.match_config != null and _main.runtime.match_config.has_method("allocate_volley"):
+		volley = _main.runtime.match_config.allocate_volley(_force_fire_count)
 	for turret in _main.runtime.turrets.values():
 		if turret != null and is_instance_valid(turret) and not turret.is_destroyed:
-			turret.fire_burst(_force_fire_count)
+			turret.fire_volley(volley)
 
 
 # Live-resize test: changing the window while a match runs must re-apply the

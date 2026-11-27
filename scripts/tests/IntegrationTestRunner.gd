@@ -22,6 +22,8 @@ func _run() -> void:
 	await _flush()
 	_test_bullet_attributes_and_reset()
 	await _flush()
+	_test_special_bullet_profiles()
+	await _flush()
 
 	_assert.report("[IntegrationTest]")
 
@@ -694,6 +696,69 @@ func _test_bullet_attributes_and_reset() -> void:
 	pool.set_collision_enabled(false)
 	_assert.that(not pool.collision_enabled, "collision: toggle turns off")
 	_assert.that(not reused.controlled, "collision: bullets return to self-driven mode")
+
+	pool.clear_active()
+	pool.free()
+	Fixtures.cleanup_node(battlefield)
+
+# ======================================================================
+# P6 — piercing / explosive profiles
+# ======================================================================
+
+func _test_special_bullet_profiles() -> void:
+	print("  [P6] piercing / explosive profiles")
+
+	var battlefield := Battlefield.new()
+	battlefield.configure(40)
+	get_root().add_child(battlefield)
+	battlefield.reset_quadrants()
+
+	var pool := BulletPool.new()
+	get_root().add_child(pool)
+	pool.set_battlefield(battlefield)
+	pool.set_experiment_profiles(5, 1)
+
+	# 穿透：连续占 5 格后消失；第 6 格保持原归属。
+	var piercer = pool.spawn_bullet(0, battlefield.to_global(Vector2(325.0, 325.0)), Vector2.RIGHT, battlefield, {}, WeaponRuleset.BulletType.PIERCING)
+	_assert.eq(int(piercer.max_enemy_captures), 5, "piercing: profile carries the capture budget")
+	for step in range(5):
+		piercer._pending_cell = Vector2i(25 + step, 25)
+		piercer._pending_has_cell = true
+		piercer.resolve_tick()
+	_assert.eq(int(piercer.enemy_captures_done), 5, "piercing: five cells consumed")
+	_assert.that(not piercer.is_active, "piercing: bullet is gone after the budget")
+	_assert.eq(int(battlefield.owners[30][25]), GameConfig.Faction.YELLOW, "piercing: the sixth cell is untouched")
+
+	# 同一格重复结算不得重复扣次数。
+	var repeat = pool.spawn_bullet(0, battlefield.to_global(Vector2(325.0, 338.0)), Vector2.RIGHT, battlefield, {}, WeaponRuleset.BulletType.PIERCING)
+	repeat._pending_cell = Vector2i(25, 26)
+	repeat._pending_has_cell = true
+	repeat.resolve_tick()
+	repeat._pending_cell = Vector2i(25, 26)
+	repeat._pending_has_cell = true
+	repeat.resolve_tick()
+	_assert.eq(int(repeat.enemy_captures_done), 1, "piercing: staying on the same cell does not double-charge")
+
+	# 爆炸 r=1：3×3 = 9 格，触发格先被占领，其余 8 格计入 explosion_cells。
+	var blaster = pool.spawn_bullet(0, battlefield.to_global(Vector2(461.5, 461.5)), Vector2.RIGHT, battlefield, {}, WeaponRuleset.BulletType.EXPLOSIVE)
+	blaster._pending_cell = Vector2i(35, 35)
+	blaster._pending_has_cell = true
+	blaster.resolve_tick()
+	_assert.eq(int(blaster.explosion_cells), 8, "explosive: radius 1 captures the 8 neighbours around the trigger")
+	_assert.that(not blaster.is_active, "explosive: bullet is consumed on detonation")
+
+	# 边界裁剪：贴着左边界爆炸只结算界内格子。
+	var edge = pool.spawn_bullet(0, battlefield.to_global(Vector2(6.5, 273.0)), Vector2.RIGHT, battlefield, {}, WeaponRuleset.BulletType.EXPLOSIVE)
+	edge._pending_cell = Vector2i(0, 21)
+	edge._pending_has_cell = true
+	edge.resolve_tick()
+	_assert.eq(int(edge.explosion_cells), 5, "explosive: boundary clips the blast to in-board cells")
+
+	pool.recycle_bullet(repeat)
+	var reused = pool.spawn_bullet(1, battlefield.to_global(Vector2(200.0, 200.0)), Vector2.RIGHT, battlefield, {})
+	_assert.eq(int(reused.max_enemy_captures), 1, "pool reset: pierce budget returns to standard")
+	_assert.eq(int(reused.enemy_captures_done), 0, "pool reset: capture progress cleared")
+	_assert.eq(int(reused.explosion_radius), 0, "pool reset: blast radius cleared")
 
 	pool.clear_active()
 	pool.free()

@@ -27,6 +27,8 @@ static func build_faction_states(chambers: Dictionary, turrets: Dictionary) -> A
 		faction_state["turret_burst_index"] = turret.burst_index if turret != null else 0
 		faction_state["turret_burst_timer"] = turret.burst_timer if turret != null else 0.0
 		faction_state["turret_burst_locked"] = turret.burst_locked if turret != null else false
+		faction_state["turret_burst_types"] = turret.burst_types.duplicate() if turret != null else []
+		faction_state["turret_burst_type_cursor"] = turret.burst_type_cursor if turret != null else 0
 		factions.append(faction_state)
 	return factions
 

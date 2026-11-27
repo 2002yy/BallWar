@@ -417,6 +417,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	_apply_board_transform()
 
 	_create_battlefield(grid_size)
+	_apply_match_experiment_profiles()
 	_create_turrets()
 	_create_control_chambers()
 	_refresh_chassis()
@@ -601,12 +602,23 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 			return
 		chamber.start_locked(shot_count)
 		_refresh_add_ball_button(faction_id)
-		runtime.turrets[faction_id].fire_burst(shot_count)
+		runtime.turrets[faction_id].fire_volley(volley)
 
 func _build_volley(fire: int) -> Dictionary:
 	if runtime.match_config != null and runtime.match_config.has_method("allocate_volley"):
 		return runtime.match_config.allocate_volley(fire)
 	return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
+
+func _apply_match_experiment_profiles() -> void:
+	if runtime.bullet_pool == null or not is_instance_valid(runtime.bullet_pool):
+		return
+	if runtime.match_config == null:
+		return
+	if runtime.bullet_pool.has_method("set_experiment_profiles"):
+		runtime.bullet_pool.set_experiment_profiles(
+			int(runtime.match_config.piercing_captures),
+			int(runtime.match_config.explosion_radius)
+		)
 
 func _on_turret_burst_progress(faction_id, remaining) -> void:
 	if runtime.chambers.has(faction_id):

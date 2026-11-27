@@ -39,6 +39,7 @@ var _audio_arm: String = "on"
 var _experiment_fire: bool = false
 var _experiment_fire_interval: float = 1.0
 var _experiment_fire_count: int = 40
+var _active_samples: Array[float] = []
 
 var _trace_file: FileAccess = null
 var _trace_lines: Array[String] = []
@@ -159,6 +160,9 @@ func _run() -> void:
 		quit(2)
 		return
 
+	if _main.runtime.bullet_pool != null and is_instance_valid(_main.runtime.bullet_pool):
+		_main.runtime.bullet_pool.collision_resolver.track_near_misses = _env_flag("BALLWAR_TRACK_NEAR_MISS", false)
+
 	_trace_path = "user://trace_%s.tsv" % _label
 	_trace_file = FileAccess.open(_trace_path, FileAccess.WRITE)
 	if _trace_file == null:
@@ -272,9 +276,12 @@ func _maybe_experiment_fire() -> void:
 	var interval_ticks: int = maxi(1, int(round(_experiment_fire_interval * float(_ticks_per_second))))
 	if _tick % interval_ticks != 0:
 		return
+	var volley: Dictionary = {WeaponRuleset.BulletType.STANDARD: _experiment_fire_count}
+	if _main.runtime.match_config != null and _main.runtime.match_config.has_method("allocate_volley"):
+		volley = _main.runtime.match_config.allocate_volley(_experiment_fire_count)
 	for turret in _main.runtime.turrets.values():
 		if turret != null and is_instance_valid(turret) and not turret.is_destroyed:
-			turret.fire_burst(_experiment_fire_count)
+			turret.fire_volley(volley)
 
 
 func _record_tick() -> void:
@@ -302,6 +309,7 @@ func _record_tick() -> void:
 	])
 
 	_track_milestones(state)
+	_sample_metrics()
 	_write_detail(state)
 	if _trace_lines.size() >= TRACE_FLUSH_EVERY:
 		_flush_trace()
@@ -602,6 +610,7 @@ func _print_summary() -> void:
 	])
 	_print_final_cells()
 	_print_collision_summary()
+	_print_load_summary()
 	# Perf is reported separately and never feeds the simulation digest.
 	print("[Probe] ---- clocks (perf, not state) ----")
 	print("  process_calls    = %d" % _probe.process_calls)
@@ -625,22 +634,69 @@ func _print_collision_summary() -> void:
 	print("[Probe] ---- collision (perf, not state) ----")
 	var stats: Dictionary = pool.get_collision_stats()
 	print("  enabled          = %s" % str(stats.get("enabled", false)))
+	print("  experiment       = pierce=%d mix_pierce=%d blast=%d mix_blast=%d" % [
+		int(stats.get("piercing_captures", 1)),
+		int(_main.runtime.match_config.piercing_mix_percent) if _main.runtime.match_config != null else 0,
+		int(stats.get("explosion_radius", 0)),
+		int(_main.runtime.match_config.explosion_mix_percent) if _main.runtime.match_config != null else 0,
+	])
 	print("  bucket_size      = %.1f (cells=%d)" % [
 		float(stats.get("bucket_size", 0.0)), int(stats.get("bucket_cells", 0))
 	])
-	print("  last_tick        = bullets=%d buckets=%d max_bucket=%d" % [
-		int(stats.get("bullet_count", 0)),
-		int(stats.get("buckets", 0)),
-		int(stats.get("max_bucket", 0)),
+	print("  totals           = pairs=%d checks=%d near_misses=%d hits=%d" % [
+		int(stats.get("total_bucket_pairs", 0)),
+		int(stats.get("total_distance_checks", 0)),
+		int(stats.get("total_near_misses", 0)),
+		int(stats.get("total_hits", 0)),
 	])
-	print("  last_tick        = bucket_pairs=%d faction_skips=%d distance_checks=%d" % [
-		int(stats.get("bucket_pairs", 0)),
-		int(stats.get("faction_skips", 0)),
-		int(stats.get("distance_checks", 0)),
+	print("  collision_usec   = avg=%.0f max=%d" % [
+		float(stats.get("usec_total", 0)) / maxf(1.0, float(_tick)),
+		int(stats.get("usec_max", 0)),
 	])
-	print("  hit_bullets      = %d (both sides removed)" % int(stats.get("total_hits", 0)))
-	print("  spawned_total    = %d" % int(stats.get("total_spawned", 0)))
+	print("  pool_step        = avg=%.2fms max=%.2fms" % [
+		float(stats.get("step_usec_total", 0)) / maxf(1.0, float(_tick)) / 1000.0,
+		float(stats.get("step_usec_max", 0)) / 1000.0,
+	])
+	print("  depth / blast    = max_capture_depth=%d explosion_cells=%d" % [
+		int(stats.get("max_capture_depth", 0)),
+		int(stats.get("total_explosion_cells", 0)),
+	])
+	print("  spawned_total    = %d by_type=%s" % [
+		int(stats.get("total_spawned", 0)),
+		str(stats.get("spawned_by_type", {})),
+	])
 	print("  peak_active      = %d" % int(pool.get_peak_active_count()))
+
+func _sample_metrics() -> void:
+	if _main == null or _main.runtime == null:
+		return
+	var pool = _main.runtime.bullet_pool
+	if pool != null and is_instance_valid(pool):
+		_active_samples.append(float(pool.get_active_count()))
+
+func _print_load_summary() -> void:
+	if _active_samples.is_empty():
+		return
+	print("[Probe] ---- load (perf, not state) ----")
+	print("  active           = p50=%.0f p95=%.0f peak=%.0f" % [
+		_percentile(_active_samples, 0.50),
+		_percentile(_active_samples, 0.95),
+		_array_max(_active_samples),
+	])
+
+func _percentile(values: Array[float], ratio: float) -> float:
+	if values.is_empty():
+		return 0.0
+	var sorted: Array[float] = values.duplicate()
+	sorted.sort()
+	var index: int = clampi(int(round(ratio * float(sorted.size() - 1))), 0, sorted.size() - 1)
+	return sorted[index]
+
+func _array_max(values: Array[float]) -> float:
+	var result: float = 0.0
+	for value in values:
+		result = maxf(result, value)
+	return result
 
 func _print_final_cells() -> void:
 	if _main == null or _main.runtime == null or _main.runtime.battlefield == null:

@@ -32,6 +32,8 @@ var muzzle_flash: float = 0.0
 
 var burst_remaining: int = 0
 var burst_total: int = 0
+var burst_types: Array[int] = []
+var burst_type_cursor: int = 0
 var burst_interval: float = GameConfig.BURST_FIRE_INTERVAL
 var burst_timer: float = 0.0
 var burst_locked: bool = false
@@ -116,6 +118,9 @@ func _inward_center_angle() -> float:
 			return 0.0
 
 func fire_burst(count: int) -> void:
+	fire_volley({WeaponRuleset.BulletType.STANDARD: count})
+
+func fire_volley(volley: Dictionary) -> void:
 	if is_destroyed:
 		return
 	if battlefield == null or bullet_container == null:
@@ -123,7 +128,13 @@ func fire_burst(count: int) -> void:
 	if burst_remaining > 0:
 		return
 
-	burst_remaining = clampi(count, 1, GameConfig.get_max_pending_count())
+	var queue: Array[int] = _build_volley_queue(volley)
+	if queue.is_empty():
+		return
+
+	burst_types = queue
+	burst_type_cursor = 0
+	burst_remaining = queue.size()
 	burst_total = burst_remaining
 	burst_timer = 0.0
 	burst_index = 0
@@ -133,12 +144,44 @@ func fire_burst(count: int) -> void:
 	burst_progress.emit(faction_id, burst_remaining)
 	_set_burst_locked(true)
 
+func _build_volley_queue(volley: Dictionary) -> Array[int]:
+	# 固定轮转发牌：同一份 volley 输入必须得到同一串弹种序列。
+	var queue: Array[int] = []
+	var remaining: Dictionary = {}
+	var order: Array[int] = [
+		WeaponRuleset.BulletType.STANDARD,
+		WeaponRuleset.BulletType.VELOCITY,
+		WeaponRuleset.BulletType.PIERCING,
+		WeaponRuleset.BulletType.HEAVY,
+		WeaponRuleset.BulletType.EXPLOSIVE,
+		WeaponRuleset.BulletType.CLUSTER,
+		WeaponRuleset.BulletType.INTERCEPTOR,
+		WeaponRuleset.BulletType.HOMING,
+	]
+	for type_id in volley:
+		var count: int = maxi(0, int(volley[type_id]))
+		if count > 0:
+			remaining[int(type_id)] = count
+	var total: int = 0
+	for count in remaining.values():
+		total += int(count)
+	while queue.size() < total:
+		for type_id in order:
+			var left: int = int(remaining.get(type_id, 0))
+			if left <= 0:
+				continue
+			queue.append(type_id)
+			remaining[type_id] = left - 1
+	return queue
+
 func cancel_burst() -> int:
 	var remaining: int = burst_remaining
 	burst_remaining = 0
 	burst_total = 0
 	burst_index = 0
 	burst_timer = 0.0
+	burst_types.clear()
+	burst_type_cursor = 0
 	burst_progress_emit_timer = 0.0
 	burst_last_reported_remaining = 0
 	burst_progress.emit(faction_id, 0)
@@ -158,6 +201,12 @@ func restore_from_state(state: Dictionary) -> void:
 	burst_total = clampi(int(state.get("turret_burst_total", burst_remaining)), burst_remaining, GameConfig.get_max_pending_count())
 	burst_index = clampi(int(state.get("turret_burst_index", 0)), 0, GameConfig.get_max_pending_count())
 	burst_timer = clampf(float(state.get("turret_burst_timer", 0.0)), 0.0, 1.0)
+	burst_types.clear()
+	var restored_types = state.get("turret_burst_types", [])
+	if restored_types is Array:
+		for value in restored_types:
+			burst_types.append(clampi(int(value), 0, WeaponRuleset.BulletType.HOMING))
+	burst_type_cursor = clampi(int(state.get("turret_burst_type_cursor", 0)), 0, burst_types.size())
 	burst_progress_emit_timer = 0.0
 	burst_last_reported_remaining = burst_remaining
 
@@ -250,11 +299,19 @@ func _spawn_bullet() -> void:
 	var spawn_position: Vector2 = global_position + shot_direction * muzzle_distance
 
 	if _bullet_container_can_spawn:
-		bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
+		bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets, _next_burst_type())
 	else:
 		var bullet = Bullet.new()
 		bullet.setup(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
+		bullet.apply_type_profile(_next_burst_type(), 1, 0)
 		bullet_container.add_child(bullet)
+
+func _next_burst_type() -> int:
+	if burst_type_cursor < burst_types.size():
+		var type_id: int = int(burst_types[burst_type_cursor])
+		burst_type_cursor += 1
+		return type_id
+	return WeaponRuleset.BulletType.STANDARD
 
 func _current_burst_shot_angle() -> float:
 	# v1.9.6 修正：
@@ -294,6 +351,8 @@ func _destroy() -> void:
 	destroy_anim_time = 0.0
 	burst_remaining = 0
 	burst_total = 0
+	burst_types.clear()
+	burst_type_cursor = 0
 	burst_last_reported_remaining = 0
 	burst_progress_emit_timer = 0.0
 	burst_progress.emit(faction_id, 0)

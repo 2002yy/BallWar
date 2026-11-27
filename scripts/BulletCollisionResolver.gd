@@ -13,6 +13,10 @@ var bucket_size: float = 13.0
 var bucket_cells: int = DEFAULT_BUCKET_CELLS
 var last_stats: Dictionary = {}
 var total_hits: int = 0
+var total_bucket_pairs: int = 0
+var total_distance_checks: int = 0
+var total_near_misses: int = 0
+var track_near_misses: bool = false
 
 var _buckets: Dictionary = {}
 var _max_travel: float = 0.0
@@ -23,6 +27,9 @@ func configure(cell_size: float, cells: int = DEFAULT_BUCKET_CELLS) -> void:
 
 func reset_stats() -> void:
 	total_hits = 0
+	total_bucket_pairs = 0
+	total_distance_checks = 0
+	total_near_misses = 0
 	last_stats = {}
 
 func resolve(bullets: Array, pool, delta: float) -> int:
@@ -94,13 +101,17 @@ func find_hits(bullets: Array) -> Dictionary:
 					if not _alive(b):
 						continue
 					last_stats["bucket_pairs"] = int(last_stats["bucket_pairs"]) + 1
+					total_bucket_pairs += 1
 					if a.faction_id == b.faction_id:
 						last_stats["faction_skips"] = int(last_stats["faction_skips"]) + 1
 						continue
 					last_stats["distance_checks"] = int(last_stats["distance_checks"]) + 1
+					total_distance_checks += 1
 					if _collides(a, b):
 						hits[a.get_instance_id()] = a
 						hits[b.get_instance_id()] = b
+					elif track_near_misses and _near(a, b):
+						total_near_misses += 1
 
 	last_stats["hits"] = hits.size()
 	return hits
@@ -117,6 +128,11 @@ func _collides(a, b) -> bool:
 		return false
 	var rel_prev: Vector2 = a.prev_position - b.prev_position
 	return _segment_point_distance_sq(rel_prev, rel_now, Vector2.ZERO) <= radius_sum * radius_sum
+
+func _near(a, b) -> bool:
+	# 实验指标：两颗敌弹是否曾接近到 3 倍接触距离（未命中）。
+	var reach: float = (a.physical_radius + b.physical_radius) * 3.0
+	return a.global_position.distance_squared_to(b.global_position) <= reach * reach
 
 func _segment_point_distance_sq(start: Vector2, end: Vector2, point: Vector2) -> float:
 	var segment: Vector2 = end - start

@@ -136,6 +136,8 @@ static func collect_bullet_states(bullet_container) -> Array:
 				"direction": vec2_to_arr(node.direction),
 				"age": node.age,
 				"last_cell": vec2i_to_arr(node.last_cell),
+				"type_id": node.type_id,
+				"enemy_captures_done": node.enemy_captures_done,
 				"trail_points": trail,
 			}
 			if has_field:
@@ -216,6 +218,16 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
 			fixed["turret_burst_remaining"] = clampi(int(fixed.get("turret_burst_remaining", 0)), 0, GameConfig.get_max_pending_count())
 			fixed["turret_burst_total"] = clampi(int(fixed.get("turret_burst_total", 0)), 0, GameConfig.get_max_pending_count())
 			fixed["turret_burst_index"] = clampi(int(fixed.get("turret_burst_index", 0)), 0, GameConfig.get_max_pending_count())
+
+			var burst_types = fixed.get("turret_burst_types", [])
+			var clean_types: Array = []
+			if burst_types is Array:
+				for value in burst_types:
+					if clean_types.size() >= GameConfig.get_max_pending_count():
+						break
+					clean_types.append(clampi(int(value), 0, WeaponRuleset.BulletType.HOMING))
+			fixed["turret_burst_types"] = clean_types
+			fixed["turret_burst_type_cursor"] = clampi(int(fixed.get("turret_burst_type_cursor", 0)), 0, clean_types.size())
 
 			var queued_modifiers = fixed.get("queued_round_modifiers", [])
 			if queued_modifiers is Array:
