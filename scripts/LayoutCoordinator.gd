@@ -262,48 +262,82 @@ static func _calculate_roulette(grid_size: int, viewport_size: Vector2, is_mobil
 	stage_y = clampf(stage_y, 92.0, 126.0)
 	return Rect2(Vector2((viewport_size.x - stage_size.x) * 0.5, stage_y), stage_size)
 
+# PreviewScene 的内容包围盒：X 从 -364 到 356，Y 从 -170 到 240。
+# 这两个常数只用于把预览台居中，不参与任何战场坐标换算 —— 战场坐标仍然
+# 只在 Main / 模拟层里算，菜单只摆放一张已经画好的节点树。
+const START_MENU_PREVIEW_CONTENT := Vector2(720.0, 410.0)
+const START_MENU_PREVIEW_CONTENT_CENTER := Vector2(-4.0, 35.0)
+
+
 static func _calculate_start_menu_layout(viewport_size: Vector2, is_mobile: bool) -> Dictionary:
-	var root_panel_size: Vector2 = Vector2(792.0, 660.0) if is_mobile else Vector2(840.0, 684.0)
+	# 主菜单 = 一块机械控制台：左侧约 30% 操作区，右侧约 70% 战场预览台。
+	#
+	# 面板随视口长，但有上下限：1120×720 上是 963×634，4K 上到 1400×820 就停。
+	# 不设上限会让一块卡片飘在大画布正中；不随视口长则 4K 下登录面板小得像缩略图。
+	var root_panel_size := Vector2(
+		clampf(viewport_size.x * 0.86, 960.0, 1400.0),
+		clampf(viewport_size.y * 0.88, 600.0, 820.0)
+	)
 	root_panel_size.x = minf(root_panel_size.x, viewport_size.x - 48.0)
 	root_panel_size.y = minf(root_panel_size.y, viewport_size.y - 36.0)
 	var vertical_offset: float = 6.0 if is_mobile else 8.0
 	var root_panel_pos := Vector2(
 		(viewport_size.x - root_panel_size.x) * 0.5,
-		clampf((viewport_size.y - root_panel_size.y) * 0.5 + vertical_offset, 12.0, viewport_size.y - root_panel_size.y - 12.0)
+		clampf(
+			(viewport_size.y - root_panel_size.y) * 0.5 + vertical_offset,
+			12.0,
+			maxf(12.0, viewport_size.y - root_panel_size.y - 12.0)
+		)
 	)
-	var preview_size := Vector2(root_panel_size.x - 36.0, 192.0 if is_mobile else 224.0)
-	var preview_center := Vector2(preview_size.x * 0.5, 90.0 if is_mobile else 102.0)
 
-	var config_panel_rect := Rect2(Vector2(48.0, 364.0 if not is_mobile else 358.0), Vector2(root_panel_size.x - 96.0, 126.0))
-	var save_panel_rect := Rect2(Vector2(48.0, 494.0 if not is_mobile else 488.0), Vector2(root_panel_size.x - 96.0, 136.0))
-	var save_slot_container_rect := Rect2(Vector2(0.0, 32.0), Vector2(save_panel_rect.size.x, 40.0))
-	var slot_button_size := Vector2(136.0, 36.0)
-	var slot_gap: float = 8.0 if is_mobile else 8.0
-	var slot_start_x: float = 14.0
-	var slot_positions: Dictionary = {}
-	for slot in range(1, 6):
-		slot_positions[slot] = Vector2(slot_start_x + float(slot - 1) * (slot_button_size.x + slot_gap), 10.0)
+	# 双栏：内边距 → 30% 操作区 → 缝 → 70% 预览台。
+	# 下边距比上边距大：操作区最后一行是状态栏/版本号，贴着钢板底边会看起来被切掉。
+	var columns_margin := Vector2(22.0, 18.0)
+	var columns_margin_bottom: float = 22.0 if is_mobile else 30.0
+	var column_gap: float = 12.0 if is_mobile else 18.0
+	var inner := Vector2(
+		root_panel_size.x - columns_margin.x * 2.0,
+		root_panel_size.y - columns_margin.y - columns_margin_bottom
+	)
+	var action_width: float = clampf(round(inner.x * 0.30), 248.0, 420.0)
+	var stage_width: float = maxf(220.0, inner.x - action_width - column_gap)
+	var action_column_rect := Rect2(Vector2.ZERO, Vector2(action_width, inner.y))
+	var stage_rect := Rect2(Vector2(action_width + column_gap, 0.0), Vector2(stage_width, inner.y))
 
-	var continue_button_rect := Rect2(
-		Vector2(root_panel_size.x - 192.0, 590.0 if not is_mobile else 582.0),
-		Vector2(120.0, 36.0)
+	# 预览台内部再切出监控窗：上面留表头（阵营色标），下面留表脚（刻度条）。
+	var header_height: float = 30.0 if is_mobile else 36.0
+	var footer_height: float = 26.0 if is_mobile else 32.0
+	var side_pad: float = 12.0 if is_mobile else 16.0
+	var preview_size := Vector2(
+		maxf(80.0, stage_width - side_pad * 2.0),
+		maxf(60.0, inner.y - header_height - footer_height)
+	)
+
+	# 预览缩放由监控窗决定，保证整张战场完整可见再留一点气口。
+	var fit: float = minf(
+		preview_size.x / START_MENU_PREVIEW_CONTENT.x,
+		preview_size.y / START_MENU_PREVIEW_CONTENT.y
+	)
+	var preview_scale_value: float = clampf(fit * 0.97, 0.30, 1.05)
+	# 让内容包围盒的中心落在监控窗中心，而不是让节点原点落在中心：
+	# 这张预览的内容本来就不以原点对称，直接把原点放中心会歪。
+	var preview_center := Vector2(
+		preview_size.x * 0.5 - START_MENU_PREVIEW_CONTENT_CENTER.x * preview_scale_value,
+		preview_size.y * 0.5 - START_MENU_PREVIEW_CONTENT_CENTER.y * preview_scale_value
 	)
 
 	return {
 		"shade_rect": Rect2(Vector2.ZERO, viewport_size),
 		"root_panel_rect": Rect2(root_panel_pos, root_panel_size),
-		"title_rect": Rect2(Vector2(150.0, 16.0), Vector2(root_panel_size.x - 300.0, 56.0)),
-		"subtitle_rect": Rect2(Vector2(180.0, 72.0), Vector2(root_panel_size.x - 360.0, 24.0)),
-		"mobile_hint_rect": Rect2(Vector2(180.0, 98.0), Vector2(root_panel_size.x - 360.0, 23.0)),
-		"preview_position": Vector2(root_panel_size.x * 0.5, 250.0 if not is_mobile else 240.0),
+		"columns_margin": columns_margin,
+		"columns_margin_bottom": columns_margin_bottom,
+		"column_gap": column_gap,
+		"action_column_rect": action_column_rect,
+		"stage_rect": stage_rect,
+		"preview_header_height": header_height,
+		"preview_footer_height": footer_height,
+		"preview_side_pad": side_pad,
 		"preview_size": preview_size,
 		"preview_center": preview_center,
-		"preview_scale": Vector2(0.40, 0.40) if not is_mobile else Vector2(0.36, 0.36),
-		"config_panel_rect": config_panel_rect,
-		"save_panel_rect": save_panel_rect,
-		"continue_button_rect": continue_button_rect,
-		"status_rect": Rect2(Vector2(120.0, 626.0 if not is_mobile else 616.0), Vector2(root_panel_size.x - 240.0, 22.0)),
-		"save_slot_container_rect": save_slot_container_rect,
-		"save_slot_button_positions": slot_positions,
-		"save_slot_button_size": slot_button_size,
+		"preview_scale": Vector2(preview_scale_value, preview_scale_value),
 	}

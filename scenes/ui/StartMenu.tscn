@@ -1,6 +1,17 @@
 [gd_scene format=3 uid="uid://ba1c04gy7f2a0"]
 
 [ext_resource type="Script" uid="uid://crbx0lclp4a2d" path="res://scripts/StartMenu.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/MechShell.gd" id="2_shell"]
+[ext_resource type="Script" path="res://scripts/ui/MechStage.gd" id="3_stage"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_root"]
+bg_color = Color(0.0235294, 0.0431373, 0.0627451, 1)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 16
 
 [node name="StartMenu" type="CanvasLayer" unique_id=174486562]
 script = ExtResource("1_script")
@@ -11,249 +22,344 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.02, 0.03, 0.05, 0.88)
+color = Color(0.0156863, 0.027451, 0.0431373, 0.9)
 
 [node name="RootPanel" type="Panel" parent="."]
-self_modulate = Color(0.98, 0.99, 1, 0.96)
-offset_left = 140.0
-offset_top = 35.0
-offset_right = 980.0
-offset_bottom = 685.0
+unique_name_in_owner = true
+offset_left = 78.0
+offset_top = 38.0
+offset_right = 1041.0
+offset_bottom = 672.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_root")
 
-[node name="PanelBg" type="ColorRect" parent="RootPanel"]
-offset_left = 8.0
-offset_top = 8.0
-offset_right = 832.0
-offset_bottom = 662.0
-color = Color(0.08, 0.12, 0.18, 0.97)
-
-[node name="MainVBox" type="VBoxContainer" parent="RootPanel"]
+[node name="ShellArt" type="Control" parent="RootPanel"]
+unique_name_in_owner = true
+show_vents = false
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-offset_left = 18.0
-offset_top = 10.0
-offset_right = -18.0
-offset_bottom = -10.0
-theme_override_constants/separation = 4
+mouse_filter = 2
+script = ExtResource("2_shell")
 
-[node name="TitleLabel" type="Label" parent="RootPanel/MainVBox"]
+[node name="Columns" type="Control" parent="RootPanel"]
+unique_name_in_owner = true
+offset_left = 22.0
+offset_top = 18.0
+offset_right = 941.0
+offset_bottom = 616.0
+
+[node name="ActionColumn" type="VBoxContainer" parent="RootPanel/Columns"]
+offset_right = 276.0
+theme_override_constants/separation = 6
+
+[node name="TitleLabel" type="Label" parent="RootPanel/Columns/ActionColumn"]
+theme_type_variation = &"TitleLabel"
 text = "领土战争"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(1, 0.95, 0.72, 1)
-theme_override_colors/font_outline_color = Color(0.02, 0.03, 0.06, 1)
-theme_override_constants/outline_size = 7
-theme_override_font_sizes/font_size = 44
-custom_minimum_size = Vector2(0, 56)
 
-[node name="SubtitleLabel" type="Label" parent="RootPanel/MainVBox"]
+[node name="SubtitleLabel" type="Label" parent="RootPanel/Columns/ActionColumn"]
+theme_type_variation = &"SubtitleLabel"
 text = "四控制仓 · 四角炮台 · 领土争夺"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.84, 0.92, 1, 1)
-theme_override_font_sizes/font_size = 18
-custom_minimum_size = Vector2(0, 24)
+autowrap_mode = 3
 
-[node name="MobileHint" type="Label" parent="RootPanel/MainVBox"]
-text = "电脑 / 安卓均可游玩 · 手机建议横屏"
-horizontal_alignment = 1
-theme_override_colors/font_color = Color(0.74, 0.86, 1, 1)
-theme_override_font_sizes/font_size = 15
-custom_minimum_size = Vector2(0, 22)
+[node name="TitleRule" type="ColorRect" parent="RootPanel/Columns/ActionColumn"]
+custom_minimum_size = Vector2(0, 2)
+color = Color(0.909804, 0.713726, 0.235294, 0.55)
 
-[node name="PreviewContainer" type="Control" parent="RootPanel/MainVBox"]
-custom_minimum_size = Vector2(0, 170)
-clip_contents = true
+[node name="PageHost" type="Control" parent="RootPanel/Columns/ActionColumn"]
+size_flags_vertical = 3
 
-[node name="ChamberPreview" type="Node2D" parent="RootPanel/MainVBox/PreviewContainer"]
-position = Vector2(402, 78)
-scale = Vector2(0.4, 0.4)
+[node name="MainMenuPage" type="VBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost"]
+unique_name_in_owner = true
+visible = false
+theme_override_constants/separation = 10
 
-[node name="ConfigPanel" type="Panel" parent="RootPanel/MainVBox"]
-custom_minimum_size = Vector2(0, 126)
+[node name="StartButton" type="Button" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 54)
+theme_type_variation = &"PrimaryButton"
+text = "开始新游戏"
 
-[node name="ConfigBg" type="ColorRect" parent="RootPanel/MainVBox/ConfigPanel"]
-offset_left = 8.0
-offset_top = 6.0
-offset_right = 778.0
-offset_bottom = 130.0
-color = Color(0.12, 0.16, 0.23, 1)
+[node name="ContinueEntryButton" type="Button" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+theme_type_variation = &"SecondaryButton"
+text = "继续游戏"
 
-[node name="ConfigVBox" type="VBoxContainer" parent="RootPanel/MainVBox/ConfigPanel"]
-offset_left = 16.0
-offset_top = 10.0
-offset_right = 772.0
-offset_bottom = 128.0
-theme_override_constants/separation = 4
+[node name="MenuHintLabel" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage"]
+unique_name_in_owner = true
+theme_type_variation = &"HintLabel"
+text = "选玩法 → 调配置 → 开局"
+autowrap_mode = 3
 
-[node name="ConfigRow1" type="HBoxContainer" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox"]
-theme_override_constants/separation = 16
+[node name="MainSummaryPanel" type="PanelContainer" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage"]
 
-[node name="SizeOptionBox" type="HBoxContainer" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1"]
-theme_override_constants/separation = 4
+[node name="SummaryVBox" type="VBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel"]
+theme_override_constants/separation = 6
 
-[node name="SizeLabel" type="Label" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1/SizeOptionBox"]
-text = "地图大小"
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 17
-custom_minimum_size = Vector2(74, 24)
+[node name="SummaryTitle" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox"]
+theme_type_variation = &"SectionLabel"
+text = "当前配置"
 
-[node name="GridSizeOption" type="OptionButton" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1/SizeOptionBox"]
-custom_minimum_size = Vector2(110, 28)
+[node name="ModeRow" type="HBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox"]
 
-[node name="ModeOptionBox" type="HBoxContainer" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1"]
-theme_override_constants/separation = 4
+[node name="ModeCaption" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox/ModeRow"]
+theme_type_variation = &"HintLabel"
+text = "玩法"
 
-[node name="ModeLabel" type="Label" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1/ModeOptionBox"]
-text = "游戏模式"
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 17
-custom_minimum_size = Vector2(76, 24)
+[node name="MainModeValue" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox/ModeRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_type_variation = &"ValueLabel"
+horizontal_alignment = 2
 
-[node name="ModeOption" type="OptionButton" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1/ModeOptionBox"]
-custom_minimum_size = Vector2(130, 28)
+[node name="StageRow" type="HBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox"]
 
-[node name="QualityOptionBox" type="HBoxContainer" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1"]
-theme_override_constants/separation = 4
+[node name="MapCaption" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox/StageRow"]
+theme_type_variation = &"HintLabel"
+text = "地图"
 
-[node name="QualityLabel" type="Label" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1/QualityOptionBox"]
+[node name="MainMapValue" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox/StageRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_type_variation = &"ValueLabel"
+horizontal_alignment = 2
+
+[node name="QualityRow" type="HBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox"]
+
+[node name="QualityCaption" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox/QualityRow"]
+theme_type_variation = &"HintLabel"
 text = "画质"
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 17
-custom_minimum_size = Vector2(42, 24)
 
-[node name="QualityOption" type="OptionButton" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1/QualityOptionBox"]
-custom_minimum_size = Vector2(52, 28)
+[node name="MainQualityValue" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage/MainSummaryPanel/SummaryVBox/QualityRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+theme_type_variation = &"ValueLabel"
+horizontal_alignment = 2
 
-[node name="TimeOptionBox" type="HBoxContainer" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1"]
-theme_override_constants/separation = 4
+[node name="MainSpacer" type="Control" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage"]
+size_flags_vertical = 3
 
-[node name="TimeLabel" type="Label" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1/TimeOptionBox"]
-text = "限时"
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 17
-custom_minimum_size = Vector2(42, 24)
+[node name="VersionLabel" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MainMenuPage"]
+unique_name_in_owner = true
+theme_type_variation = &"SectionLabel"
+text = "v0.0.0"
 
-[node name="TimeSpin" type="SpinBox" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow1/TimeOptionBox"]
-custom_minimum_size = Vector2(66, 28)
+[node name="ModeSelectPage" type="VBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost"]
+unique_name_in_owner = true
+visible = false
+theme_override_constants/separation = 8
+
+[node name="ModePageTitle" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/ModeSelectPage"]
+theme_type_variation = &"PageTitleLabel"
+text = "选择玩法"
+
+[node name="ModeCardHost" type="VBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost/ModeSelectPage"]
+unique_name_in_owner = true
+theme_override_constants/separation = 8
+
+[node name="ModeTipLabel" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/ModeSelectPage"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+theme_type_variation = &"ModeTipLabel"
+autowrap_mode = 3
+
+[node name="ModeSpacer" type="Control" parent="RootPanel/Columns/ActionColumn/PageHost/ModeSelectPage"]
+size_flags_vertical = 3
+
+[node name="ModeNavRow" type="HBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost/ModeSelectPage"]
+theme_override_constants/separation = 8
+
+[node name="ModeBackButton" type="Button" parent="RootPanel/Columns/ActionColumn/PageHost/ModeSelectPage/ModeNavRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+theme_type_variation = &"GhostButton"
+text = "返回"
+
+[node name="ModeNextButton" type="Button" parent="RootPanel/Columns/ActionColumn/PageHost/ModeSelectPage/ModeNavRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+size_flags_horizontal = 3
+theme_type_variation = &"SecondaryButton"
+text = "下一步"
+
+[node name="MatchConfigPage" type="VBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost"]
+unique_name_in_owner = true
+visible = false
+theme_override_constants/separation = 8
+
+[node name="ConfigPageTitle" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage"]
+theme_type_variation = &"PageTitleLabel"
+text = "对局配置"
+
+[node name="MatchSummaryLabel" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage"]
+unique_name_in_owner = true
+theme_type_variation = &"HintLabel"
+autowrap_mode = 3
+
+[node name="ConfigGrid" type="GridContainer" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage"]
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="SizeCaption" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigGrid"]
+theme_type_variation = &"HintLabel"
+text = "地图大小"
+
+[node name="GridSizeOption" type="OptionButton" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigGrid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+size_flags_horizontal = 3
+
+[node name="QualityCaption" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigGrid"]
+theme_type_variation = &"HintLabel"
+text = "画质"
+
+[node name="QualityOption" type="OptionButton" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigGrid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+size_flags_horizontal = 3
+
+[node name="TimeCaption" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigGrid"]
+theme_type_variation = &"HintLabel"
+text = "限时（分）"
+
+[node name="TimeSpin" type="SpinBox" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigGrid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+size_flags_horizontal = 3
 min_value = 5.0
 max_value = 15.0
 value = 5.0
 
-[node name="ConfigRow2" type="HBoxContainer" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox"]
-theme_override_constants/separation = 12
-
-[node name="PaletteOptionBox" type="HBoxContainer" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow2"]
-theme_override_constants/separation = 4
-
-[node name="PaletteLabel" type="Label" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow2/PaletteOptionBox"]
+[node name="PaletteCaption" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigGrid"]
+theme_type_variation = &"HintLabel"
 text = "配色方案"
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 17
-custom_minimum_size = Vector2(82, 24)
 
-[node name="PaletteOption" type="OptionButton" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow2/PaletteOptionBox"]
-custom_minimum_size = Vector2(140, 28)
+[node name="PaletteOption" type="OptionButton" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigGrid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+size_flags_horizontal = 3
 
-[node name="StartButton" type="Button" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow2"]
-self_modulate = Color(0.22, 0.6, 1, 1)
-custom_minimum_size = Vector2(140, 32)
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 15
-text = "开始 / 覆盖存档"
-
-[node name="ResetDefaultsButton" type="Button" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox/ConfigRow2"]
-self_modulate = Color(0.22, 0.22, 0.32, 0.85)
-custom_minimum_size = Vector2(90, 32)
-theme_override_colors/font_color = Color(0.82, 0.90, 1, 1)
-theme_override_font_sizes/font_size = 14
+[node name="ResetDefaultsButton" type="Button" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 34)
+size_flags_horizontal = 0
+theme_type_variation = &"GhostButton"
 text = "恢复默认"
 tooltip_text = "重置为默认设置"
 
-[node name="ModeTipLabel" type="Label" parent="RootPanel/MainVBox/ConfigPanel/ConfigVBox"]
-text = "占领：达到 75% 胜利　限时：5~15 分钟结算　狂野：全局 ×3，事件更频繁"
-autowrap_mode = 3
-theme_override_colors/font_color = Color(0.82, 0.90, 1, 1)
-theme_override_font_sizes/font_size = 13
-custom_minimum_size = Vector2(0, 32)
+[node name="ConfigSpacer" type="Control" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage"]
+size_flags_vertical = 3
 
-[node name="SavePanel" type="Panel" parent="RootPanel/MainVBox"]
-custom_minimum_size = Vector2(0, 136)
+[node name="ConfigNavRow" type="HBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage"]
+theme_override_constants/separation = 8
 
-[node name="SaveBg" type="ColorRect" parent="RootPanel/MainVBox/SavePanel"]
-offset_left = 8.0
-offset_top = 6.0
-offset_right = 778.0
-offset_bottom = 136.0
-color = Color(0.1, 0.14, 0.2, 1)
+[node name="ConfigBackButton" type="Button" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigNavRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+theme_type_variation = &"GhostButton"
+text = "返回"
 
-[node name="SaveVBox" type="VBoxContainer" parent="RootPanel/MainVBox/SavePanel"]
-offset_left = 16.0
-offset_top = 10.0
-offset_right = 772.0
-offset_bottom = 138.0
-theme_override_constants/separation = 4
+[node name="StartMatchButton" type="Button" parent="RootPanel/Columns/ActionColumn/PageHost/MatchConfigPage/ConfigNavRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "开始对局"
 
-[node name="SaveTitle" type="Label" parent="RootPanel/MainVBox/SavePanel/SaveVBox"]
+[node name="ContinuePage" type="VBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost"]
+unique_name_in_owner = true
+visible = false
+theme_override_constants/separation = 8
+
+[node name="ContinuePageTitle" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/ContinuePage"]
+theme_type_variation = &"PageTitleLabel"
+text = "继续游戏"
+
+[node name="SaveTitle" type="Label" parent="RootPanel/Columns/ActionColumn/PageHost/ContinuePage"]
+unique_name_in_owner = true
+theme_type_variation = &"HintLabel"
 text = "选择存档槽（暂停 / 退出会保存到当前槽）"
-theme_override_colors/font_color = Color(0.84, 0.92, 1, 1)
-theme_override_font_sizes/font_size = 14
-custom_minimum_size = Vector2(0, 22)
+autowrap_mode = 3
 
-[node name="SlotGrid" type="GridContainer" parent="RootPanel/MainVBox/SavePanel/SaveVBox"]
-columns = 3
+[node name="SlotGrid" type="GridContainer" parent="RootPanel/Columns/ActionColumn/PageHost/ContinuePage"]
+unique_name_in_owner = true
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 6
-custom_minimum_size = Vector2(0, 80)
+columns = 1
 
-[node name="SlotButton_1" type="Button" parent="RootPanel/MainVBox/SavePanel/SaveVBox/SlotGrid"]
-self_modulate = Color(0.16, 0.22, 0.32, 1)
-custom_minimum_size = Vector2(200, 34)
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 13
-clip_text = true
+[node name="ContinueSpacer" type="Control" parent="RootPanel/Columns/ActionColumn/PageHost/ContinuePage"]
+size_flags_vertical = 3
 
-[node name="SlotButton_2" type="Button" parent="RootPanel/MainVBox/SavePanel/SaveVBox/SlotGrid"]
-self_modulate = Color(0.16, 0.22, 0.32, 1)
-custom_minimum_size = Vector2(200, 34)
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 13
-clip_text = true
+[node name="ContinueNavRow" type="HBoxContainer" parent="RootPanel/Columns/ActionColumn/PageHost/ContinuePage"]
+theme_override_constants/separation = 8
 
-[node name="SlotButton_3" type="Button" parent="RootPanel/MainVBox/SavePanel/SaveVBox/SlotGrid"]
-self_modulate = Color(0.16, 0.22, 0.32, 1)
-custom_minimum_size = Vector2(200, 34)
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 13
-clip_text = true
+[node name="ContinueBackButton" type="Button" parent="RootPanel/Columns/ActionColumn/PageHost/ContinuePage/ContinueNavRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+theme_type_variation = &"GhostButton"
+text = "返回"
 
-[node name="SlotButton_4" type="Button" parent="RootPanel/MainVBox/SavePanel/SaveVBox/SlotGrid"]
-self_modulate = Color(0.16, 0.22, 0.32, 1)
-custom_minimum_size = Vector2(200, 34)
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 13
-clip_text = true
-
-[node name="SlotButton_5" type="Button" parent="RootPanel/MainVBox/SavePanel/SaveVBox/SlotGrid"]
-self_modulate = Color(0.16, 0.22, 0.32, 1)
-custom_minimum_size = Vector2(200, 34)
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 13
-clip_text = true
-
-[node name="ContinueButton" type="Button" parent="RootPanel/MainVBox"]
-self_modulate = Color(0.2, 0.66, 0.42, 1)
-custom_minimum_size = Vector2(0, 36)
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 18
+[node name="ContinueButton" type="Button" parent="RootPanel/Columns/ActionColumn/PageHost/ContinuePage/ContinueNavRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
 text = "读取槽1"
 
-[node name="MenuStatusLabel" type="Label" parent="RootPanel/MainVBox"]
+[node name="MenuStatusLabel" type="Label" parent="RootPanel/Columns/ActionColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 34)
+theme_type_variation = &"StatusLabel"
 text = "当前存档槽：1"
 horizontal_alignment = 1
-theme_override_colors/font_color = Color(1, 0.72, 0.44, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 15
-custom_minimum_size = Vector2(0, 22)
+autowrap_mode = 3
+
+[node name="MobileHint" type="Label" parent="RootPanel/Columns/ActionColumn"]
+theme_type_variation = &"HintLabel"
+text = "电脑 / 安卓均可游玩 · 手机建议横屏"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="StageColumn" type="Control" parent="RootPanel/Columns"]
+unique_name_in_owner = true
+offset_left = 294.0
+offset_right = 919.0
+offset_bottom = 598.0
+
+[node name="StageChrome" type="Control" parent="RootPanel/Columns/StageColumn"]
+unique_name_in_owner = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("3_stage")
+
+[node name="PreviewContainer" type="Control" parent="RootPanel/Columns/StageColumn"]
+unique_name_in_owner = true
+clip_contents = true
+offset_left = 16.0
+offset_top = 36.0
+offset_right = 609.0
+offset_bottom = 566.0
+
+[node name="ChamberPreview" type="Node2D" parent="RootPanel/Columns/StageColumn/PreviewContainer"]
+unique_name_in_owner = true
+position = Vector2(296, 265)
+scale = Vector2(0.77, 0.77)
+
+[node name="StageCaption" type="Label" parent="RootPanel/Columns/StageColumn"]
+unique_name_in_owner = true
+offset_left = 16.0
+offset_top = 574.0
+offset_right = 609.0
+offset_bottom = 598.0
+theme_type_variation = &"StageCaptionLabel"
+text = "实时战场预览 · 40 × 40"
+horizontal_alignment = 1
