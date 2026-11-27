@@ -1,6 +1,9 @@
 ﻿extends Node2D
 class_name Bullet
 
+# Presentation only; see scripts/render/BulletRenderer.gd.
+const BulletRendererScript = preload("res://scripts/render/BulletRenderer.gd")
+
 const MAX_RESTORE_TRAIL_POINTS: int = 3
 
 var faction_id: int = GameConfig.Faction.BLUE
@@ -309,22 +312,9 @@ func _visual_radius() -> float:
 	return GameConfig.BULLET_RADIUS
 
 func _draw() -> void:
-	var base = GameConfig.faction_color(faction_id)
-	var radius: float = _visual_radius()
-
-	# v1.9.29：拖尾已移到 BulletTrailLayer 统一绘制。
-	# 子弹节点自身只负责主体圆球，避免每颗子弹各自 queue_redraw()。
-
-	if simple_draw:
-		draw_circle(Vector2.ZERO, radius, base)
-		return
-
-	if not reduce_visual_effects:
-		draw_circle(Vector2(2.8, 2.8), radius + 2.2, Color(0.0, 0.0, 0.0, 0.34))
-		draw_circle(Vector2.ZERO, radius + 1.2, Color(0.05, 0.05, 0.05, 0.94))
-
-	draw_circle(Vector2.ZERO, radius, base)
-	if not reduce_visual_effects:
-		draw_circle(Vector2(1.8, 1.8), radius * 0.64, base.darkened(0.26))
-		draw_circle(Vector2(-2.2, -2.0), radius * 0.30, Color(1.0, 1.0, 1.0, 0.76))
-		draw_circle(Vector2.ZERO, radius * 0.25, Color(1.0, 1.0, 1.0, 0.14))
+	BulletRendererScript.draw(self, {
+		"color": GameConfig.faction_color(faction_id),
+		"radius": _visual_radius(),
+		"simple": simple_draw,
+		"reduce": reduce_visual_effects,
+	})
