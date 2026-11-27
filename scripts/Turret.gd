@@ -115,11 +115,12 @@ func _inward_center_angle() -> float:
 		_:
 			return 0.0
 
-func can_start_burst() -> bool:
-	return not is_destroyed and battlefield != null and bullet_container != null and burst_remaining <= 0
-
 func fire_burst(count: int) -> void:
-	if not can_start_burst():
+	if is_destroyed:
+		return
+	if battlefield == null or bullet_container == null:
+		return
+	if burst_remaining > 0:
 		return
 
 	burst_remaining = clampi(count, 1, GameConfig.get_max_pending_count())

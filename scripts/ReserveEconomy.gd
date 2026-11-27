@@ -10,7 +10,7 @@ var _balances: Dictionary = {}
 func balance(faction_id: int) -> int:
 	return _balances.get(faction_id, 0)
 
-func convert_release(faction_id: int, firepower: int) -> int:
+func convert_pending(firepower: int, faction_id: int) -> int:
 	var stored := balance(faction_id)
 	@warning_ignore("integer_division")
 	var converted := mini(firepower / CONVERSION_DIVISOR, CAPACITY - stored)
