@@ -14,6 +14,20 @@ extends Node2D
 
 const VIEW_W: float = 1120.0
 const VIEW_H: float = 720.0
+
+# The layout system below already takes a viewport size everywhere; it was
+# simply always handed the 1120x720 design canvas. With stretch mode
+# canvas_items + aspect expand the real logical canvas is wider than 1120 on
+# any 16:9 window (1280x720 at 1920x1080), so the board stayed centred in a
+# 1120 strip and the extra width rendered as empty background.
+var _view_size: Vector2 = Vector2(VIEW_W, VIEW_H)
+
+
+func _resolve_view_size() -> Vector2:
+	var real_size: Vector2 = get_viewport_rect().size
+	# Never go below the design canvas: the profiles are hand-tuned in absolute
+	# pixels and smaller canvases would make panels overlap.
+	return Vector2(maxf(VIEW_W, real_size.x), maxf(VIEW_H, real_size.y))
 const LEGACY_SAVE_PATH: String = "user://ballwar_save.json"
 const LEGACY_SLOT_SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.json"
 const SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.save"
@@ -75,7 +89,7 @@ func _set_ui_runtime_ref(key: String, value) -> void:
 
 func _build_runtime_layout(grid_size: int) -> Dictionary:
 	var layout: Dictionary = LayoutProfiles.get_profile(grid_size).duplicate(true)
-	layout.merge(LayoutCoordinator.calculate_layout(grid_size, Vector2(VIEW_W, VIEW_H), is_mobile_layout), true)
+	layout.merge(LayoutCoordinator.calculate_layout(grid_size, _view_size, is_mobile_layout), true)
 	return layout
 
 func _sync_runtime_context(grid_size: int) -> void:
@@ -95,6 +109,7 @@ func _ready() -> void:
 		seed(match_seed)
 	else:
 		randomize()
+	_view_size = _resolve_view_size()
 	is_mobile_layout = _detect_mobile_layout()
 	player_settings = PlayerSettingsStore.load_settings()
 	_apply_performance_setting()
@@ -169,7 +184,7 @@ func _create_background() -> void:
 	var background = ColorRect.new()
 	background.name = "MainBackground"
 	background.color = Color(0.03, 0.07, 0.14)
-	background.size = Vector2(VIEW_W, VIEW_H)
+	background.size = _view_size
 	add_child(background)
 	background.z_index = -100
 
@@ -181,7 +196,7 @@ func _create_start_menu() -> void:
 	var menu_layout: Dictionary = _build_runtime_layout(LayoutProfiles.sanitize_grid_size(selected_grid_size))
 	var instance: CanvasLayer = StartMenuScene.instantiate()
 	add_child(instance)
-	instance.setup(self, Vector2(VIEW_W, VIEW_H), _get_save_slot_summaries(), menu_layout)
+	instance.setup(self, _view_size, _get_save_slot_summaries(), menu_layout)
 	menu_nodes = instance.get_parts()
 
 	menu_layer = menu_nodes.get("menu_layer", null)
@@ -239,7 +254,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 		_show_center_banner("领土战争", "开战！", Color(1.0, 0.94, 0.48), true)
 
 func _create_battlefield(grid_size: int) -> void:
-	var scene_nodes: Dictionary = GameSceneBuilder.create_battlefield(self, game_layer, grid_size, runtime.current_layout, Vector2(VIEW_W, VIEW_H))
+	var scene_nodes: Dictionary = GameSceneBuilder.create_battlefield(self, game_layer, grid_size, runtime.current_layout, _view_size)
 	runtime.battlefield = scene_nodes.get("battlefield", null)
 	runtime.bullet_pool = scene_nodes.get("bullet_container", null)
 	chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
@@ -250,14 +265,14 @@ func _create_turrets() -> void:
 		runtime.bullet_pool.set_tracked_turrets(runtime.turrets)
 
 func _create_control_chambers() -> void:
-	runtime.chambers = GameSceneBuilder.create_control_chambers(self, game_layer, runtime.battlefield, runtime.turrets, runtime.current_layout, chamber_scale, Vector2(VIEW_W, VIEW_H))
+	runtime.chambers = GameSceneBuilder.create_control_chambers(self, game_layer, runtime.battlefield, runtime.turrets, runtime.current_layout, chamber_scale, _view_size)
 	_sync_chamber_game_elapsed_time()
 
 func _create_ui() -> void:
 	var game_hud: CanvasLayer = GameHUDScene.instantiate()
 	game_hud.name = "UICanvas"
 	game_layer.add_child(game_hud)
-	game_hud.setup_static(self, Vector2(VIEW_W, VIEW_H), runtime.current_layout, is_mobile_layout)
+	game_hud.setup_static(self, _view_size, runtime.current_layout, is_mobile_layout)
 	var hud_nodes: Dictionary = game_hud.get_static_parts()
 
 	runtime.set_hud_parts(hud_nodes)
@@ -283,7 +298,7 @@ func _create_event_roulette_system() -> void:
 		return
 
 	runtime.event_view = EventRouletteScene.instantiate()
-	runtime.event_view.setup(Vector2(VIEW_W, VIEW_H), runtime.current_layout, is_mobile_layout)
+	runtime.event_view.setup(_view_size, runtime.current_layout, is_mobile_layout)
 	ui_canvas.add_child(runtime.event_view)
 
 	var event_controller_script = load("res://scripts/EventRouletteController.gd")
@@ -306,7 +321,7 @@ func _create_event_roulette_system() -> void:
 	_refresh_event_log()
 
 func _create_control_buttons() -> void:
-	var button_nodes: Dictionary = GameHudView.create_control_buttons(self, game_layer, runtime.chambers, runtime.current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
+	var button_nodes: Dictionary = GameHudView.create_control_buttons(self, game_layer, runtime.chambers, runtime.current_layout, _view_size, is_mobile_layout)
 	_set_ui_runtime_ref("add_ball_buttons", button_nodes.get("add_ball_buttons", {}))
 	_set_ui_runtime_ref("add_ball_button_base_positions", button_nodes.get("add_ball_button_base_positions", {}))
 	for faction_id in _ui_runtime_ref("add_ball_buttons", {}).keys():
@@ -409,7 +424,7 @@ func _show_center_banner(title_text: String, sub_text: String, accent: Color, au
 			self,
 			_hud_ref("ui_canvas"),
 			_hud_ref("opening_banner"),
-			Vector2(VIEW_W, VIEW_H),
+			_view_size,
 			runtime.current_layout,
 			title_text,
 			sub_text,
