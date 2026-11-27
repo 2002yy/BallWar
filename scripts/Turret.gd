@@ -7,6 +7,7 @@ class_name Turret
 const TurretRendererScript = preload("res://scripts/render/TurretRenderer.gd")
 
 signal destroyed(faction_id)
+signal damaged(faction_id, amount)
 signal burst_lock_changed(faction_id, locked)
 signal burst_progress(faction_id, remaining)
 
@@ -279,6 +280,10 @@ func take_damage(amount: int) -> void:
 	health = max(0, health - amount)
 	damage_flash = 1.0
 	queue_redraw()
+	# Presentation event, not a rule change: emitted after the damage is applied,
+	# carries no state back, and is the reason nothing needs to poll the flash
+	# timer for "the turret was hit".
+	damaged.emit(faction_id, amount)
 	if health <= 0:
 		_destroy()
 

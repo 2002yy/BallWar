@@ -5,8 +5,8 @@
 [node name="SettingsPanel" type="Control" unique_id=26256766]
 process_mode = 3
 visible = false
-offset_right = 286.0
-offset_bottom = 168.0
+offset_right = 300.0
+offset_bottom = 250.0
 script = ExtResource("1_script")
 
 [node name="Bg" type="ColorRect" parent="."]
@@ -56,8 +56,62 @@ theme_override_colors/font_color = Color(0.88, 0.92, 1, 1)
 theme_override_font_sizes/font_size = 14
 button_pressed = true
 
+[node name="VolumeTitle" type="Label" parent="PanelMargin/MainVBox"]
+text = "音量"
+theme_override_colors/font_color = Color(1, 0.95, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+custom_minimum_size = Vector2(0, 18)
+
+[node name="MasterVolumeRow" type="HBoxContainer" parent="PanelMargin/MainVBox"]
+theme_override_constants/separation = 6
+
+[node name="MasterVolumeLabel" type="Label" parent="PanelMargin/MainVBox/MasterVolumeRow"]
+custom_minimum_size = Vector2(64, 0)
+text = "总音量"
+theme_override_colors/font_color = Color(0.88, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="MasterVolumeSlider" type="HSlider" parent="PanelMargin/MainVBox/MasterVolumeRow"]
+custom_minimum_size = Vector2(0, 18)
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 0.7
+
+[node name="SfxVolumeRow" type="HBoxContainer" parent="PanelMargin/MainVBox"]
+theme_override_constants/separation = 6
+
+[node name="SfxVolumeLabel" type="Label" parent="PanelMargin/MainVBox/SfxVolumeRow"]
+custom_minimum_size = Vector2(64, 0)
+text = "音效"
+theme_override_colors/font_color = Color(0.88, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="SfxVolumeSlider" type="HSlider" parent="PanelMargin/MainVBox/SfxVolumeRow"]
+custom_minimum_size = Vector2(0, 18)
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 0.55
+
+[node name="MusicVolumeRow" type="HBoxContainer" parent="PanelMargin/MainVBox"]
+theme_override_constants/separation = 6
+
+[node name="MusicVolumeLabel" type="Label" parent="PanelMargin/MainVBox/MusicVolumeRow"]
+custom_minimum_size = Vector2(64, 0)
+text = "音乐"
+theme_override_colors/font_color = Color(0.88, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="MusicVolumeSlider" type="HSlider" parent="PanelMargin/MainVBox/MusicVolumeRow"]
+custom_minimum_size = Vector2(0, 18)
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 0.6
+
 [node name="HintLabel" type="Label" parent="PanelMargin/MainVBox"]
-text = "部分设置重启后生效"
+text = "音量即时生效并自动保存"
 theme_override_colors/font_color = Color(0.62, 0.68, 0.82, 1)
 theme_override_font_sizes/font_size = 11
 custom_minimum_size = Vector2(0, 18)

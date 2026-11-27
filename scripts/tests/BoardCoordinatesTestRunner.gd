@@ -15,6 +15,14 @@ func _run() -> void:
 	var main = MainScript.new()
 	main.match_seed = 12345
 	root.add_child(main)
+	# This runner is about coordinates, not audio. Muting keeps it from starting
+	# playbacks, and a headless run that leaves playback objects behind makes the
+	# engine report "resources still in use at exit" - intermittently, depending on
+	# mixer timing. The suite treats that line as a failure, so before this was
+	# added this runner failed roughly one suite run in three while passing every
+	# time on its own.
+	if main.audio_manager != null:
+		main.audio_manager.set_enabled(false)
 	main._start_game(40, true, false)
 	paused = true
 

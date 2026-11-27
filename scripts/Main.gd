@@ -41,9 +41,16 @@ const BOARD_SIDE_PAD: float = 10.0
 
 const BoardChassisScript = preload("res://scripts/render/BoardChassis.gd")
 const ArtStyleScript = preload("res://scripts/render/ArtStyle.gd")
+const AudioManagerScript = preload("res://scripts/AudioManager.gd")
+const PresentationEventsScript = preload("res://scripts/presentation/PresentationEvents.gd")
 
 var board_root: CanvasLayer = null
 var board_chassis: Node2D = null
+var audio_manager = null
+# Single fan-out point from simulation to presentation. Audio subscribes today;
+# effects and HUD feedback will subscribe to the same object rather than digging
+# into Turret/ControlChamber state.
+var presentation_events = null
 var _board_layout: Dictionary = {}
 
 
@@ -218,6 +225,12 @@ func _ready() -> void:
 	_view_size = _resolve_view_size()
 	is_mobile_layout = _detect_mobile_layout()
 	player_settings = PlayerSettingsStore.load_settings()
+	presentation_events = PresentationEventsScript.new()
+	audio_manager = AudioManagerScript.new()
+	audio_manager.name = "AudioManager"
+	add_child(audio_manager)
+	audio_manager.bind_presentation(presentation_events)
+	_apply_audio_settings()
 	_apply_performance_setting()
 	_load_menu_preferences()
 	_create_background()
@@ -419,6 +432,43 @@ func _create_battlefield(grid_size: int) -> void:
 	runtime.bullet_pool = scene_nodes.get("bullet_container", null)
 	chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
 
+func _on_release_sfx(faction_id = null, count = null, _chamber = null) -> void:
+	if presentation_events != null:
+		presentation_events.emit_released(int(faction_id) if faction_id != null else 0, int(count) if count != null else 0)
+
+
+func _on_turret_destroyed_sfx(faction_id = null) -> void:
+	if presentation_events != null:
+		presentation_events.emit_destroyed(int(faction_id) if faction_id != null else 0)
+
+
+func _on_turret_damaged_sfx(faction_id = null, amount = null) -> void:
+	if presentation_events != null:
+		presentation_events.emit_damaged(int(faction_id) if faction_id != null else 0, int(amount) if amount != null else 0)
+
+
+func _on_ball_landed_sfx(faction_id = null, ball_count = null) -> void:
+	if presentation_events != null:
+		presentation_events.emit_ball_landed(int(faction_id) if faction_id != null else 0, int(ball_count) if ball_count != null else 0)
+
+
+func _on_gate_multiplier_sfx(faction_id = null, multiplier = null, pending = null) -> void:
+	if presentation_events != null:
+		presentation_events.emit_multiplier_applied(
+			int(faction_id) if faction_id != null else 0,
+			int(multiplier) if multiplier != null else 0,
+			int(pending) if pending != null else 0)
+
+
+func _apply_audio_settings() -> void:
+	if audio_manager == null:
+		return
+	audio_manager.apply_volumes(
+		float(player_settings.get("master_volume", 0.7)),
+		float(player_settings.get("sfx_volume", 0.55)),
+		float(player_settings.get("music_volume", 0.6)))
+
+
 func _refresh_chassis() -> void:
 	if board_chassis == null or not is_instance_valid(board_chassis):
 		return
@@ -427,11 +477,39 @@ func _refresh_chassis() -> void:
 
 func _create_turrets() -> void:
 	runtime.turrets = GameSceneBuilder.create_turrets(self, board_root, runtime.battlefield, runtime.bullet_pool, _board_layout)
+	for fid in runtime.turrets.keys():
+		var t = runtime.turrets[fid]
+		if t == null or not is_instance_valid(t):
+			continue
+		if t.has_signal("destroyed"):
+			var cb: Callable = Callable(self, "_on_turret_destroyed_sfx")
+			if not t.destroyed.is_connected(cb):
+				t.destroyed.connect(cb)
+		if t.has_signal("damaged"):
+			var cb_damaged: Callable = Callable(self, "_on_turret_damaged_sfx")
+			if not t.damaged.is_connected(cb_damaged):
+				t.damaged.connect(cb_damaged)
 	if runtime.bullet_pool != null and is_instance_valid(runtime.bullet_pool) and runtime.bullet_pool.has_method("set_tracked_turrets"):
 		runtime.bullet_pool.set_tracked_turrets(runtime.turrets)
 
 func _create_control_chambers() -> void:
 	runtime.chambers = GameSceneBuilder.create_control_chambers(self, board_root, runtime.battlefield, runtime.turrets, _board_layout, chamber_scale, BOARD_SPACE)
+	for fid in runtime.chambers.keys():
+		var ch = runtime.chambers[fid]
+		if ch == null or not is_instance_valid(ch):
+			continue
+		for pair in [
+			["release_requested", "_on_release_sfx"],
+			["ball_landed", "_on_ball_landed_sfx"],
+			["gate_multiplier_applied", "_on_gate_multiplier_sfx"],
+		]:
+			var signal_name: String = String(pair[0])
+			if not ch.has_signal(signal_name):
+				continue
+			var callback: Callable = Callable(self, String(pair[1]))
+			var sig: Signal = ch.get(signal_name)
+			if not sig.is_connected(callback):
+				sig.connect(callback)
 	_sync_chamber_game_elapsed_time()
 
 func _create_ui() -> void:
@@ -628,10 +706,17 @@ func _toggle_pause() -> void:
 		_hud_ref("pause_button"),
 		Callable(self, "_save_game_progress")
 	)
+	# Pausing must not leave battle sounds ringing, and resuming must not replay
+	# a backlog: events are played immediately, so stopping is the whole story.
+	if audio_manager != null:
+		audio_manager.on_pause_changed(get_tree().paused)
 
 func _on_player_settings_changed(settings: Dictionary) -> void:
 	var event_log_changed: bool = bool(player_settings.get("show_event_log", true)) != bool(settings.get("show_event_log", true))
 	player_settings = settings.duplicate()
+	# Volume moves the bus graph immediately; the panel already wrote the value
+	# through, so a restart is not needed for any of these.
+	_apply_audio_settings()
 	_apply_performance_setting()
 	if event_log_changed:
 		_apply_event_log_setting()
@@ -770,6 +855,12 @@ func _cleanup_game_layer() -> void:
 		game_layer = null
 	board_root = null
 	board_chassis = null
+	# A fresh match must not inherit the previous one's sound tail. Connections
+	# themselves die with the turrets and chambers, which are recreated per match.
+	if audio_manager != null:
+		audio_manager.stop_all()
+	if presentation_events != null:
+		presentation_events.reset_counts()
 	runtime.reset()
 	bullet_restore_queue.reset()
 

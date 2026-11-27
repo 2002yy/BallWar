@@ -27,6 +27,12 @@ var _tick: int = 0
 var _seed_used: int = 0
 var _max_seconds: float = 90.0
 var _label: String = "run"
+# Audio arm for the on/off trace comparison:
+#   on    - default, the shipped audio graph runs for the whole match
+#   off   - audio node exists but play() short-circuits (a player muting the bus)
+#   none  - audio node is freed before the match starts, so the presentation bus
+#           has no subscriber at all (the strongest "audio does not exist" arm)
+var _audio_arm: String = "on"
 
 var _trace_file: FileAccess = null
 var _trace_lines: Array[String] = []
@@ -86,6 +92,11 @@ func _run() -> void:
 	_seed_used = _env_int("BALLWAR_MATCH_SEED", 12345)
 	_max_seconds = _env_float("BALLWAR_MATCH_SECONDS", 90.0)
 	_label = _env_string("BALLWAR_TRACE_LABEL", "run")
+	_audio_arm = _env_string("BALLWAR_AUDIO", "on").strip_edges().to_lower()
+	if not ["on", "off", "none"].has(_audio_arm):
+		printerr("[Probe] BALLWAR_AUDIO must be on|off|none, got '%s'." % _audio_arm)
+		quit(2)
+		return
 	_ticks_per_second = int(ProjectSettings.get_setting("physics/common/physics_ticks_per_second", 60))
 	if _ticks_per_second <= 0:
 		_ticks_per_second = 60
@@ -121,6 +132,10 @@ func _run() -> void:
 	get_root().add_child(_main)
 	get_root().add_child(_probe)
 	await process_frame
+
+	if not _apply_audio_arm():
+		quit(2)
+		return
 
 	_main._start_game(GRID_SIZE, true, false)
 	await process_frame
@@ -162,7 +177,72 @@ func _run() -> void:
 		quit(4)
 		return
 	_print_summary()
+	_write_audio_report()
 	quit(0)
+
+
+# Applies the audio arm BEFORE the match exists, so every arm starts from the
+# same node tree minus the audio node. Returns false on an unusable arm.
+#
+# The point of three arms instead of two: "off" still runs the whole presentation
+# bus and the throttling code, while "none" removes the subscriber entirely. If
+# only "none" matches and "off" does not, the divergence lives in the event
+# plumbing rather than in audio playback - that difference is the useful part.
+func _apply_audio_arm() -> bool:
+	if _main.audio_manager == null:
+		print("[Probe] AUDIO arm=%s (no audio node present)" % _audio_arm)
+		return true
+	match _audio_arm:
+		"on":
+			pass
+		"off":
+			_main.audio_manager.set_enabled(false)
+		"none":
+			_main.remove_child(_main.audio_manager)
+			_main.audio_manager.free()
+			_main.audio_manager = null
+		_:
+			return false
+	print("[Probe] AUDIO arm=%s" % _audio_arm)
+	return true
+
+
+# Proof that the arm actually did something. An "audio on" run in which nothing
+# was ever played would match an "audio off" run for the wrong reason, and that
+# is the vacuous comparison this file has to avoid.
+func _write_audio_report() -> void:
+	var played: Dictionary = {}
+	var emitted: Dictionary = {}
+	if _main != null and is_instance_valid(_main):
+		# Read the bus directly, not through AudioManager: in the "none" arm there
+		# is no AudioManager left to ask, and the question "did the GAME emit the
+		# same events in every arm" has to be answerable for all three arms.
+		if _main.presentation_events != null:
+			emitted = _main.presentation_events.snapshot()
+		if _main.audio_manager != null:
+			played = _main.audio_manager.play_counts()
+	var total_played: int = 0
+	for key in played.keys():
+		total_played += int(played[key])
+	var total_emitted: int = 0
+	for key in emitted.keys():
+		total_emitted += int(emitted[key])
+	var report: Dictionary = {
+		"arm": _audio_arm,
+		"label": _label,
+		"seed": _seed_used,
+		"ticks": _tick,
+		"event_counts": emitted,
+		"event_total": total_emitted,
+		"played_counts": played,
+		"played_total": total_played,
+	}
+	var path: String = "user://audio_%s.json" % _label
+	var f: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(report, "  "))
+		f.close()
+	print("[Probe] AUDIO_REPORT %s" % JSON.stringify(report))
 
 
 func _capture_loop(max_ticks: int) -> void:

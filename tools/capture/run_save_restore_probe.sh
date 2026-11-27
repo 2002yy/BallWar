@@ -10,6 +10,14 @@
 # A large GLOBAL delta is expected when the two sizes give the board a different
 # origin or scale - it is reported as proof the comparison is not vacuous.
 #
+# Isolation: both processes run against a throwaway APPDATA, so the save file is
+# written there and the player's real slots are never opened. Nothing is backed
+# up or restored, because nothing real is touched.
+#
+# Note: this must NOT be wrapped in tools/run-win.sh - that wrapper hardcodes
+# APPDATA for the trimmed-environment problem, which would drop the probe back
+# into the real user directory. The project must already be imported.
+#
 # Usage:
 #   tools/capture/run_save_restore_probe.sh
 #   SAVE_SIZE=1120x720 RESTORE_SIZE=1920x1080 tools/capture/run_save_restore_probe.sh
@@ -18,64 +26,51 @@
 
 set -u
 
-GODOT="${GODOT:-/d/Godot/4.7.1/Godot_v4.7.1-stable_win64_console.exe}"
-RUN_WIN="${RUN_WIN:-/c/Users/Zhang/.workbuddy/tools/run-win.sh}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+
+GODOT="${GODOT:-}"
+if [ -z "$GODOT" ]; then
+	for candidate in \
+		/d/Godot/4.7.1/Godot_v4.7.1-stable_win64_console.exe \
+		/c/Program\ Files/Godot/Godot_v4.7.1-stable_win64_console.exe; do
+		[ -x "$candidate" ] && GODOT="$candidate" && break
+	done
+fi
+if [ -z "$GODOT" ]; then
+	echo "GODOT not found; set GODOT=/path/to/godot" >&2
+	exit 2
+fi
+
 SAVE_SIZE="${SAVE_SIZE:-1024x768}"
 RESTORE_SIZE="${RESTORE_SIZE:-1920x1080}"
-SAVE_AT="${SAVE_AT:-12}"
+SAVE_AT="${SAVE_AT:-15}"
 TOL="${TOL:-0.5}"
 SEED="${SEED:-424242}"
 SLOT="${SLOT:-5}"
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$HERE/../.." && pwd)"
 OUT="${OUT:-$(cd "$ROOT/.." && pwd)/art_captures/save_restore}"
-
 mkdir -p "$OUT" || { echo "cannot create $OUT"; exit 5; }
 LOG1="$OUT/run_save.log"
 LOG2="$OUT/run_restore.log"
 
-# The probe borrows one save slot, and save slots are player data: whatever was
-# there before the run is put back afterwards, and if the slot was empty the
-# probe's own file is moved out of the way instead of deleted.
-USERDIR="${USERDIR:-$APPDATA/Godot/app_userdata/领土战争}"
-SLOT_SAVE="$USERDIR/ballwar_save_slot_${SLOT}.save"
-SLOT_BAK="${SLOT_SAVE}.bak"
-BACKUP="$OUT/player_slot_backup"
-HAD_SAVE=0
-HAD_BAK=0
-if [ -d "$USERDIR" ]; then
-	mkdir -p "$BACKUP"
-	if [ -f "$SLOT_SAVE" ]; then cp -p "$SLOT_SAVE" "$BACKUP/" && HAD_SAVE=1; fi
-	if [ -f "$SLOT_BAK" ]; then cp -p "$SLOT_BAK" "$BACKUP/" && HAD_BAK=1; fi
-else
-	echo "WARN: $USERDIR not found, cannot protect slot $SLOT"
-fi
-
-restore_slot() {
-	[ -d "$USERDIR" ] || return 0
-	if [ "$HAD_SAVE" -eq 1 ]; then
-		cp -p "$BACKUP/ballwar_save_slot_${SLOT}.save" "$SLOT_SAVE"
-		echo "-- slot $SLOT restored from backup"
+ISO="$(mktemp -d "${TMPDIR:-/tmp}/ballwar-probe-user-XXXXXX")"
+cleanup() {
+	if [ -n "${KEEP_ISO:-}" ]; then
+		echo "-- isolated user dir kept at $ISO"
 	else
-		mkdir -p "$BACKUP/probe_wrote"
-		[ -f "$SLOT_SAVE" ] && mv -f "$SLOT_SAVE" "$BACKUP/probe_wrote/" 
-		echo "-- slot $SLOT was empty before the run; probe artifact moved to $BACKUP/probe_wrote"
+		rm -rf "$ISO"
 	fi
-	if [ "$HAD_BAK" -eq 1 ]; then
-		cp -p "$BACKUP/ballwar_save_slot_${SLOT}.save.bak" "$SLOT_BAK"
-	else
-		[ -f "$SLOT_BAK" ] && mv -f "$SLOT_BAK" "$BACKUP/probe_wrote/"
-	fi
-	return 0
 }
-trap restore_slot EXIT
+trap cleanup EXIT
 
 echo "== probe: save @ $SAVE_SIZE (t=${SAVE_AT}s) -> restore @ $RESTORE_SIZE =="
 echo "   out=$OUT  slot=$SLOT  tol=${TOL}px  seed=$SEED"
+echo "   isolated APPDATA=$ISO"
 
 run_phase() {
 	local size="$1" phase="$2" log="$3"
+	APPDATA="$ISO" \
 	CAPTURE_OUT="$OUT" \
 	CAPTURE_SAVE_RESTORE="$phase" \
 	CAPTURE_SAVE_SLOT="$SLOT" \
@@ -85,7 +80,7 @@ run_phase() {
 	CAPTURE_GRID=40 \
 	CAPTURE_SECONDS=40 \
 	CAPTURE_TIME_LIMIT=3 \
-	"$RUN_WIN" "$GODOT" --path "$ROOT" --resolution "$size" \
+	"$GODOT" --path "$ROOT" --resolution "$size" \
 		--script res://tools/capture/capture_battle.gd > "$log" 2>&1
 	return $?
 }

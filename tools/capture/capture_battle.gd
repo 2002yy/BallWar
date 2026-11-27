@@ -42,6 +42,10 @@ extends SceneTree
 #                     public add_control_ball() before the probe saves, so the
 #                     comparison runs on dozens of bullets instead of two.
 #   CAPTURE_TRACE     "1" prints the live bullet count every 5 battle seconds
+#   CAPTURE_AUDIO     "on" (default) or "off". "off" mutes the SFX path so the
+#                     same match can be captured with and without audio; without
+#                     this the only way to compare was to edit the code under
+#                     measurement, which is not a comparison.
 #
 # Exit codes: 0 ok, 2 capture dir not writable, 3 no viewport image,
 #             4 save/restore local-coordinate mismatch, 5 match ended early,
@@ -73,6 +77,7 @@ var _exit_code: int = 0
 var _trace: bool = false
 var _trace_next: float = 5.0
 var _fill_chambers: bool = false
+var _audio_off: bool = false
 
 
 # A fresh 40x40 match only keeps 1-4 bullets alive at any instant, which makes a
@@ -92,6 +97,19 @@ func _fill_all_chambers() -> void:
 				break
 			added += 1
 	print("[Probe] fixture: added %d control balls" % added)
+
+
+# Switches the audio path off inside the same build, so the two captures differ
+# in one thing only. set_enabled(false) short-circuits play() before it touches
+# a player, which is the whole cost this comparison is trying to measure.
+func _apply_audio_switch() -> void:
+	if _main == null or _main.audio_manager == null:
+		return
+	if _audio_off:
+		_main.audio_manager.set_enabled(false)
+		print("[Capture] audio disabled for this run")
+	else:
+		print("[Capture] audio enabled for this run")
 
 
 # Bullet count over time. The pool has no event to hook, and "how many are alive
@@ -136,6 +154,7 @@ func _run() -> void:
 	_tol_px = _env_float("CAPTURE_TOL", 0.5)
 	_trace = _env_string("CAPTURE_TRACE", "0") == "1"
 	_fill_chambers = _env_string("CAPTURE_FILL_CHAMBERS", "1") == "1"
+	_audio_off = _env_string("CAPTURE_AUDIO", "on").strip_edges().to_lower() == "off"
 
 	if DirAccess.make_dir_recursive_absolute(_out_dir) != OK:
 		print("[Capture] ERROR: cannot create %s" % _out_dir)
@@ -187,6 +206,13 @@ func _run() -> void:
 	_main._start_game(_grid, false, true)
 	for i in 4:
 		await process_frame
+	_apply_audio_switch()
+	# Perf comparison needs events to exist. A fresh match keeps 1-4 bullets alive
+	# and produces about one presentation event per second, which is far too thin
+	# to show any audio cost; topping up the chambers through the same public call
+	# the +ball button uses raises the rate without touching a rule.
+	if _fill_chambers:
+		_fill_all_chambers()
 
 	# Save-coordinate contract: this must NOT depend on the window size, or a
 	# save taken at one resolution restores to the wrong place at another.
@@ -377,6 +403,8 @@ func _parse_plan(raw: String) -> Array:
 
 func _finish() -> void:
 	_write_perf()
+	if _env_string("CAPTURE_DIAG", "") == "1" and _main != null and is_instance_valid(_main) and _main.audio_manager != null:
+		print("[Capture] audio_played = ", _main.audio_manager.play_counts())
 	print("[Capture] done, %d shots" % _shot_count)
 	quit(_exit_code)
 
