@@ -11,6 +11,7 @@ var event_controller = null
 var event_view = null
 var current_config: Dictionary = {}
 var current_layout: Dictionary = {}
+var match_config = null
 
 func reset() -> void:
     battlefield = null
@@ -23,9 +24,13 @@ func reset() -> void:
     event_view = null
     current_config.clear()
     current_layout.clear()
+    match_config = null
 
 func set_config(config: Dictionary) -> void:
     current_config = config.duplicate(true)
+
+func set_match_config(config) -> void:
+    match_config = config
 
 func set_layout(layout: Dictionary) -> void:
     current_layout = layout.duplicate(true)
