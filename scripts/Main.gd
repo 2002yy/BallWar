@@ -237,6 +237,7 @@ func _on_viewport_resized() -> void:
 		return
 	_sync_runtime_context(_runtime_grid_size())
 	_apply_board_transform()
+	_refresh_chassis()
 	var hud_canvas = _hud_ref("ui_canvas")
 	if hud_canvas != null and is_instance_valid(hud_canvas) and hud_canvas.has_method("setup_static"):
 		hud_canvas.setup_static(self, _view_size, runtime.current_layout, is_mobile_layout)
@@ -374,6 +375,11 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	game_layer.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(game_layer)
 
+	# Draw order: chassis first so the whole board sits on top of it.
+	board_chassis = BoardChassisScript.new()
+	board_chassis.name = "BoardChassis"
+	game_layer.add_child(board_chassis)
+
 	board_root = Node2D.new()
 	board_root.name = "BoardRoot"
 	game_layer.add_child(board_root)
@@ -382,6 +388,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	_create_battlefield(grid_size)
 	_create_turrets()
 	_create_control_chambers()
+	_refresh_chassis()
 	_create_ui()
 	_create_event_roulette_system()
 	_create_control_buttons()
@@ -393,6 +400,12 @@ func _create_battlefield(grid_size: int) -> void:
 	runtime.battlefield = scene_nodes.get("battlefield", null)
 	runtime.bullet_pool = scene_nodes.get("bullet_container", null)
 	chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
+
+func _refresh_chassis() -> void:
+	if board_chassis == null or not is_instance_valid(board_chassis):
+		return
+	board_chassis.setup(_view_size, _board_screen_rect(), _chamber_screen_rects(), ArtStyleScript.low_effect())
+
 
 func _create_turrets() -> void:
 	runtime.turrets = GameSceneBuilder.create_turrets(self, board_root, runtime.battlefield, runtime.bullet_pool, _board_layout)
