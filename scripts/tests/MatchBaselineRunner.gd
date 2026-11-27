@@ -10,12 +10,9 @@ extends SceneTree
 #   - FPS, frame times, memory, render pressure (they are perf, not state)
 #   - HUD values, trail/particle counts, animation state
 #
-# Usage:
-#   BALLWAR_MATCH_SEED=12345 BALLWAR_MATCH_SECONDS=15 BALLWAR_TRACE_LABEL=a \
-#     <godot> --headless --fixed-fps 60 --path . \
-#     --script res://scripts/tests/MatchBaselineRunner.gd
-#
-# Exit codes: 0 ok, 2 config mismatch, 3 no battlefield, 4 trace write failed.
+# Usage: bash scripts/tests/determinism_probe.sh <label> [seconds]
+# Exit codes: 0 ok, 2 invalid config, 3 no battlefield, 4 trace write failed,
+# 5 user data is not isolated.
 
 const MainScene = preload("res://scripts/Main.gd")
 
@@ -93,8 +90,14 @@ func _run() -> void:
 	if _ticks_per_second <= 0:
 		_ticks_per_second = 60
 
-	# A stale preferences file would silently override the experiment config.
-	_remove_if_exists("user://menu_preferences.json")
+	if not _is_isolated_user_data():
+		printerr("[Probe] Refusing to run outside a fresh probe profile. Use determinism_probe.sh.")
+		quit(5)
+		return
+	if not _label.is_valid_filename() or not is_finite(_max_seconds) or _max_seconds <= 0.0:
+		printerr("[Probe] Invalid trace label or duration.")
+		quit(2)
+		return
 
 	print("[Probe] label=%s seed=%d window=%.1fs tick_rate=%d" % [_label, _seed_used, _max_seconds, _ticks_per_second])
 
@@ -146,15 +149,23 @@ func _run() -> void:
 	_write_trace_header()
 	_record_tick()
 
-	await _capture_loop()
+	var max_ticks: int = int(ceil(_max_seconds * float(_ticks_per_second)))
+	await _capture_loop(max_ticks)
 	_flush_trace()
+	var footer_written: bool = _trace_file.store_line("# end\t%s\t%d\t%d" % [_end_reason, _tick, max_ticks])
+	_trace_file.flush()
+	var trace_error: Error = _trace_file.get_error()
+	_trace_file.close()
 	_close_detail()
+	if not footer_written or trace_error != OK:
+		printerr("[Probe] Cannot finish trace.")
+		quit(4)
+		return
 	_print_summary()
 	quit(0)
 
 
-func _capture_loop() -> void:
-	var max_ticks: int = int(ceil(_max_seconds * float(_ticks_per_second)))
+func _capture_loop(max_ticks: int) -> void:
 	while _tick < max_ticks:
 		await physics_frame
 		_tick += 1
@@ -243,6 +254,15 @@ func _sim_state() -> Dictionary:
 			chamber.balls.size(),
 			float(chamber.jammed_time_left)
 		])
+		for index in range(chamber.balls.size()):
+			var ball = chamber.balls[index]
+			if not is_instance_valid(ball):
+				chamber_sig.append("%d:ball:%d:gone" % [fid, index])
+				continue
+			var stuck: Dictionary = chamber.stuck_states.get(ball.get_instance_id(), {})
+			chamber_sig.append("%d:ball:%d:%s" % [fid, index, var_to_str([
+				ball.position, ball.velocity, ball.radius, chamber.get_ball_stay_time(ball), stuck
+			]).replace("\n", "")])
 
 	if _main.runtime.bullet_pool != null and is_instance_valid(_main.runtime.bullet_pool):
 		for bullet in _main.runtime.bullet_pool.get_active_bullets():
@@ -497,9 +517,17 @@ func _tick_text(tick: int) -> String:
 	return "tick %d (%.2fs)" % [tick, float(tick) / float(_ticks_per_second)]
 
 
-func _remove_if_exists(path: String) -> void:
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+func _is_isolated_user_data() -> bool:
+	if OS.get_name() != "Windows":
+		return false
+	var root: String = OS.get_environment("APPDATA").replace("\\", "/").simplify_path()
+	var token: String = OS.get_environment("BALLWAR_PROBE_TOKEN")
+	var marker: String = root.path_join(".ballwar-probe")
+	var user_dir: String = OS.get_user_data_dir().replace("\\", "/").simplify_path()
+	return (root.is_absolute_path() and not token.is_empty() and root.get_file() == token
+		and user_dir.get_base_dir().nocasecmp_to(root.path_join("Godot/app_userdata")) == 0
+		and FileAccess.file_exists(marker) and FileAccess.get_file_as_string(marker) == token
+		and DirAccess.get_files_at(user_dir).is_empty())
 
 
 func _env_string(key: String, fallback: String) -> String:
