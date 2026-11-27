@@ -120,6 +120,20 @@ func _run() -> void:
 	_main._start_game(_grid, false, true)
 	for i in 4:
 		await process_frame
+
+	# Save-coordinate contract: this must NOT depend on the window size, or a
+	# save taken at one resolution restores to the wrong place at another.
+	# Gated behind CAPTURE_DIAG so ordinary runs stay quiet.
+	if _env_string("CAPTURE_DIAG", "") == "1" and _main != null and _main.runtime != null and _main.runtime.battlefield != null:
+		var xf: Transform2D = _main.call("_board_transform") if _main.has_method("_board_transform") else Transform2D()
+		print("[Capture] canvas=%s board_scale=%.4f battlefield.global_position=%s" % [
+			_main.get_viewport_rect().size, xf.get_scale().x, _main.runtime.battlefield.global_position])
+		var blue = _main.runtime.chambers.get(GameConfig.Faction.BLUE)
+		if blue != null and is_instance_valid(blue):
+			var ct: Transform2D = blue.get_global_transform_with_canvas()
+			print("[Capture] chamber(BLUE) draw_origin=%s draw_scale=%.4f  sim_position=%s" % [
+				ct.origin, ct.get_scale().x, blue.position])
+
 	_warm_seconds = 2.0
 	_perf_start_usec = Time.get_ticks_usec()
 
