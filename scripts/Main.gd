@@ -241,12 +241,16 @@ func _on_viewport_resized() -> void:
 	var hud_canvas = _hud_ref("ui_canvas")
 	if hud_canvas != null and is_instance_valid(hud_canvas) and hud_canvas.has_method("setup_static"):
 		hud_canvas.setup_static(self, _view_size, runtime.current_layout, is_mobile_layout)
-	var positions: Dictionary = runtime.current_layout.get("add_ball_button_positions", {})
-	var buttons: Dictionary = _ui_runtime_ref("add_ball_buttons", {})
-	for fid in buttons.keys():
-		var btn = buttons[fid]
-		if btn != null and is_instance_valid(btn) and positions.has(fid):
-			btn.position = positions[fid]
+	# Rebuild the add-ball buttons rather than moving them. They live on their own
+	# CanvasLayer, which does not inherit board_root, and their positions are also
+	# touched by the idle animation, so assigning position afterwards lost the
+	# race (observed: right-hand buttons ended up on top of their chambers).
+	# Re-running the original creation path is the only version guaranteed to
+	# agree with a fresh start.
+	var stale = game_layer.get_node_or_null("ControlButtons")
+	if stale != null and is_instance_valid(stale):
+		stale.queue_free()
+	_create_control_buttons()
 
 func _process(delta: float) -> void:
 	ui_time += delta
