@@ -2,6 +2,7 @@ extends Node2D
 class_name BulletPool
 
 var inactive_bullets: Array = []
+var inactive_ids: Dictionary = {}
 var active_bullets: Array = []
 var active_bullet_indices: Dictionary = {}
 var active_spawn_order: Array[int] = []
@@ -30,6 +31,19 @@ var last_visual_profile: Dictionary = {
 	"trail_degrade_reason": "none",
 }
 
+# P1 互撞开关：默认关闭，经典规则完全不变。
+# 开启后由本节点统一推进所有炮弹（移动 → 碰撞 → 结算 → 回收），
+# 每颗弹不再各自完整执行 _physics_process。
+var collision_enabled: bool = false
+var collision_reverse_order: bool = false
+var collision_resolver = BulletCollisionResolver.new()
+var collision_stats: Dictionary = {}
+var collision_total_hits: int = 0
+var total_spawned: int = 0
+var next_spawn_serial: int = 1
+var battlefield = null
+var _step_scratch: Array = []
+
 const VISUAL_PRESSURE_UPDATE_INTERVAL: float = 0.35
 const PRIORITY: Dictionary = {
 	"none": 0,
@@ -40,6 +54,86 @@ const PRIORITY: Dictionary = {
 	"fps_low": 5,
 }
 const ACTIVE_SPAWN_ORDER_COMPACT_CURSOR_THRESHOLD: int = 256
+
+func _ready() -> void:
+	collision_enabled = _env_flag("BALLWAR_BULLET_COLLISION", false)
+	collision_reverse_order = _env_string("BALLWAR_COLLISION_ORDER", "forward") == "reverse"
+	collision_resolver.configure(float(GameConfig.CELL_SIZE), _env_int("BALLWAR_COLLISION_BUCKET_CELLS", BulletCollisionResolver.DEFAULT_BUCKET_CELLS))
+	set_physics_process(collision_enabled)
+
+func _physics_process(delta: float) -> void:
+	if not collision_enabled:
+		return
+	step_controlled(delta)
+
+func step_controlled(delta: float) -> void:
+	# 唯一的执行顺序：全部移动 → 统一碰撞 → 统一结算（炮台/领土）→ 回收。
+	_step_scratch.clear()
+	for bullet in active_bullets:
+		if bullet != null and is_instance_valid(bullet) and bullet.is_active:
+			_step_scratch.append(bullet)
+
+	for bullet in _step_scratch:
+		if bullet.is_active:
+			bullet.advance_tick(delta)
+
+	collision_resolver.resolve(_step_scratch, self, delta)
+	collision_stats = collision_resolver.last_stats.duplicate()
+	collision_total_hits = collision_resolver.total_hits
+
+	if collision_reverse_order:
+		for index in range(_step_scratch.size() - 1, -1, -1):
+			var bullet = _step_scratch[index]
+			if bullet != null and is_instance_valid(bullet) and bullet.is_active:
+				bullet.resolve_tick()
+	else:
+		for bullet in _step_scratch:
+			if bullet != null and is_instance_valid(bullet) and bullet.is_active:
+				bullet.resolve_tick()
+
+func set_battlefield(value) -> void:
+	battlefield = value
+	collision_resolver.configure(_cell_size(), _env_int("BALLWAR_COLLISION_BUCKET_CELLS", collision_resolver.bucket_cells))
+
+func set_collision_enabled(value: bool) -> void:
+	collision_enabled = value
+	set_physics_process(value)
+	for bullet in active_bullets:
+		if bullet != null and is_instance_valid(bullet):
+			bullet.set_controlled(value)
+
+func set_collision_bucket_cells(cells: int) -> void:
+	collision_resolver.configure(_cell_size(), cells)
+
+func get_collision_stats() -> Dictionary:
+	var stats: Dictionary = collision_stats.duplicate()
+	stats["enabled"] = collision_enabled
+	stats["total_hits"] = collision_total_hits
+	stats["total_spawned"] = total_spawned
+	stats["bucket_size"] = collision_resolver.bucket_size
+	stats["bucket_cells"] = collision_resolver.bucket_cells
+	return stats
+
+func _cell_size() -> float:
+	if battlefield != null and is_instance_valid(battlefield):
+		return float(battlefield.cell_size)
+	return float(GameConfig.CELL_SIZE)
+
+func _env_flag(name: String, fallback: bool) -> bool:
+	var raw: String = OS.get_environment(name).strip_edges().to_lower()
+	if raw == "":
+		return fallback
+	return raw == "1" or raw == "true" or raw == "yes" or raw == "on"
+
+func _env_int(name: String, fallback: int) -> int:
+	var raw: String = OS.get_environment(name).strip_edges()
+	if raw == "" or not raw.is_valid_int():
+		return fallback
+	return int(raw)
+
+func _env_string(name: String, fallback: String) -> String:
+	var raw: String = OS.get_environment(name).strip_edges()
+	return raw if raw != "" else fallback
 
 func _process(delta: float) -> void:
 	visual_pressure_update_timer -= delta
@@ -125,8 +219,10 @@ func recycle_bullet(bullet) -> void:
 		return
 	_remove_active_bullet_fast(bullet)
 	_unregister_active_bullet(bullet)
-	if inactive_bullets.find(bullet) < 0:
+	var bullet_id: int = bullet.get_instance_id()
+	if not inactive_ids.has(bullet_id):
 		inactive_bullets.append(bullet)
+		inactive_ids[bullet_id] = true
 	recycled_bullets_this_second += 1
 	bullet.deactivate()
 	if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
@@ -163,6 +259,9 @@ func get_peak_active_count() -> int:
 
 func reset_stats() -> void:
 	peak_active_count = 0
+	collision_resolver.reset_stats()
+	collision_stats = {}
+	collision_total_hits = 0
 
 func get_tracked_queue_total() -> int:
 	return tracked_queue_total
@@ -362,6 +461,7 @@ func _obtain_bullet_with_visual_profile():
 	var bullet
 	if inactive_bullets.size() > 0:
 		bullet = inactive_bullets.pop_back()
+		inactive_ids.erase(bullet.get_instance_id())
 	else:
 		bullet = Bullet.new()
 		bullet.pool = self
@@ -375,10 +475,14 @@ func _obtain_bullet_with_visual_profile():
 	bullet.simple_draw = bool(visual_profile.get("simple_draw", false))
 	bullet.reduce_visual_effects = bool(visual_profile.get("reduce_visual_effects", false))
 	bullet.trail_max_points = int(visual_profile.get("trail_points", GameConfig.get_normal_trail_points()))
+	bullet.set_controlled(collision_enabled)
 	return bullet
 
 func _finalize_spawned_bullet(bullet):
 	var bullet_id: int = bullet.get_instance_id()
+	bullet.spawn_serial = next_spawn_serial
+	next_spawn_serial += 1
+	total_spawned += 1
 	active_bullet_indices[bullet_id] = active_bullets.size()
 	active_bullets.append(bullet)
 	active_spawn_order.append(bullet_id)

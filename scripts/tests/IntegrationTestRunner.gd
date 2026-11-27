@@ -20,6 +20,8 @@ func _run() -> void:
 	await _flush()
 	_test_match_config_and_volley()
 	await _flush()
+	_test_bullet_attributes_and_reset()
+	await _flush()
 
 	_assert.report("[IntegrationTest]")
 
@@ -644,3 +646,55 @@ func _test_match_config_and_volley() -> void:
 
 	var again := mixed.allocate(100, {WeaponRuleset.BulletType.PIERCING: 50})
 	_assert.eq(str(again), str(split), "allocation: same input produces the same volley")
+
+# ======================================================================
+# P5 — bullet attributes / pool reuse / collision toggle
+# ======================================================================
+
+func _test_bullet_attributes_and_reset() -> void:
+	print("  [P5] bullet attributes / pool reset / collision toggle")
+
+	var battlefield := Battlefield.new()
+	battlefield.configure(40)
+	get_root().add_child(battlefield)
+	battlefield.reset_quadrants()
+
+	var pool := BulletPool.new()
+	get_root().add_child(pool)
+	pool.set_battlefield(battlefield)
+
+	var bullet = pool.spawn_bullet(0, Vector2(100.0, 100.0), Vector2.RIGHT, battlefield, {})
+	_assert.eq(int(bullet.type_id), WeaponRuleset.BulletType.STANDARD, "bullet: type defaults to standard")
+	_assert.eq(int(bullet.cost), 1, "bullet: standard costs 1")
+	_assert.eq(bullet.speed, GameConfig.BULLET_SPEED, "bullet: standard speed")
+	_assert.eq(bullet.physical_radius, GameConfig.BULLET_RADIUS, "bullet: standard physical radius")
+	_assert.eq(bullet.mass, 1.0, "bullet: standard mass")
+	_assert.eq(int(bullet.energy), 1, "bullet: standard energy")
+	_assert.eq(int(bullet.damage), GameConfig.BULLET_DAMAGE, "bullet: standard damage")
+	_assert.that(not bullet.controlled, "bullet: classic mode leaves the bullet self-driven")
+
+	# 模拟上一颗特殊弹的残留，回收后必须完全回到普通弹属性。
+	bullet.speed = 75.6
+	bullet.physical_radius = 10.0
+	bullet.mass = 6.0
+	bullet.energy = 4
+	bullet.damage = 8
+	pool.recycle_bullet(bullet)
+	var reused = pool.spawn_bullet(1, Vector2(120.0, 100.0), Vector2.RIGHT, battlefield, {})
+	_assert.that(reused == bullet, "pool: recycled node is reused")
+	_assert.eq(reused.speed, GameConfig.BULLET_SPEED, "pool reset: speed restored")
+	_assert.eq(reused.physical_radius, GameConfig.BULLET_RADIUS, "pool reset: radius restored")
+	_assert.eq(reused.mass, 1.0, "pool reset: mass restored")
+	_assert.eq(int(reused.energy), 1, "pool reset: energy restored")
+	_assert.eq(int(reused.damage), GameConfig.BULLET_DAMAGE, "pool reset: damage restored")
+
+	pool.set_collision_enabled(true)
+	_assert.that(pool.collision_enabled, "collision: toggle turns on")
+	_assert.that(reused.controlled, "collision: active bullets hand control to the pool")
+	pool.set_collision_enabled(false)
+	_assert.that(not pool.collision_enabled, "collision: toggle turns off")
+	_assert.that(not reused.controlled, "collision: bullets return to self-driven mode")
+
+	pool.clear_active()
+	pool.free()
+	Fixtures.cleanup_node(battlefield)
