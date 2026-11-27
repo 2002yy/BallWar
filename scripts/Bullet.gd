@@ -114,7 +114,9 @@ func replace_trail_points(points: Array) -> void:
 
 func restore_from_state(state: Dictionary, new_battlefield, new_target_turrets = {}) -> void:
 	var restored_faction_id: int = clampi(int(state.get("faction_id", 0)), 0, 3)
-	var restored_position: Vector2 = SaveGameCodec.arr_to_vec2(state.get("position", [0, 0]), Vector2.ZERO)
+	var stored_position: Vector2 = SaveGameCodec.arr_to_vec2(state.get("position", [0, 0]), Vector2.ZERO)
+	var has_battlefield_space: bool = is_instance_valid(new_battlefield) and state.get("position_space") == SaveGameCodec.BULLET_BATTLEFIELD_SPACE
+	var restored_position: Vector2 = new_battlefield.to_global(stored_position) if has_battlefield_space else stored_position
 	var restored_direction: Vector2 = SaveGameCodec.arr_to_vec2(state.get("direction", [1, 0]), Vector2.RIGHT).normalized()
 	if restored_direction.length() <= 0.001:
 		restored_direction = Vector2.RIGHT
@@ -128,7 +130,8 @@ func restore_from_state(state: Dictionary, new_battlefield, new_target_turrets =
 	if trail is Array and trail.size() > 0:
 		var trail_count: int = mini(trail.size(), MAX_RESTORE_TRAIL_POINTS)
 		for i in range(trail_count):
-			restored_trail_points.append(SaveGameCodec.arr_to_vec2(trail[i], global_position))
+			var point: Vector2 = SaveGameCodec.arr_to_vec2(trail[i], stored_position)
+			restored_trail_points.append(new_battlefield.to_global(point) if has_battlefield_space else point)
 	else:
 		restored_trail_points.append(global_position)
 	replace_trail_points(restored_trail_points)
@@ -216,7 +219,8 @@ func _stabilize_bounce_direction(raw_direction: Vector2) -> Vector2:
 
 func _bounce_tangent_sign() -> float:
 	# 用阵营和当前寿命做一个确定性符号，避免每次随机导致轨迹抖动。
-	var seed_value: int = int(age * 1000.0) + faction_id * 37 + int(global_position.x + global_position.y)
+	var board_position: Vector2 = battlefield.to_local(global_position) if is_instance_valid(battlefield) else global_position
+	var seed_value: int = int(age * 1000.0) + faction_id * 37 + int(board_position.x + board_position.y)
 	return -1.0 if seed_value % 2 == 0 else 1.0
 
 func configure_visuals(new_simple_draw: bool, new_reduce_visual_effects: bool, new_trail_max_points: int) -> void:

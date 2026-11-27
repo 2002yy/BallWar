@@ -14,6 +14,106 @@ extends Node2D
 
 const VIEW_W: float = 1120.0
 const VIEW_H: float = 720.0
+
+# The layout system below already takes a viewport size everywhere; it was
+# simply always handed the 1120x720 design canvas. With stretch mode
+# canvas_items + aspect expand the real logical canvas is wider than 1120 on
+# any 16:9 window (1280x720 at 1920x1080), so the board stayed centred in a
+# 1120 strip and the extra width rendered as empty background.
+var _view_size: Vector2 = Vector2(VIEW_W, VIEW_H)
+
+
+func _resolve_view_size() -> Vector2:
+	var real_size: Vector2 = get_viewport_rect().size
+	# Never go below the design canvas: the profiles are hand-tuned in absolute
+	# pixels and smaller canvases would make panels overlap.
+	return Vector2(maxf(VIEW_W, real_size.x), maxf(VIEW_H, real_size.y))
+
+
+# The board is laid out in a viewport-independent design space and then placed by
+# a single uniform transform. Simulation coordinates, cell size, bullet speed and
+# collision radii are untouched: only the display transform changes, so a bigger
+# screen shows the same match, bigger.
+const BOARD_SPACE: Vector2 = Vector2(VIEW_W, VIEW_H)
+const BOARD_TOP_RESERVE: float = 100.0
+const BOARD_BOTTOM_RESERVE: float = 62.0
+const BOARD_SIDE_PAD: float = 10.0
+
+const BoardChassisScript = preload("res://scripts/render/BoardChassis.gd")
+const ArtStyleScript = preload("res://scripts/render/ArtStyle.gd")
+
+var board_root: CanvasLayer = null
+var board_chassis: Node2D = null
+var _board_layout: Dictionary = {}
+
+
+func _board_avail_rect(view: Vector2) -> Rect2:
+	var top: float = BOARD_TOP_RESERVE
+	var bottom: float = maxf(top + 120.0, view.y - BOARD_BOTTOM_RESERVE)
+	return Rect2(Vector2(BOARD_SIDE_PAD, top), Vector2(maxf(320.0, view.x - BOARD_SIDE_PAD * 2.0), bottom - top))
+
+
+# Bounding box of everything that belongs to the board: battlefield, the four
+# chambers and the add-ball buttons. Derived from the real layout, so it stays
+# correct for every grid size instead of assuming the 40x40 numbers.
+func _board_content_rect(layout: Dictionary) -> Rect2:
+	var bf: Rect2 = layout.get("battlefield_rect", Rect2())
+	var chamber_size: Vector2 = layout.get("chamber_size", Vector2.ZERO)
+	var button_size: Vector2 = layout.get("add_ball_button_size", Vector2.ZERO)
+	var lo: Vector2 = bf.position
+	var hi: Vector2 = bf.end
+	for pos in layout.get("chamber_positions", {}).values():
+		lo = Vector2(minf(lo.x, pos.x), minf(lo.y, pos.y))
+		hi = Vector2(maxf(hi.x, pos.x + chamber_size.x), maxf(hi.y, pos.y + chamber_size.y))
+	for pos in layout.get("add_ball_button_positions", {}).values():
+		lo = Vector2(minf(lo.x, pos.x), minf(lo.y, pos.y))
+		hi = Vector2(maxf(hi.x, pos.x + button_size.x), maxf(hi.y, pos.y + button_size.y))
+	return Rect2(lo, hi - lo)
+
+
+func _fit_scale(avail: Rect2, content: Rect2) -> float:
+	if content.size.x <= 1.0 or content.size.y <= 1.0:
+		return 1.0
+	return minf(avail.size.x / content.size.x, avail.size.y / content.size.y)
+
+
+# Scale 1.0 is defined as "the design canvas", so 1120x720 keeps its exact
+# hand-tuned look and every other viewport grows from there.
+func _board_transform(layout: Dictionary = {}) -> Transform2D:
+	var src: Dictionary = layout if not layout.is_empty() else _board_layout
+	var content: Rect2 = _board_content_rect(src)
+	var base: float = _fit_scale(_board_avail_rect(BOARD_SPACE), content)
+	var raw: float = _fit_scale(_board_avail_rect(_view_size), content)
+	var s: float = 1.0 if base <= 0.0 else clampf(raw / base, 1.0, 1.45)
+	# Test-only override, used by the display-scale invariance regression.
+	var forced: String = OS.get_environment("BALLWAR_BOARD_SCALE").strip_edges()
+	if forced != "":
+		s = clampf(float(forced), 0.5, 3.0)
+	var avail: Rect2 = _board_avail_rect(_view_size)
+	var origin: Vector2 = avail.position + (avail.size - content.size * s) * 0.5 - content.position * s
+	return Transform2D(0.0, Vector2(s, s), 0.0, origin)
+
+
+func _board_screen_rect() -> Rect2:
+	var xf: Transform2D = _board_transform()
+	var bf: Rect2 = _board_layout.get("battlefield_rect", Rect2())
+	return Rect2(xf * bf.position, bf.size * xf.get_scale().x)
+
+
+func _chamber_screen_rects() -> Array:
+	var xf: Transform2D = _board_transform()
+	var out: Array = []
+	var size: Vector2 = _board_layout.get("chamber_size", Vector2.ZERO)
+	for pos in _board_layout.get("chamber_positions", {}).values():
+		out.append(Rect2(xf * pos, size * xf.get_scale().x))
+	return out
+
+
+func _apply_board_transform() -> void:
+	if board_root == null or not is_instance_valid(board_root):
+		return
+	var xf: Transform2D = _board_transform()
+	board_root.transform = xf
 const LEGACY_SAVE_PATH: String = "user://ballwar_save.json"
 const LEGACY_SLOT_SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.json"
 const SAVE_PATH_TEMPLATE: String = "user://ballwar_save_slot_%d.save"
@@ -75,10 +175,30 @@ func _set_ui_runtime_ref(key: String, value) -> void:
 
 func _build_runtime_layout(grid_size: int) -> Dictionary:
 	var layout: Dictionary = LayoutProfiles.get_profile(grid_size).duplicate(true)
-	layout.merge(LayoutCoordinator.calculate_layout(grid_size, Vector2(VIEW_W, VIEW_H), is_mobile_layout), true)
+	layout.merge(LayoutCoordinator.calculate_layout(grid_size, _view_size, is_mobile_layout), true)
+	# Add-ball buttons live on a CanvasLayer, so they are not affected by
+	# board_root's transform; feed them the already-transformed positions or they
+	# would drift away from the chambers once the board is scaled.
+	if not _board_layout.is_empty():
+		var xf: Transform2D = _board_transform(_board_layout)
+		var moved := {}
+		for fid in _board_layout.get("add_ball_button_positions", {}).keys():
+			moved[fid] = xf * Vector2(_board_layout["add_ball_button_positions"][fid])
+		layout["add_ball_button_positions"] = moved
+		layout["add_ball_positions"] = moved
+	return layout
+
+
+func _build_board_layout(grid_size: int) -> Dictionary:
+	# Deliberately the design canvas: the board must not re-flow when the window
+	# changes, only scale as one piece. Same function, different space - this is
+	# not a second layout system.
+	var layout: Dictionary = LayoutProfiles.get_profile(grid_size).duplicate(true)
+	layout.merge(LayoutCoordinator.calculate_layout(grid_size, BOARD_SPACE, is_mobile_layout), true)
 	return layout
 
 func _sync_runtime_context(grid_size: int) -> void:
+	_board_layout = _build_board_layout(grid_size)
 	runtime.set_layout(_build_runtime_layout(grid_size))
 	runtime.set_config({
 		"grid_size": grid_size,
@@ -95,12 +215,46 @@ func _ready() -> void:
 		seed(match_seed)
 	else:
 		randomize()
+	_view_size = _resolve_view_size()
 	is_mobile_layout = _detect_mobile_layout()
 	player_settings = PlayerSettingsStore.load_settings()
 	_apply_performance_setting()
 	_load_menu_preferences()
 	_create_background()
 	_create_start_menu()
+	var size_cb: Callable = Callable(self, "_on_viewport_resized")
+	if not get_viewport().size_changed.is_connected(size_cb):
+		get_viewport().size_changed.connect(size_cb)
+
+
+# Live resize. The board itself needs nothing but a new transform: its layout is
+# viewport-independent by construction, so chambers, turrets and add-ball anchors
+# all keep their relative positions for free. Only the screen-space pieces have to
+# be re-applied: the chassis, the HUD, and the add-ball buttons (which live on
+# their own CanvasLayer and therefore do not inherit board_root's transform).
+func _on_viewport_resized() -> void:
+	var new_size: Vector2 = _resolve_view_size()
+	if new_size.is_equal_approx(_view_size):
+		return
+	_view_size = new_size
+	if game_layer == null or not is_instance_valid(game_layer):
+		return
+	_sync_runtime_context(_runtime_grid_size())
+	_apply_board_transform()
+	_refresh_chassis()
+	var hud_canvas = _hud_ref("ui_canvas")
+	if hud_canvas != null and is_instance_valid(hud_canvas) and hud_canvas.has_method("setup_static"):
+		hud_canvas.setup_static(self, _view_size, runtime.current_layout, is_mobile_layout)
+	# Rebuild the add-ball buttons rather than moving them. They live on their own
+	# CanvasLayer, which does not inherit board_root, and their positions are also
+	# touched by the idle animation, so assigning position afterwards lost the
+	# race (observed: right-hand buttons ended up on top of their chambers).
+	# Re-running the original creation path is the only version guaranteed to
+	# agree with a fresh start.
+	var stale = game_layer.get_node_or_null("ControlButtons")
+	if stale != null and is_instance_valid(stale):
+		stale.queue_free()
+	_create_control_buttons()
 
 func _process(delta: float) -> void:
 	ui_time += delta
@@ -169,7 +323,7 @@ func _create_background() -> void:
 	var background = ColorRect.new()
 	background.name = "MainBackground"
 	background.color = Color(0.03, 0.07, 0.14)
-	background.size = Vector2(VIEW_W, VIEW_H)
+	background.size = _view_size
 	add_child(background)
 	background.z_index = -100
 
@@ -181,7 +335,7 @@ func _create_start_menu() -> void:
 	var menu_layout: Dictionary = _build_runtime_layout(LayoutProfiles.sanitize_grid_size(selected_grid_size))
 	var instance: CanvasLayer = StartMenuScene.instantiate()
 	add_child(instance)
-	instance.setup(self, Vector2(VIEW_W, VIEW_H), _get_save_slot_summaries(), menu_layout)
+	instance.setup(self, _view_size, _get_save_slot_summaries(), menu_layout)
 	menu_nodes = instance.get_parts()
 
 	menu_layer = menu_nodes.get("menu_layer", null)
@@ -229,9 +383,28 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	game_layer.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(game_layer)
 
+	# Draw order: chassis first so the whole board sits on top of it.
+	board_chassis = BoardChassisScript.new()
+	board_chassis.name = "BoardChassis"
+	game_layer.add_child(board_chassis)
+
+	# CanvasLayer, not Node2D: a Node2D parent's scale changes what children
+	# report as global_position, and Bullet/Turret/SaveGameCodec all work in
+	# global space (measured: at scale 1.45 a +3 px global step became 2.07 px of
+	# local movement, i.e. the simulation ran 1.45x slower). A CanvasLayer
+	# transform is applied when drawing, so global_position stays in the design
+	# space and the simulation is untouched - verified with
+	# tools/tests/coord_semantics_probe.gd.
+	board_root = CanvasLayer.new()
+	board_root.name = "BoardRoot"
+	board_root.layer = 1
+	game_layer.add_child(board_root)
+	_apply_board_transform()
+
 	_create_battlefield(grid_size)
 	_create_turrets()
 	_create_control_chambers()
+	_refresh_chassis()
 	_create_ui()
 	_create_event_roulette_system()
 	_create_control_buttons()
@@ -239,25 +412,32 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 		_show_center_banner("领土战争", "开战！", Color(1.0, 0.94, 0.48), true)
 
 func _create_battlefield(grid_size: int) -> void:
-	var scene_nodes: Dictionary = GameSceneBuilder.create_battlefield(self, game_layer, grid_size, runtime.current_layout, Vector2(VIEW_W, VIEW_H))
+	var scene_nodes: Dictionary = GameSceneBuilder.create_battlefield(self, board_root, grid_size, _board_layout, BOARD_SPACE)
 	runtime.battlefield = scene_nodes.get("battlefield", null)
 	runtime.bullet_pool = scene_nodes.get("bullet_container", null)
 	chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
 
+func _refresh_chassis() -> void:
+	if board_chassis == null or not is_instance_valid(board_chassis):
+		return
+	board_chassis.setup(_view_size, _board_screen_rect(), _chamber_screen_rects(), ArtStyleScript.low_effect())
+
+
 func _create_turrets() -> void:
-	runtime.turrets = GameSceneBuilder.create_turrets(self, game_layer, runtime.battlefield, runtime.bullet_pool, runtime.current_layout)
+	runtime.turrets = GameSceneBuilder.create_turrets(self, board_root, runtime.battlefield, runtime.bullet_pool, _board_layout)
 	if runtime.bullet_pool != null and is_instance_valid(runtime.bullet_pool) and runtime.bullet_pool.has_method("set_tracked_turrets"):
 		runtime.bullet_pool.set_tracked_turrets(runtime.turrets)
 
 func _create_control_chambers() -> void:
-	runtime.chambers = GameSceneBuilder.create_control_chambers(self, game_layer, runtime.battlefield, runtime.turrets, runtime.current_layout, chamber_scale, Vector2(VIEW_W, VIEW_H))
+	runtime.chambers = GameSceneBuilder.create_control_chambers(self, board_root, runtime.battlefield, runtime.turrets, _board_layout, chamber_scale, BOARD_SPACE)
 	_sync_chamber_game_elapsed_time()
 
 func _create_ui() -> void:
 	var game_hud: CanvasLayer = GameHUDScene.instantiate()
 	game_hud.name = "UICanvas"
+	game_hud.layer = 3
 	game_layer.add_child(game_hud)
-	game_hud.setup_static(self, Vector2(VIEW_W, VIEW_H), runtime.current_layout, is_mobile_layout)
+	game_hud.setup_static(self, _view_size, runtime.current_layout, is_mobile_layout)
 	var hud_nodes: Dictionary = game_hud.get_static_parts()
 
 	runtime.set_hud_parts(hud_nodes)
@@ -283,7 +463,7 @@ func _create_event_roulette_system() -> void:
 		return
 
 	runtime.event_view = EventRouletteScene.instantiate()
-	runtime.event_view.setup(Vector2(VIEW_W, VIEW_H), runtime.current_layout, is_mobile_layout)
+	runtime.event_view.setup(_view_size, runtime.current_layout, is_mobile_layout)
 	ui_canvas.add_child(runtime.event_view)
 
 	var event_controller_script = load("res://scripts/EventRouletteController.gd")
@@ -306,7 +486,7 @@ func _create_event_roulette_system() -> void:
 	_refresh_event_log()
 
 func _create_control_buttons() -> void:
-	var button_nodes: Dictionary = GameHudView.create_control_buttons(self, game_layer, runtime.chambers, runtime.current_layout, Vector2(VIEW_W, VIEW_H), is_mobile_layout)
+	var button_nodes: Dictionary = GameHudView.create_control_buttons(self, game_layer, runtime.chambers, runtime.current_layout, _view_size, is_mobile_layout)
 	_set_ui_runtime_ref("add_ball_buttons", button_nodes.get("add_ball_buttons", {}))
 	_set_ui_runtime_ref("add_ball_button_base_positions", button_nodes.get("add_ball_button_base_positions", {}))
 	for faction_id in _ui_runtime_ref("add_ball_buttons", {}).keys():
@@ -409,7 +589,7 @@ func _show_center_banner(title_text: String, sub_text: String, accent: Color, au
 			self,
 			_hud_ref("ui_canvas"),
 			_hud_ref("opening_banner"),
-			Vector2(VIEW_W, VIEW_H),
+			_view_size,
 			runtime.current_layout,
 			title_text,
 			sub_text,
@@ -573,6 +753,8 @@ func _cleanup_game_layer() -> void:
 	if game_layer != null:
 		game_layer.queue_free()
 		game_layer = null
+	board_root = null
+	board_chassis = null
 	runtime.reset()
 	bullet_restore_queue.reset()
 

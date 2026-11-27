@@ -1,8 +1,9 @@
 extends RefCounted
 class_name SaveGameCodec
 
-const SUPPORTED_SAVE_MAJOR_PREFIXES: Array[String] = ["1.9", "2.0"]
-const SAVE_SCHEMA_VERSION: String = "2.0.0"
+const SUPPORTED_SAVE_MAJOR_PREFIXES: Array[String] = ["1.9", "2.0", "2.1"]
+const SAVE_SCHEMA_VERSION: String = "2.1.0"
+const BULLET_BATTLEFIELD_SPACE: String = "battlefield"
 const CURRENT_SAVE_VERSION: String = SAVE_SCHEMA_VERSION
 const MAX_RESTORE_CONTROL_BALLS: int = 8
 const PAYLOAD_HASH_KEY: String = "payload_hash"
@@ -58,7 +59,7 @@ static func inspect_payload_integrity(payload: Dictionary) -> Dictionary:
 	}
 
 static func is_supported_save_version(version: String) -> bool:
-	# Preserve bare 1.9 / 2.0 and their numeric patch versions, but do not
+	# Preserve the known families and their numeric patch versions, but do not
 	# mistake an arbitrary string sharing the prefix for a compatible schema.
 	for prefix in SUPPORTED_SAVE_MAJOR_PREFIXES:
 		if version == prefix:
@@ -124,17 +125,22 @@ static func collect_bullet_states(bullet_container) -> Array:
 	var source_bullets: Array = bullet_container.get_active_bullets() if bullet_container.has_method("get_active_bullets") else bullet_container.get_children()
 	for node in source_bullets:
 		if node is Bullet and node.is_active:
+			var field: Node2D = node.battlefield as Node2D
+			var has_field: bool = is_instance_valid(field)
 			var trail: Array = []
 			for point in node.trail_points:
-				trail.append(vec2_to_arr(point))
-			result.append({
+				trail.append(vec2_to_arr(field.to_local(point) if has_field else point))
+			var entry: Dictionary = {
 				"faction_id": node.faction_id,
-				"position": vec2_to_arr(node.global_position),
+				"position": vec2_to_arr(field.to_local(node.global_position) if has_field else node.global_position),
 				"direction": vec2_to_arr(node.direction),
 				"age": node.age,
 				"last_cell": vec2i_to_arr(node.last_cell),
 				"trail_points": trail,
-			})
+			}
+			if has_field:
+				entry["position_space"] = BULLET_BATTLEFIELD_SPACE
+			result.append(entry)
 	return result
 
 static func validate_save_data(data: Dictionary) -> Dictionary:
