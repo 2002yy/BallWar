@@ -10,6 +10,10 @@ static func default_state() -> Dictionary:
 		"chamber_ball_count": 0,
 		"chamber_release_ball_index": -1,
 		"chamber_jammed_time_left": 0.0,
+		"chamber_queued_volley": 0,
+		"chamber_queue_ball_index": -1,
+		"chamber_queue_overflow": 0,
+		"chamber_production_mode": "locked",
 		"queued_round_modifiers": [],
 		"control_balls": [],
 	}
@@ -26,6 +30,10 @@ static func collect_state(chamber) -> Dictionary:
 	state["chamber_ball_count"] = chamber.get_ball_count()
 	state["chamber_release_ball_index"] = SaveGameCodec.get_release_ball_index(chamber)
 	state["chamber_jammed_time_left"] = chamber.get_jammed_time_left()
+	state["chamber_queued_volley"] = chamber.queued_volley
+	state["chamber_queue_ball_index"] = chamber.balls.find(chamber.queued_ball) if chamber.queued_ball != null else -1
+	state["chamber_queue_overflow"] = chamber.queue_overflow_events
+	state["chamber_production_mode"] = chamber.production_mode
 	state["queued_round_modifiers"] = chamber.get_queued_round_modifiers()
 	state["control_balls"] = SaveGameCodec.collect_control_ball_states(chamber)
 	state["fire_ledger"] = chamber.fire_ledger.snapshot() if chamber.fire_ledger != null else {}
@@ -42,6 +50,9 @@ static func restore_state(state: Dictionary, context: Dictionary) -> Dictionary:
 	restored["chamber_pending_count"] = clampi(int(state.get("chamber_pending_count", 1)), 1, max_pending_count)
 	restored["chamber_locked_remaining"] = clampi(int(state.get("chamber_locked_remaining", 0)), 0, max_pending_count)
 	restored["chamber_jammed_time_left"] = maxf(0.0, float(state.get("chamber_jammed_time_left", 0.0)))
+	restored["chamber_queued_volley"] = clampi(int(state.get("chamber_queued_volley", 0)), 0, max_pending_count)
+	restored["chamber_queue_overflow"] = maxi(0, int(state.get("chamber_queue_overflow", 0)))
+	restored["chamber_production_mode"] = str(state.get("chamber_production_mode", "locked"))
 	restored["chamber_is_locked"] = bool(state.get("chamber_is_locked", false))
 	restored["chamber_is_damaged"] = bool(state.get("chamber_is_damaged", false))
 	restored["queued_round_modifiers"] = _sanitize_queued_round_modifiers(state.get("queued_round_modifiers", []))
@@ -61,6 +72,8 @@ static func restore_state(state: Dictionary, context: Dictionary) -> Dictionary:
 	var restored_ball_count: int = control_balls.size() if not control_balls.is_empty() else int(restored["chamber_ball_count"])
 	var release_index: int = int(state.get("chamber_release_ball_index", -1))
 	restored["chamber_release_ball_index"] = release_index if release_index >= 0 and release_index < restored_ball_count else -1
+	var queue_index: int = int(state.get("chamber_queue_ball_index", -1))
+	restored["chamber_queue_ball_index"] = queue_index if queue_index >= 0 and queue_index < restored_ball_count else -1
 	return restored
 
 static func _sanitize_queued_round_modifiers(modifiers) -> Array:
