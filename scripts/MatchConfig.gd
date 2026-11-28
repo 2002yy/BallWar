@@ -6,7 +6,8 @@ class_name MatchConfig
 # 后续地图/弹种接入时，新字段只在这里扩展，不再散落到 GameConfig 静态变量。
 
 const CLASSIC_MAP_ID: String = "classic_plains"
-const KNOWN_MAP_IDS: Array[String] = [CLASSIC_MAP_ID]
+const CENTRAL_FORTRESS_ID: String = "central_fortress"
+const KNOWN_MAP_IDS: Array[String] = [CLASSIC_MAP_ID, CENTRAL_FORTRESS_ID]
 
 var map_id: String = CLASSIC_MAP_ID
 var weapon_ruleset_id: String = WeaponRuleset.CLASSIC_ID

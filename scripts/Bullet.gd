@@ -162,6 +162,13 @@ func _physics_process(delta: float) -> void:
 	var next_position = global_position + direction * speed * delta
 	var local_position = battlefield.to_local(next_position)
 	var bounced = false
+	if battlefield is Battlefield and battlefield.fortress != null:
+		var start: Vector2 = battlefield.to_local(global_position)
+		var motion: Vector4 = battlefield.fortress.reflect_motion(start, local_position - start)
+		local_position = Vector2(motion.x, motion.y)
+		var heading := Vector2(motion.z, motion.w)
+		if not heading.is_zero_approx():
+			direction = heading
 
 	if local_position.x < 0.0:
 		local_position.x = 0.0

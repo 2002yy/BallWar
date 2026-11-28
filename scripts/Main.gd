@@ -155,6 +155,7 @@ var reserve_lab_enabled: bool = false
 var additive_lab_enabled: bool = false
 var construction_lab_enabled: bool = false
 var facility_lab_enabled: bool = false
+var fortress_lab_enabled: bool = false
 var _construction_faction: int = -1
 var _construction_preview: ConstructionPreview
 var _construction_touch_cell := Vector2i(-1, -1)
@@ -227,7 +228,8 @@ func _sync_runtime_context(grid_size: int) -> void:
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var args := OS.get_cmdline_user_args()
-	facility_lab_enabled = OS.is_debug_build() and args.has("--facility-lab")
+	fortress_lab_enabled = OS.is_debug_build() and args.has("--fortress-lab")
+	facility_lab_enabled = fortress_lab_enabled or (OS.is_debug_build() and args.has("--facility-lab"))
 	construction_lab_enabled = facility_lab_enabled or (OS.is_debug_build() and args.has("--construction-lab"))
 	additive_lab_enabled = not construction_lab_enabled and OS.is_debug_build() and args.has("--additive-lab")
 	reserve_lab_enabled = not construction_lab_enabled and not additive_lab_enabled and _reserve_lab_requested()
@@ -265,15 +267,15 @@ func _ready() -> void:
 			ball.position = Vector2(lerpf(gate_x, chamber.chamber_size.x, 0.5), chamber.chamber_size.y - ball.radius - 1.0)
 			ball.velocity = Vector2(0, 120)
 			if facility_lab_enabled:
-				var neutral: Turret = runtime.turret_roster.next_live_turret(Turret.NEUTRAL_FACTION)
-				var field: Battlefield = runtime.battlefield
-				var offset := Vector2(field.cell_size + 1.0, minf(100.0, field.grid_size * field.cell_size * 0.4))
-				var start := neutral.global_position - offset
-				runtime.bullet_pool.spawn_bullet(GameConfig.Faction.BLUE, start, Vector2.DOWN, field, _turret_targets())
+				_launch_facility_demo_shot()
 		var title := "设施实验" if facility_lab_enabled else "建设实验"
+		if fortress_lab_enabled:
+			title = "中央要塞"
 		if args.has("--construction-fixture"):
 			title += " · 演示"
 		var hint := "先击中中央中立炮塔即可夺取" if facility_lab_enabled else "50 建材可选己方地块建造"
+		if fortress_lab_enabled:
+			hint = "反射墙改写弹道，抢先击中中央炮塔"
 		_show_center_banner(title, hint, Color(0.74, 0.92, 0.22), true)
 	else:
 		_create_start_menu()
@@ -292,6 +294,21 @@ func _prepare_lab_match() -> void:
 		match_seed = 7341
 	seed(match_seed)
 	selected_palette_name = "经典"
+
+func _launch_facility_demo_shot() -> void:
+	var neutral: Turret = runtime.turret_roster.next_live_turret(Turret.NEUTRAL_FACTION)
+	var field: Battlefield = runtime.battlefield
+	var offset := Vector2(field.cell_size + 1.0, minf(100.0, field.grid_size * field.cell_size * 0.4))
+	var start := neutral.global_position - offset
+	var direction := Vector2.DOWN
+	if field.fortress != null:
+		var wall: Rect2 = field.fortress.wall_rects[0]
+		var impact := wall.end - Vector2(0.0, field.cell_size * 0.5)
+		var toward_center := field.to_local(neutral.global_position) - impact
+		var incoming := Vector2(-toward_center.x, toward_center.y)
+		direction = incoming.normalized()
+		start = field.to_global(impact - incoming * 0.5)
+	runtime.bullet_pool.spawn_bullet(GameConfig.Faction.BLUE, start, direction, field, _turret_targets())
 
 func _start_reserve_lab_match(price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD) -> void:
 	_prepare_lab_match()
@@ -458,6 +475,8 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	_sync_runtime_context(grid_size)
 	# 对局配置只在开局时快照一次：窗口缩放、UI 重建都不应该重新解释地图与武器规则。
 	var match_config := MatchConfig.capture_current(grid_size, match_seed)
+	if fortress_lab_enabled and construction_enabled:
+		match_config.map_id = MatchConfig.CENTRAL_FORTRESS_ID
 	match_config.reserve_economy_enabled = reserve_economy_enabled
 	match_config.reserve_price_preset = reserve_price_preset
 	match_config.additive_gate_bonus = maxi(0, additive_gate_bonus)
@@ -503,6 +522,8 @@ func _create_battlefield(grid_size: int) -> void:
 	var scene_nodes: Dictionary = GameSceneBuilder.create_battlefield(self, board_root, grid_size, _board_layout, BOARD_SPACE)
 	runtime.battlefield = scene_nodes.get("battlefield", null)
 	runtime.bullet_pool = scene_nodes.get("bullet_container", null)
+	if runtime.match_config.map_id == MatchConfig.CENTRAL_FORTRESS_ID:
+		runtime.battlefield.configure_fortress()
 	chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
 
 func _on_release_sfx(faction_id = null, count = null, _chamber = null) -> void:
@@ -727,6 +748,8 @@ func _construction_site_issue(faction_id: int, cell: Vector2i) -> String:
 	if field.owners[cell.x][cell.y] != faction_id:
 		return "非己方领土"
 	var position := _construction_position(cell)
+	if field.fortress != null and not field.fortress.has_turret_clearance(field.to_local(position), Turret.MUZZLE_DISTANCE):
+		return "太靠近反射墙"
 	for turret_id in runtime.turret_roster.by_id:
 		var turret: Turret = runtime.turret_roster.live_turret(turret_id)
 		if turret != null and position.distance_to(turret.global_position) < 2.0 * GameConfig.TURRET_RADIUS:
@@ -935,7 +958,7 @@ func _check_winner() -> void:
 		counts = runtime.battlefield.count_cells_by_team()
 
 	var time_expired: bool = mode_name == GameConfig.GAME_MODE_TIMED and game_elapsed_time >= GameConfig.get_time_limit_seconds()
-	var total_cells: int = _runtime_grid_size() * _runtime_grid_size()
+	var total_cells: int = runtime.battlefield.claimable_cell_count()
 
 	var result: Dictionary = WinConditionEvaluator.evaluate(mode_name, runtime.turrets, counts, total_cells, time_expired)
 

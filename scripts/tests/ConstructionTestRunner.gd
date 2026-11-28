@@ -158,6 +158,7 @@ func _run() -> void:
 	t.eq(new_roster.live_turret(primary.turret_id), null, "destroyed identity is excluded from live selection")
 
 	_check_neutral_facility(main, t, site)
+	_check_fortress_map(main, t, site)
 	main.queue_free()
 	await process_frame
 	t.report("ConstructionTestRunner")
@@ -222,6 +223,62 @@ func _check_neutral_facility(main, t: TestAssert, site: Vector2i) -> void:
 		opponent.take_damage(opponent.health)
 	t.that(main.is_game_over and not chamber.is_damaged, "the faction can win with only the captured tower")
 	t.eq(neutral.burst_remaining, 0, "end of match stops the captured tower")
+
+func _check_fortress_map(main, t: TestAssert, site: Vector2i) -> void:
+	main.fortress_lab_enabled = true
+	main.facility_lab_enabled = true
+	main._start_game(40, true, false, false, ReserveEconomy.PricePreset.STANDARD, 0, true)
+	var field: Battlefield = main.runtime.battlefield
+	var terrain: FortressTerrain = field.fortress
+	var roster: TurretRoster = main.runtime.turret_roster
+	var state: ConstructionState = main.runtime.construction
+	var chamber: ControlChamber = main.runtime.chambers[BLUE]
+	var neutral := roster.next_live_turret(Turret.NEUTRAL_FACTION)
+	t.eq(main.runtime.match_config.map_id, MatchConfig.CENTRAL_FORTRESS_ID, "fortress is selected by the match config")
+	t.eq(terrain.wall_cells.size(), 16, "fortress has four symmetric two-by-two walls")
+	t.eq(field.claimable_cell_count(), 1584, "the score denominator excludes walls")
+	var counts := field.count_cells_by_team()
+	t.eq(counts.values().reduce(func(total, value): return total + value, 0), 1584, "territory totals exclude walls")
+	var wall: Rect2 = terrain.wall_rects[0]
+	var wall_cell := field.world_to_cell(field.to_global(wall.get_center()))
+	t.eq(field.apply_bullet(wall_cell, RED), "WALL", "a wall cannot be captured as normal territory")
+	t.that(not field.claim_cell(wall_cell, RED), "direct territory changes cannot capture a wall")
+	t.eq(field.count_cells_by_team(), counts, "blocked claims leave scores unchanged")
+	t.eq(main._construction_site_issue(BLUE, wall_cell), "太靠近反射墙", "construction checks the terrain clearance")
+
+	var start := Vector2(wall.end.x + 20.0, wall.get_center().y)
+	var travel := terrain.reflect_motion(start, Vector2.LEFT * 70.0)
+	t.that(is_equal_approx(travel.x, wall.end.x + 50.01), "a fast shot reflects before crossing the full wall")
+	t.eq(Vector2(travel.z, travel.w), Vector2.RIGHT, "a vertical face flips the horizontal heading")
+	var corner := terrain.reflect_motion(wall.end + Vector2(10, 10), Vector2(-20, -20))
+	t.that(Vector2(corner.z, corner.w).is_equal_approx(Vector2(1, 1).normalized()), "a simultaneous corner hit reflects both axes")
+
+	state.convert_pending(200, BLUE)
+	t.that(main._try_build_auxiliary(BLUE, site), "an ordinary owned site away from the walls remains buildable")
+	var auxiliary := roster.live_turret(state.auxiliary_id(BLUE))
+	var primary: Turret = main.runtime.turrets[BLUE]
+	main._launch_facility_demo_shot()
+	var projectiles: Array = main.runtime.bullet_pool.get_active_bullets()
+	var bullet: Bullet = projectiles[0]
+	var initial_speed: float = bullet.speed
+	var reflected := false
+	for step in range(110):
+		bullet._physics_process(1.0 / 60.0)
+		if bullet.is_active and bullet.direction.x > 0.0 and not reflected:
+			t.eq(bullet.speed, initial_speed, "a live ricochet maintains projectile speed")
+			reflected = true
+		if neutral.faction_id == BLUE or not bullet.is_active:
+			break
+	t.that(reflected, "an actual projectile reflects off a wall")
+	t.eq(neutral.faction_id, BLUE, "the reflected projectile reaches and captures the installation")
+	var release_x := lerpf(chamber._current_x2_width(), chamber.chamber_size.x, 0.25)
+	for tower in [auxiliary, neutral, primary]:
+		chamber.pending_count = 9
+		_land(chamber, release_x)
+		t.eq(tower.burst_remaining, 9, "fortress towers each take their turn on the shared queue")
+		t.eq(main.runtime.bullet_pool.get_tracked_queue_total(), 9, "fortress volley conserves faction firepower")
+		tower.cancel_burst()
+	t.that(not main._save_game_progress().ok, "experimental terrain uses isolated match persistence")
 
 func _land(chamber: ControlChamber, x: float) -> void:
 	var ball: ControlBall = chamber.balls[0]
