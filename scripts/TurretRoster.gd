@@ -13,10 +13,24 @@ func register(turret: Turret) -> int:
 	_next_id += 1
 	turret.turret_id = turret_id
 	by_id[turret_id] = turret
-	var members: Array = _turret_ids_by_faction.get(turret.faction_id, [])
-	members.append(turret_id)
-	_turret_ids_by_faction[turret.faction_id] = members
+	_add_faction_member(turret.faction_id, turret_id)
 	return turret_id
+
+func _add_faction_member(faction_id: int, turret_id: int) -> void:
+	var members: Array = _turret_ids_by_faction.get(faction_id, [])
+	members.append(turret_id)
+	_turret_ids_by_faction[faction_id] = members
+
+func claim_neutral(turret: Turret, faction_id: int) -> bool:
+	if live_turret(turret.turret_id) != turret or turret.faction_id != Turret.NEUTRAL_FACTION:
+		return false
+	if next_live_turret(faction_id) == null or faction_id == Turret.NEUTRAL_FACTION:
+		return false
+	var neutral_members: Array = _turret_ids_by_faction[Turret.NEUTRAL_FACTION]
+	neutral_members.erase(turret.turret_id)
+	turret.capture_for_faction(faction_id)
+	_add_faction_member(faction_id, turret.turret_id)
+	return true
 
 func live_turret(turret_id: int) -> Turret:
 	var turret: Turret = by_id.get(turret_id)
