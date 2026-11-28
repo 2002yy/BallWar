@@ -21,9 +21,11 @@ func _run() -> void:
 	var chamber: ControlChamber = main.runtime.chambers[BLUE]
 	var primary: Turret = main.runtime.turrets[BLUE]
 	var build_button: EnergyButton = main._ui_runtime_ref("add_ball_buttons", {})[BLUE]
+	var site := Vector2i(9, 8)
+	t.eq(main.get_node("MainBackground").mouse_filter, Control.MOUSE_FILTER_IGNORE, "decorative background leaves the board pickable")
 	t.that(build_button.disabled, "starting construction balance is insufficient")
 	t.eq(chamber._build_draw_snapshot().resource_gate_label, "建", "construction gate is labelled")
-	t.that(not main._try_build_auxiliary(BLUE), "cannot build without materials")
+	t.that(not main._try_build_auxiliary(BLUE, site), "cannot build without materials")
 	chamber.pending_count = 200
 	var divider := chamber._reserve_gate_x(chamber._current_x2_width())
 	_land(chamber, lerpf(divider, chamber.chamber_size.x, 0.5))
@@ -32,23 +34,55 @@ func _run() -> void:
 	t.eq(state.balance(RED), 0, "materials are faction-specific")
 	t.that(not build_button.disabled, "50 materials enables the build button")
 
-	var site := state.auxiliary_cell(BLUE, field.grid_size)
+	build_button.pressed.emit()
+	t.eq(state.balance(BLUE), 50, "opening placement does not spend materials")
+	t.eq(main._construction_preview.cell, state.auxiliary_cell(BLUE, field.grid_size), "opening placement shows the suggested cell")
+	var escape := InputEventKey.new()
+	escape.pressed = true
+	escape.keycode = KEY_ESCAPE
+	main._unhandled_input(escape)
+	t.eq(main._construction_preview, null, "Escape clears the preview without building")
+	t.eq(state.balance(BLUE), 50, "cancelling does not spend materials")
+	build_button.pressed.emit()
+	t.that(not main._try_build_auxiliary(BLUE, Vector2i(-1, 8)), "off-board build is rejected")
+	var primary_cell := field.world_to_cell(primary.global_position)
+	t.eq(main._construction_site_issue(BLUE, primary_cell), "太靠近炮塔", "occupied area is marked unavailable")
+	# The board presentation is scaled and translated independently of simulation.
+	main.board_root.transform = Transform2D(0.0, Vector2(1.45, 1.45), 0.0, Vector2(91, 47))
+	var motion := InputEventMouseMotion.new()
+	motion.position = _screen_cell(field, site)
+	main._unhandled_input(motion)
+	t.eq(main._construction_preview.cell, site, "hover maps the scaled screen point to the intended cell")
+	t.eq(main._construction_preview.issue, "", "owned and clear site previews as allowed")
 	field.claim_cell(site, RED)
-	t.that(not main._try_build_auxiliary(BLUE), "enemy-owned site rejects construction")
+	field.flush_score_emit()
+	t.eq(main._construction_preview.issue, "非己方领土", "preview revalidates when a cell is captured")
+	var click := InputEventMouseButton.new()
+	click.position = motion.position
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	main._unhandled_input(click)
+	t.eq(state.live_turret(state.auxiliary_slot(BLUE)), null, "enemy-owned site rejects confirmation")
 	t.eq(state.balance(BLUE), 50, "failed placement does not debit materials")
 	field.claim_cell(site, BLUE)
 	var enemy := Bullet.new()
 	var ally := Bullet.new()
 	enemy.setup(RED, Vector2.ZERO, Vector2.RIGHT, field, state.targets)
 	ally.setup(BLUE, Vector2.ZERO, Vector2.RIGHT, field, state.targets)
-	build_button.pressed.emit()
+	var tap := InputEventScreenTouch.new()
+	tap.position = motion.position
+	tap.pressed = true
+	main._unhandled_input(tap)
+	t.eq(state.balance(BLUE), 50, "first touch only selects the cell")
+	main._unhandled_input(tap)
 	var auxiliary: Turret = state.live_turret(state.auxiliary_slot(BLUE))
-	t.that(auxiliary != null, "existing build button creates the auxiliary")
-	t.eq(field.world_to_cell(auxiliary.global_position), site, "auxiliary shares the battlefield coordinate system")
+	t.that(auxiliary != null, "second touch confirms construction")
+	t.eq(main._construction_preview, null, "successful build clears the preview")
+	t.eq(field.world_to_cell(auxiliary.global_position), site, "auxiliary is placed at the chosen non-default cell")
 	t.eq(state.balance(BLUE), 0, "successful build charges exactly 50")
 	t.eq(auxiliary.health * 2, primary.health, "auxiliary starts at half main health")
 	state.convert_pending(200, BLUE)
-	t.that(not main._try_build_auxiliary(BLUE), "cannot exceed one auxiliary")
+	t.that(not main._try_build_auxiliary(BLUE, site + Vector2i(2, 2)), "cannot exceed one auxiliary")
 	t.eq(state.balance(BLUE), 50, "duplicate build does not charge")
 	enemy.global_position = auxiliary.global_position
 	ally.global_position = auxiliary.global_position
@@ -94,6 +128,9 @@ func _run() -> void:
 	await process_frame
 	t.report("ConstructionTestRunner")
 	quit(0 if t.failures.is_empty() else 1)
+
+func _screen_cell(field: Battlefield, cell: Vector2i) -> Vector2:
+	return field.get_global_transform_with_canvas() * ((Vector2(cell) + Vector2(0.5, 0.5)) * field.cell_size)
 
 func _land(chamber: ControlChamber, x: float) -> void:
 	var ball: ControlBall = chamber.balls[0]

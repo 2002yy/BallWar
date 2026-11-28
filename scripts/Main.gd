@@ -154,6 +154,9 @@ var match_seed: int = -1
 var reserve_lab_enabled: bool = false
 var additive_lab_enabled: bool = false
 var construction_lab_enabled: bool = false
+var _construction_faction: int = -1
+var _construction_preview: ConstructionPreview
+var _construction_touch_cell := Vector2i(-1, -1)
 const ADDITIVE_LAB_BONUS: int = 2
 
 var menu_title_label
@@ -260,7 +263,7 @@ func _ready() -> void:
 			ball.position = Vector2(lerpf(gate_x, chamber.chamber_size.x, 0.5), chamber.chamber_size.y - ball.radius - 1.0)
 			ball.velocity = Vector2(0, 120)
 		var title := "建设实验 · 构造落门" if args.has("--construction-fixture") else "建设实验"
-		_show_center_banner(title, "建门转存火力，50 建材可造辅助炮塔", Color(0.74, 0.92, 0.22), true)
+		_show_center_banner(title, "50 建材可选己方地块建造", Color(0.74, 0.92, 0.22), true)
 	else:
 		_create_start_menu()
 	var size_cb: Callable = Callable(self, "_on_viewport_resized")
@@ -387,6 +390,7 @@ func _create_background() -> void:
 	background.name = "MainBackground"
 	background.color = Color(0.03, 0.07, 0.14)
 	background.size = _view_size
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
 	background.z_index = -100
 
@@ -650,7 +654,7 @@ func _create_control_buttons() -> void:
 
 func _add_ball_to_chamber(faction_id: int) -> void:
 	if runtime.construction != null:
-		_try_build_auxiliary(faction_id)
+		_begin_construction_placement(faction_id)
 		return
 	if not runtime.chambers.has(faction_id):
 		return
@@ -686,24 +690,94 @@ func _convert_construction_materials(pending: int, faction_id: int) -> int:
 	_refresh_construction_button(faction_id)
 	return remaining
 
-func _construction_site(faction_id: int) -> Vector2i:
-	return runtime.construction.auxiliary_cell(faction_id, runtime.battlefield.grid_size)
-
 func _construction_position(cell: Vector2i) -> Vector2:
 	var field: Battlefield = runtime.battlefield
 	return field.to_global((Vector2(cell) + Vector2(0.5, 0.5)) * field.cell_size)
 
-func _construction_site_is_legal(faction_id: int) -> bool:
+func _construction_site_issue(faction_id: int, cell: Vector2i) -> String:
 	var field: Battlefield = runtime.battlefield
-	var cell := _construction_site(faction_id)
-	if not field.is_inside(cell) or field.owners[cell.x][cell.y] != faction_id:
-		return false
+	if not field.is_inside(cell):
+		return "战场外"
+	if field.owners[cell.x][cell.y] != faction_id:
+		return "非己方领土"
 	var position := _construction_position(cell)
 	for slot in runtime.construction.targets:
 		var turret: Turret = runtime.construction.live_turret(slot)
 		if turret != null and position.distance_to(turret.global_position) < 2.0 * GameConfig.TURRET_RADIUS:
-			return false
-	return true
+			return "太靠近炮塔"
+	return ""
+
+func _begin_construction_placement(faction_id: int) -> void:
+	if _construction_faction == faction_id:
+		_cancel_construction_placement()
+		return
+	if not _can_build_auxiliary(faction_id):
+		return
+	_cancel_construction_placement()
+	var field: Battlefield = runtime.battlefield
+	_construction_faction = faction_id
+	_construction_preview = ConstructionPreview.new()
+	_construction_preview.name = "ConstructionPreview"
+	_construction_preview.cell_size = field.cell_size
+	_construction_preview.z_index = 20
+	field.add_child(_construction_preview)
+	_update_construction_preview(runtime.construction.auxiliary_cell(faction_id, field.grid_size))
+	_refresh_construction_button(faction_id)
+
+func _cancel_construction_placement() -> void:
+	var faction_id := _construction_faction
+	_construction_faction = -1
+	_construction_touch_cell = Vector2i(-1, -1)
+	if is_instance_valid(_construction_preview):
+		_construction_preview.hide()
+		_construction_preview.queue_free()
+	_construction_preview = null
+	if faction_id >= 0 and runtime.construction != null:
+		_refresh_construction_button(faction_id)
+
+func _update_construction_preview(cell: Vector2i) -> void:
+	if not is_instance_valid(_construction_preview):
+		return
+	if not runtime.battlefield.is_inside(cell):
+		_construction_preview.hide()
+		return
+	_construction_preview.show_cell(cell, _construction_site_issue(_construction_faction, cell))
+
+func _construction_cell_at(viewport_position: Vector2) -> Vector2i:
+	var field: Battlefield = runtime.battlefield
+	var local_position := field.get_global_transform_with_canvas().affine_inverse() * viewport_position
+	return Vector2i((local_position / float(field.cell_size)).floor())
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _construction_faction < 0 or get_tree().paused or is_game_over:
+		return
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		_cancel_construction_placement()
+	elif event is InputEventMouseMotion and event.device != InputEvent.DEVICE_ID_EMULATION:
+		_update_construction_preview(_construction_cell_at(event.position))
+		return
+	elif event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION:
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			_cancel_construction_placement()
+		elif event.button_index == MOUSE_BUTTON_LEFT:
+			_confirm_construction_placement(_construction_cell_at(event.position))
+		else:
+			return
+	elif event is InputEventScreenTouch and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION:
+		var cell := _construction_cell_at(event.position)
+		if cell == _construction_touch_cell:
+			_confirm_construction_placement(cell)
+		else:
+			_construction_touch_cell = cell
+			_update_construction_preview(cell)
+	else:
+		return
+	get_viewport().set_input_as_handled()
+
+func _confirm_construction_placement(cell: Vector2i) -> void:
+	_update_construction_preview(cell)
+	if _try_build_auxiliary(_construction_faction, cell):
+		_cancel_construction_placement()
 
 func _refresh_construction_button(faction_id: int) -> void:
 	var button: EnergyButton = _ui_runtime_ref("add_ball_buttons", {}).get(faction_id)
@@ -712,30 +786,33 @@ func _refresh_construction_button(faction_id: int) -> void:
 	var state: ConstructionState = runtime.construction
 	var built: Turret = state.targets.get(state.auxiliary_slot(faction_id))
 	var amount := state.balance(faction_id)
-	button.tooltip_text = "建材 %d/%d，预设建造格 %s" % [amount, ConstructionState.COST, _construction_site(faction_id)]
+	button.tooltip_text = "建材 %d/%d" % [amount, ConstructionState.COST]
 	if is_game_over or state.select_turret(faction_id) == null:
 		button.set_button_status("damaged", "停建")
 	elif built != null:
 		button.set_button_status("full", "已毁" if built.is_destroyed else "已建")
-	elif not _construction_site_is_legal(faction_id):
-		button.set_button_status("locked", "地块")
 	elif amount < ConstructionState.COST:
 		button.set_button_status("locked", "%d/%d" % [amount, ConstructionState.COST])
+	elif _construction_faction == faction_id:
+		button.set_button_status("normal", "取消")
+		button.tooltip_text = "点击战场选址，触屏双次点按。右键或 Esc 取消"
 	else:
 		button.set_button_status("normal", "建造")
 
-func _try_build_auxiliary(faction_id: int) -> bool:
+func _can_build_auxiliary(faction_id: int) -> bool:
 	var state: ConstructionState = runtime.construction
 	if state == null or is_game_over or get_tree().paused or state.select_turret(faction_id) == null:
 		return false
-	if state.targets.has(state.auxiliary_slot(faction_id)) or state.balance(faction_id) < ConstructionState.COST:
-		return false
-	if not _construction_site_is_legal(faction_id):
+	return not state.targets.has(state.auxiliary_slot(faction_id)) and state.balance(faction_id) >= ConstructionState.COST
+
+func _try_build_auxiliary(faction_id: int, cell: Vector2i) -> bool:
+	if not _can_build_auxiliary(faction_id) or not _construction_site_issue(faction_id, cell).is_empty():
 		return false
 
+	var state: ConstructionState = runtime.construction
 	var turret := Turret.new()
 	turret.name = "AuxiliaryTurret_%d" % faction_id
-	turret.setup(faction_id, _construction_position(_construction_site(faction_id)), runtime.battlefield, runtime.bullet_pool)
+	turret.setup(faction_id, _construction_position(cell), runtime.battlefield, runtime.bullet_pool)
 	turret.max_health = ceili(turret.max_health / 2.0)
 	turret.health = turret.max_health
 	turret.set_all_turrets(state.targets)
@@ -803,6 +880,8 @@ func _on_turret_destroyed(faction_id: int) -> void:
 		var survivor: Turret = runtime.construction.select_turret(faction_id) if runtime.construction != null else null
 		if survivor == null:
 			chamber.set_damaged()
+			if _construction_faction == faction_id:
+				_cancel_construction_placement()
 		else:
 			runtime.turrets[faction_id] = survivor
 			if chamber.linked_turret.is_destroyed:
@@ -840,6 +919,7 @@ func _finish_as_draw(sub_text: String) -> void:
 	GameStateCoordinator.finish_as_draw(self, _hud_ref("winner_label"), sub_text)
 
 func _stop_all_actions_for_game_over() -> void:
+	_cancel_construction_placement()
 	GameStateCoordinator.stop_actions_for_game_over(
 		_turret_targets(),
 		runtime.chambers,
@@ -854,6 +934,8 @@ func _on_scores_changed(counts: Dictionary) -> void:
 	if runtime.construction != null:
 		for faction in runtime.chambers:
 			_refresh_construction_button(faction)
+		if is_instance_valid(_construction_preview) and _construction_preview.visible:
+			_update_construction_preview(_construction_preview.cell)
 	RuntimeHudController.update_top_bar(
 		counts,
 		_ui_runtime_ref("top_bar_segments", {}),
@@ -889,6 +971,7 @@ func _sync_chamber_game_elapsed_time() -> void:
 func _toggle_pause() -> void:
 	if GameStateCoordinator.should_ignore_pause(is_game_over, game_layer):
 		return
+	_cancel_construction_placement()
 	GameStateCoordinator.apply_pause_toggle(
 		get_tree(),
 		_hud_ref("pause_overlay"),
@@ -1041,6 +1124,7 @@ func _cleanup_menu() -> void:
 	menu_status_label = null
 
 func _cleanup_game_layer() -> void:
+	_cancel_construction_placement()
 	GameStateCoordinator.reset_pause_and_winner_state(_hud_ref("pause_overlay"), _hud_ref("pause_button"), _hud_ref("winner_label"))
 	if game_layer != null:
 		game_layer.queue_free()
