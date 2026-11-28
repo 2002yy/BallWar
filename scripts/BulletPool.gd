@@ -4,6 +4,7 @@ class_name BulletPool
 var match_random: MatchRandom
 
 var inactive_bullets: Array = []
+var inactive_ids: Dictionary = {}
 var active_bullets: Array = []
 var active_bullet_indices: Dictionary = {}
 var active_spawn_order: Array[int] = []
@@ -32,6 +33,31 @@ var last_visual_profile: Dictionary = {
 	"trail_degrade_reason": "none",
 }
 
+# P1 互撞开关：默认关闭，经典规则完全不变。
+# 开启后由本节点统一推进所有炮弹（移动 → 碰撞 → 结算 → 回收），
+# 每颗弹不再各自完整执行 _physics_process。
+var collision_enabled: bool = false
+var collision_reverse_order: bool = false
+var collision_resolver = BulletCollisionResolver.new()
+var collision_stats: Dictionary = {}
+var collision_total_hits: int = 0
+var collision_usec_last: int = 0
+var collision_usec_total: int = 0
+var collision_usec_max: int = 0
+var step_usec_last: int = 0
+var step_usec_total: int = 0
+var step_usec_max: int = 0
+var total_spawned: int = 0
+var max_capture_depth: int = 0
+var total_explosion_cells: int = 0
+var spawned_by_type: Dictionary = {}
+var spawned_by_faction: Dictionary = {}
+var piercing_captures: int = 1
+var explosion_radius: int = 0
+var next_spawn_serial: int = 1
+var battlefield = null
+var _step_scratch: Array = []
+
 const VISUAL_PRESSURE_UPDATE_INTERVAL: float = 0.35
 const PRIORITY: Dictionary = {
 	"none": 0,
@@ -42,6 +68,117 @@ const PRIORITY: Dictionary = {
 	"fps_low": 5,
 }
 const ACTIVE_SPAWN_ORDER_COMPACT_CURSOR_THRESHOLD: int = 256
+
+func _ready() -> void:
+	collision_enabled = _env_flag("BALLWAR_BULLET_COLLISION", false)
+	collision_reverse_order = _env_string("BALLWAR_COLLISION_ORDER", "forward") == "reverse"
+	collision_resolver.configure(float(GameConfig.CELL_SIZE), _env_int("BALLWAR_COLLISION_BUCKET_CELLS", BulletCollisionResolver.DEFAULT_BUCKET_CELLS))
+	set_physics_process(collision_enabled)
+
+func _physics_process(delta: float) -> void:
+	if not collision_enabled:
+		return
+	# 固定步长：与 Bullet 的经典路径一致；倍速只改变每秒执行的 tick 数。
+	step_controlled(MatchClock.STEP_SECONDS)
+
+func step_controlled(delta: float) -> void:
+	# 唯一的执行顺序：全部移动 → 统一碰撞 → 统一结算（炮台/领土）→ 回收。
+	var step_started_usec: int = Time.get_ticks_usec()
+	_step_scratch.clear()
+	for bullet in active_bullets:
+		if bullet != null and is_instance_valid(bullet) and bullet.is_active:
+			_step_scratch.append(bullet)
+
+	for bullet in _step_scratch:
+		if bullet.is_active:
+			bullet.advance_tick(delta)
+
+	var started_usec: int = Time.get_ticks_usec()
+	collision_resolver.resolve(_step_scratch, self, delta)
+	collision_usec_last = Time.get_ticks_usec() - started_usec
+	collision_usec_total += collision_usec_last
+	collision_usec_max = maxi(collision_usec_max, collision_usec_last)
+	collision_stats = collision_resolver.last_stats.duplicate()
+	collision_total_hits = collision_resolver.total_hits
+
+	if collision_reverse_order:
+		for index in range(_step_scratch.size() - 1, -1, -1):
+			var bullet = _step_scratch[index]
+			if bullet != null and is_instance_valid(bullet) and bullet.is_active:
+				bullet.resolve_tick()
+	else:
+		for bullet in _step_scratch:
+			if bullet != null and is_instance_valid(bullet) and bullet.is_active:
+				bullet.resolve_tick()
+
+	step_usec_last = Time.get_ticks_usec() - step_started_usec
+	step_usec_total += step_usec_last
+	step_usec_max = maxi(step_usec_max, step_usec_last)
+
+func set_battlefield(value) -> void:
+	battlefield = value
+	collision_resolver.configure(_cell_size(), _env_int("BALLWAR_COLLISION_BUCKET_CELLS", collision_resolver.bucket_cells))
+
+func set_collision_enabled(value: bool) -> void:
+	collision_enabled = value
+	set_physics_process(value)
+	for bullet in active_bullets:
+		if bullet != null and is_instance_valid(bullet):
+			bullet.set_controlled(value)
+
+func set_collision_bucket_cells(cells: int) -> void:
+	collision_resolver.configure(_cell_size(), cells)
+
+func set_experiment_profiles(pierce: int, blast: int) -> void:
+	piercing_captures = pierce
+	explosion_radius = maxi(0, blast)
+	for bullet in active_bullets:
+		if bullet != null and is_instance_valid(bullet):
+			bullet.apply_type_profile(bullet.type_id, piercing_captures, explosion_radius)
+
+func get_collision_stats() -> Dictionary:
+	var stats: Dictionary = collision_stats.duplicate()
+	stats["enabled"] = collision_enabled
+	stats["total_hits"] = collision_total_hits
+	stats["total_spawned"] = total_spawned
+	stats["max_capture_depth"] = max_capture_depth
+	stats["total_explosion_cells"] = total_explosion_cells
+	stats["spawned_by_type"] = spawned_by_type.duplicate()
+	stats["spawned_by_faction"] = spawned_by_faction.duplicate()
+	stats["piercing_captures"] = piercing_captures
+	stats["explosion_radius"] = explosion_radius
+	stats["bucket_size"] = collision_resolver.bucket_size
+	stats["bucket_cells"] = collision_resolver.bucket_cells
+	stats["usec_last"] = collision_usec_last
+	stats["usec_max"] = collision_usec_max
+	stats["usec_total"] = collision_usec_total
+	stats["step_usec_max"] = step_usec_max
+	stats["step_usec_total"] = step_usec_total
+	stats["total_bucket_pairs"] = collision_resolver.total_bucket_pairs
+	stats["total_distance_checks"] = collision_resolver.total_distance_checks
+	stats["total_near_misses"] = collision_resolver.total_near_misses
+	return stats
+
+func _cell_size() -> float:
+	if battlefield != null and is_instance_valid(battlefield):
+		return float(battlefield.cell_size)
+	return float(GameConfig.CELL_SIZE)
+
+func _env_flag(name: String, fallback: bool) -> bool:
+	var raw: String = OS.get_environment(name).strip_edges().to_lower()
+	if raw == "":
+		return fallback
+	return raw == "1" or raw == "true" or raw == "yes" or raw == "on"
+
+func _env_int(name: String, fallback: int) -> int:
+	var raw: String = OS.get_environment(name).strip_edges()
+	if raw == "" or not raw.is_valid_int():
+		return fallback
+	return int(raw)
+
+func _env_string(name: String, fallback: String) -> String:
+	var raw: String = OS.get_environment(name).strip_edges()
+	return raw if raw != "" else fallback
 
 func _process(delta: float) -> void:
 	visual_pressure_update_timer -= delta
@@ -79,7 +216,7 @@ func set_tracked_turrets(turret_map: Dictionary) -> void:
 		if not turret.burst_progress.is_connected(progress_callable):
 			turret.burst_progress.connect(progress_callable)
 
-func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, target_turrets: Dictionary = {}):
+func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, target_turrets: Dictionary = {}, type_id: int = WeaponRuleset.BulletType.STANDARD):
 	var max_active: int = GameConfig.get_max_active_bullets()
 	while active_bullets.size() >= max_active and active_bullets.size() > 0:
 		var oldest_bullet = _get_oldest_active_bullet()
@@ -95,6 +232,7 @@ func spawn_bullet(faction_id: int, pos: Vector2, dir: Vector2, battlefield, targ
 	if match_random != null:
 		random_source = match_random.get_stream(MatchRandom.Stream.PROJECTILE, faction_id)
 	bullet.setup(faction_id, pos, dir, battlefield, target_turrets, random_source)
+	bullet.apply_type_profile(type_id, piercing_captures, explosion_radius)
 	bullet.activate()
 	return _finalize_spawned_bullet(bullet)
 
@@ -128,10 +266,15 @@ func update_visual_pressure() -> void:
 func recycle_bullet(bullet) -> void:
 	if bullet == null:
 		return
+	max_capture_depth = maxi(max_capture_depth, int(bullet.enemy_captures_done))
+	if int(bullet.explosion_cells) > 0:
+		total_explosion_cells += int(bullet.explosion_cells)
 	_remove_active_bullet_fast(bullet)
 	_unregister_active_bullet(bullet)
-	if inactive_bullets.find(bullet) < 0:
+	var bullet_id: int = bullet.get_instance_id()
+	if not inactive_ids.has(bullet_id):
 		inactive_bullets.append(bullet)
+		inactive_ids[bullet_id] = true
 	recycled_bullets_this_second += 1
 	bullet.deactivate()
 	if trail_layer != null and is_instance_valid(trail_layer) and trail_layer.has_method("request_trail_redraw"):
@@ -168,6 +311,19 @@ func get_peak_active_count() -> int:
 
 func reset_stats() -> void:
 	peak_active_count = 0
+	collision_resolver.reset_stats()
+	collision_stats = {}
+	collision_total_hits = 0
+	collision_usec_last = 0
+	collision_usec_total = 0
+	collision_usec_max = 0
+	step_usec_last = 0
+	step_usec_total = 0
+	step_usec_max = 0
+	max_capture_depth = 0
+	total_explosion_cells = 0
+	spawned_by_type.clear()
+	spawned_by_faction.clear()
 
 func get_tracked_queue_total() -> int:
 	return tracked_queue_total
@@ -367,6 +523,7 @@ func _obtain_bullet_with_visual_profile():
 	var bullet
 	if inactive_bullets.size() > 0:
 		bullet = inactive_bullets.pop_back()
+		inactive_ids.erase(bullet.get_instance_id())
 	else:
 		bullet = Bullet.new()
 		bullet.pool = self
@@ -380,10 +537,16 @@ func _obtain_bullet_with_visual_profile():
 	bullet.simple_draw = bool(visual_profile.get("simple_draw", false))
 	bullet.reduce_visual_effects = bool(visual_profile.get("reduce_visual_effects", false))
 	bullet.trail_max_points = int(visual_profile.get("trail_points", GameConfig.get_normal_trail_points()))
+	bullet.set_controlled(collision_enabled)
 	return bullet
 
 func _finalize_spawned_bullet(bullet):
 	var bullet_id: int = bullet.get_instance_id()
+	bullet.spawn_serial = next_spawn_serial
+	next_spawn_serial += 1
+	total_spawned += 1
+	spawned_by_type[bullet.type_id] = int(spawned_by_type.get(bullet.type_id, 0)) + 1
+	spawned_by_faction[bullet.faction_id] = int(spawned_by_faction.get(bullet.faction_id, 0)) + 1
 	active_bullet_indices[bullet_id] = active_bullets.size()
 	active_bullets.append(bullet)
 	active_spawn_order.append(bullet_id)

@@ -20,6 +20,12 @@ func _run() -> void:
 	await _flush()
 	_test_match_config_and_volley()
 	await _flush()
+	_test_bullet_attributes_and_reset()
+	await _flush()
+	_test_special_bullet_profiles()
+	await _flush()
+	_test_fire_ledger()
+	await _flush()
 
 	_assert.report("[IntegrationTest]")
 
@@ -644,3 +650,213 @@ func _test_match_config_and_volley() -> void:
 
 	var again := mixed.allocate(100, {WeaponRuleset.BulletType.PIERCING: 50})
 	_assert.eq(str(again), str(split), "allocation: same input produces the same volley")
+
+# ======================================================================
+# P5 — bullet attributes / pool reuse / collision toggle
+# ======================================================================
+
+func _test_bullet_attributes_and_reset() -> void:
+	print("  [P5] bullet attributes / pool reset / collision toggle")
+
+	var battlefield := Battlefield.new()
+	battlefield.configure(40)
+	get_root().add_child(battlefield)
+	battlefield.reset_quadrants()
+
+	var pool := BulletPool.new()
+	get_root().add_child(pool)
+	pool.set_battlefield(battlefield)
+
+	var bullet = pool.spawn_bullet(0, Vector2(100.0, 100.0), Vector2.RIGHT, battlefield, {})
+	_assert.eq(int(bullet.type_id), WeaponRuleset.BulletType.STANDARD, "bullet: type defaults to standard")
+	_assert.eq(int(bullet.cost), 1, "bullet: standard costs 1")
+	_assert.eq(bullet.speed, GameConfig.BULLET_SPEED, "bullet: standard speed")
+	_assert.eq(bullet.physical_radius, GameConfig.BULLET_RADIUS, "bullet: standard physical radius")
+	_assert.eq(bullet.mass, 1.0, "bullet: standard mass")
+	_assert.eq(int(bullet.energy), 1, "bullet: standard energy")
+	_assert.eq(int(bullet.damage), GameConfig.BULLET_DAMAGE, "bullet: standard damage")
+	_assert.that(not bullet.controlled, "bullet: classic mode leaves the bullet self-driven")
+
+	# 模拟上一颗特殊弹的残留，回收后必须完全回到普通弹属性。
+	bullet.speed = 75.6
+	bullet.physical_radius = 10.0
+	bullet.mass = 6.0
+	bullet.energy = 4
+	bullet.damage = 8
+	pool.recycle_bullet(bullet)
+	var reused = pool.spawn_bullet(1, Vector2(120.0, 100.0), Vector2.RIGHT, battlefield, {})
+	_assert.that(reused == bullet, "pool: recycled node is reused")
+	_assert.eq(reused.speed, GameConfig.BULLET_SPEED, "pool reset: speed restored")
+	_assert.eq(reused.physical_radius, GameConfig.BULLET_RADIUS, "pool reset: radius restored")
+	_assert.eq(reused.mass, 1.0, "pool reset: mass restored")
+	_assert.eq(int(reused.energy), 1, "pool reset: energy restored")
+	_assert.eq(int(reused.damage), GameConfig.BULLET_DAMAGE, "pool reset: damage restored")
+
+	pool.set_collision_enabled(true)
+	_assert.that(pool.collision_enabled, "collision: toggle turns on")
+	_assert.that(reused.controlled, "collision: active bullets hand control to the pool")
+	pool.set_collision_enabled(false)
+	_assert.that(not pool.collision_enabled, "collision: toggle turns off")
+	_assert.that(not reused.controlled, "collision: bullets return to self-driven mode")
+
+	pool.clear_active()
+	pool.free()
+	Fixtures.cleanup_node(battlefield)
+
+# ======================================================================
+# P7 — cross-burst fire ledger
+# ======================================================================
+
+func _test_fire_ledger() -> void:
+	print("  [P7] fire ledger accumulation")
+
+	var piercing_only := WeaponRuleset.with_unlocked([WeaponRuleset.BulletType.PIERCING])
+	var ledger := FireLedger.new()
+	var piercing_shots := 0
+	var standard_shots := 0
+	for i in range(5):
+		var volley: Dictionary = ledger.allocate(2, {WeaponRuleset.BulletType.PIERCING: 50}, piercing_only)
+		piercing_shots += int(volley.get(WeaponRuleset.BulletType.PIERCING, 0))
+		standard_shots += int(volley.get(WeaponRuleset.BulletType.STANDARD, 0))
+	_assert.eq(piercing_shots, 1, "ledger: 5 x 2 fire at 50% buys exactly 1 piercing")
+	_assert.eq(standard_shots, 5, "ledger: the same 10 fire still buys 5 standard")
+	_assert.eq(ledger.remaining_units(), 0, "ledger: no residual units after the example")
+	_assert.that(ledger.is_balanced(), "ledger: produced = spent + remaining")
+
+	var full := FireLedger.new()
+	var empty_volley: Dictionary = full.allocate(2, {WeaponRuleset.BulletType.PIERCING: 100}, piercing_only)
+	_assert.that(empty_volley.is_empty(), "ledger: 100% special with too little fire yields no bullets")
+	_assert.eq(full.remaining_units(), 200, "ledger: the fire stays in the special account")
+	var later: Dictionary = full.allocate(4, {WeaponRuleset.BulletType.PIERCING: 100}, piercing_only)
+	_assert.eq(int(later.get(WeaponRuleset.BulletType.PIERCING, 0)), 1, "ledger: accumulated balance pays out next time")
+	_assert.eq(full.remaining_units(), 100, "ledger: only the cost is deducted")
+	_assert.that(full.is_balanced(), "ledger: balance still conserved")
+
+	var classic := FireLedger.new()
+	var plain: Dictionary = classic.allocate(5, {}, WeaponRuleset.classic())
+	_assert.eq(int(plain.get(WeaponRuleset.BulletType.STANDARD, 0)), 5, "ledger: 0% mix is pure standard")
+	_assert.eq(classic.remaining_units(), 0, "ledger: 0% mix leaves no balance")
+
+	var dual := WeaponRuleset.with_unlocked([WeaponRuleset.BulletType.PIERCING, WeaponRuleset.BulletType.EXPLOSIVE])
+	var mixed := FireLedger.new()
+	var split: Dictionary = mixed.allocate(100, {
+		WeaponRuleset.BulletType.PIERCING: 40,
+		WeaponRuleset.BulletType.EXPLOSIVE: 30,
+	}, dual)
+	_assert.eq(int(split.get(WeaponRuleset.BulletType.PIERCING, 0)), 8, "ledger: 40 fire buys 8 piercing")
+	_assert.eq(int(split.get(WeaponRuleset.BulletType.EXPLOSIVE, 0)), 3, "ledger: 30 fire buys 3 explosive")
+	_assert.eq(int(split.get(WeaponRuleset.BulletType.STANDARD, 0)), 30, "ledger: the remaining 30 fire stays standard")
+	_assert.that(mixed.is_balanced(), "ledger: multi-type split is conserved")
+
+	var invalid := FireLedger.new()
+	var rejected: Dictionary = invalid.allocate(10, {
+		WeaponRuleset.BulletType.PIERCING: 60,
+		WeaponRuleset.BulletType.EXPLOSIVE: 52,
+	}, dual)
+	_assert.eq(invalid.last_error, "shares_sum:112", "ledger: shares over 100% are rejected explicitly")
+	_assert.eq(int(rejected.get(WeaponRuleset.BulletType.STANDARD, 0)), 10, "ledger: rejected split falls back to all standard")
+	_assert.that(invalid.is_balanced(), "ledger: rejection does not create or destroy fire")
+
+	var snapshot: Dictionary = full.snapshot()
+	var restored := FireLedger.new()
+	restored.restore(snapshot)
+	_assert.eq(restored.remaining_units(), full.remaining_units(), "ledger: snapshot keeps the balance")
+	var resumed: Dictionary = restored.allocate(4, {WeaponRuleset.BulletType.PIERCING: 100}, piercing_only)
+	_assert.eq(int(resumed.get(WeaponRuleset.BulletType.PIERCING, 0)), 1, "ledger: restored balance keeps paying out")
+	_assert.that(restored.is_balanced(), "ledger: restored ledger is still conserved")
+
+	var locked := FireLedger.new()
+	var locked_volley: Dictionary = locked.allocate(5, {WeaponRuleset.BulletType.PIERCING: 50}, WeaponRuleset.classic())
+	_assert.eq(locked.last_error, "unlocked:2", "ledger: a locked type is rejected, not silently ignored")
+	_assert.eq(int(locked_volley.get(WeaponRuleset.BulletType.STANDARD, 0)), 5, "ledger: locked type keeps all fire standard")
+
+	# 已兑换 / 已发射 / 待发射 必须分开。
+	var fired := FireLedger.new()
+	fired.allocate(10, {WeaponRuleset.BulletType.PIERCING: 50}, piercing_only)
+	fired.note_fired(WeaponRuleset.BulletType.PIERCING, 1)
+	fired.note_fired(WeaponRuleset.BulletType.STANDARD, 5)
+	_assert.eq(fired.pending_units(), 0, "ledger: fired shots leave no pending units")
+	_assert.that(fired.is_balanced(), "ledger: fired accounting is conserved")
+
+	var lost := FireLedger.new()
+	lost.allocate(10, {WeaponRuleset.BulletType.PIERCING: 50}, piercing_only)
+	lost.note_lost(WeaponRuleset.BulletType.PIERCING, 1)
+	_assert.eq(lost.lost_units, 500, "ledger: a cancelled piercing shot is recorded as 5 fire lost")
+	_assert.eq(lost.pending_units(), 500, "ledger: the rest of the converted fire is still pending")
+	_assert.that(lost.is_balanced(), "ledger: lost accounting is conserved")
+
+	var broken := FireLedger.new()
+	broken.restore({"special": [[2, 50000]], "standard": 0, "consumed_fire": 1, "converted_units": 0})
+	_assert.that(not broken.restore_ok, "ledger: an unbalanced snapshot is flagged on restore")
+
+	# 存档契约：weapon_config 的边界值要被清洗，而不是原样回放。
+	var raw: Dictionary = Fixtures.build_minimal_save_payload("2.1.0")
+	raw["weapon_config"] = {"pierce": -3, "mix_pierce": 150, "blast": 9, "mix_blast": -1}
+	var clean: Dictionary = SaveGameCodec.validate_save_data(raw)
+	var weapon: Dictionary = clean.get("weapon_config", {})
+	_assert.eq(int(weapon.get("pierce", 0)), 1, "save: invalid pierce clamps to 1")
+	_assert.eq(int(weapon.get("mix_pierce", 0)), 100, "save: mix clamps to 100")
+	_assert.eq(int(weapon.get("blast", -1)), 3, "save: blast clamps to 3")
+	_assert.eq(int(weapon.get("mix_blast", -1)), 0, "save: negative mix clamps to 0")
+	raw["weapon_config"] = {"pierce": -1, "mix_pierce": 50, "blast": 2, "mix_blast": 50}
+	var clean_infinite: Dictionary = SaveGameCodec.validate_save_data(raw)
+	_assert.eq(int(clean_infinite.get("weapon_config", {}).get("pierce", 0)), -1, "save: infinite pierce survives as -1")
+
+func _test_special_bullet_profiles() -> void:
+	print("  [P6] piercing / explosive profiles")
+
+	var battlefield := Battlefield.new()
+	battlefield.configure(40)
+	get_root().add_child(battlefield)
+	battlefield.reset_quadrants()
+
+	var pool := BulletPool.new()
+	get_root().add_child(pool)
+	pool.set_battlefield(battlefield)
+	pool.set_experiment_profiles(5, 1)
+
+	# 穿透：连续占 5 格后消失；第 6 格保持原归属。
+	var piercer = pool.spawn_bullet(0, battlefield.to_global(Vector2(325.0, 325.0)), Vector2.RIGHT, battlefield, {}, WeaponRuleset.BulletType.PIERCING)
+	_assert.eq(int(piercer.max_enemy_captures), 5, "piercing: profile carries the capture budget")
+	for step in range(5):
+		piercer._pending_cell = Vector2i(25 + step, 25)
+		piercer._pending_has_cell = true
+		piercer.resolve_tick()
+	_assert.eq(int(piercer.enemy_captures_done), 5, "piercing: five cells consumed")
+	_assert.that(not piercer.is_active, "piercing: bullet is gone after the budget")
+	_assert.eq(int(battlefield.owners[30][25]), GameConfig.Faction.YELLOW, "piercing: the sixth cell is untouched")
+
+	# 同一格重复结算不得重复扣次数。
+	var repeat = pool.spawn_bullet(0, battlefield.to_global(Vector2(325.0, 338.0)), Vector2.RIGHT, battlefield, {}, WeaponRuleset.BulletType.PIERCING)
+	repeat._pending_cell = Vector2i(25, 26)
+	repeat._pending_has_cell = true
+	repeat.resolve_tick()
+	repeat._pending_cell = Vector2i(25, 26)
+	repeat._pending_has_cell = true
+	repeat.resolve_tick()
+	_assert.eq(int(repeat.enemy_captures_done), 1, "piercing: staying on the same cell does not double-charge")
+
+	# 爆炸 r=1：3×3 = 9 格，触发格先被占领，其余 8 格计入 explosion_cells。
+	var blaster = pool.spawn_bullet(0, battlefield.to_global(Vector2(461.5, 461.5)), Vector2.RIGHT, battlefield, {}, WeaponRuleset.BulletType.EXPLOSIVE)
+	blaster._pending_cell = Vector2i(35, 35)
+	blaster._pending_has_cell = true
+	blaster.resolve_tick()
+	_assert.eq(int(blaster.explosion_cells), 8, "explosive: radius 1 captures the 8 neighbours around the trigger")
+	_assert.that(not blaster.is_active, "explosive: bullet is consumed on detonation")
+
+	# 边界裁剪：贴着左边界爆炸只结算界内格子。
+	var edge = pool.spawn_bullet(0, battlefield.to_global(Vector2(6.5, 273.0)), Vector2.RIGHT, battlefield, {}, WeaponRuleset.BulletType.EXPLOSIVE)
+	edge._pending_cell = Vector2i(0, 21)
+	edge._pending_has_cell = true
+	edge.resolve_tick()
+	_assert.eq(int(edge.explosion_cells), 5, "explosive: boundary clips the blast to in-board cells")
+
+	pool.recycle_bullet(repeat)
+	var reused = pool.spawn_bullet(1, battlefield.to_global(Vector2(200.0, 200.0)), Vector2.RIGHT, battlefield, {})
+	_assert.eq(int(reused.max_enemy_captures), 1, "pool reset: pierce budget returns to standard")
+	_assert.eq(int(reused.enemy_captures_done), 0, "pool reset: capture progress cleared")
+	_assert.eq(int(reused.explosion_radius), 0, "pool reset: blast radius cleared")
+
+	pool.clear_active()
+	pool.free()
+	Fixtures.cleanup_node(battlefield)

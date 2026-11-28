@@ -28,6 +28,7 @@ static func collect_state(chamber) -> Dictionary:
 	state["chamber_jammed_time_left"] = chamber.get_jammed_time_left()
 	state["queued_round_modifiers"] = chamber.get_queued_round_modifiers()
 	state["control_balls"] = SaveGameCodec.collect_control_ball_states(chamber)
+	state["fire_ledger"] = chamber.fire_ledger.snapshot() if chamber.fire_ledger != null else {}
 	return state
 
 static func restore_state(state: Dictionary, context: Dictionary) -> Dictionary:
@@ -54,6 +55,7 @@ static func restore_state(state: Dictionary, context: Dictionary) -> Dictionary:
 				continue
 			control_balls.append(_sanitize_control_ball_state(ball_state as Dictionary, chamber_size, default_ball_radius))
 	restored["control_balls"] = control_balls
+	restored["fire_ledger"] = state.get("fire_ledger", {}) if state.get("fire_ledger") is Dictionary else {}
 
 	restored["chamber_ball_count"] = clampi(int(state.get("chamber_ball_count", 0)), 0, max_control_balls)
 	var restored_ball_count: int = control_balls.size() if not control_balls.is_empty() else int(restored["chamber_ball_count"])
@@ -72,16 +74,25 @@ static func _sanitize_queued_round_modifiers(modifiers) -> Array:
 
 static func _sanitize_control_ball_state(ball_state: Dictionary, chamber_size: Vector2, default_ball_radius: float) -> Dictionary:
 	var radius: float = clampf(float(ball_state.get("radius", default_ball_radius)), 3.0, 12.0)
-	var pos: Vector2 = SaveGameCodec.arr_to_vec2(
-		ball_state.get("position", [chamber_size.x * 0.5, 18.0]),
-		Vector2(chamber_size.x * 0.5, 18.0)
-	)
+	var pos: Vector2 = SaveGameCodec.read_vec2_text(
+		ball_state, "position", Vector2(chamber_size.x * 0.5, 18.0))
 	pos.x = clampf(pos.x, radius, chamber_size.x - radius)
 	pos.y = clampf(pos.y, radius, chamber_size.y - radius)
-	var vel: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("velocity", [0, 0]), Vector2.ZERO).limit_length(520.0)
+	var vel: Vector2 = SaveGameCodec.read_vec2_text(ball_state, "velocity", Vector2.ZERO).limit_length(520.0)
+	var stuck: Dictionary = {}
+	var stuck_raw = ball_state.get("stuck_state", {})
+	if stuck_raw is Dictionary:
+		stuck = (stuck_raw as Dictionary).duplicate(true)
+	var stuck_text: String = str(ball_state.get("stuck_state_text", ""))
+	if stuck_text != "":
+		var parsed_stuck = str_to_var(stuck_text)
+		if parsed_stuck is Dictionary:
+			stuck = (parsed_stuck as Dictionary).duplicate(true)
 	return {
 		"radius": radius,
 		"position": pos,
 		"velocity": vel,
-		"stay_time": clampf(float(ball_state.get("stay_time", 0.0)), 0.0, ControlChamber.CONTROL_BALL_MAX_STAY_TIME),
+		"stay_time": clampf(SaveGameCodec.read_float_text(ball_state, "stay_time", 0.0),
+			0.0, ControlChamber.CONTROL_BALL_MAX_STAY_TIME),
+		"stuck_state": stuck,
 	}

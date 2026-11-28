@@ -155,6 +155,9 @@ var is_game_over: bool = false
 # Negative keeps the historical behavior (time-based randomization).
 # A non-negative value starts each new match with the same random streams.
 var match_seed: int = -1
+# 续局：先按原种子建局，场景与存档状态应用完后再恢复模拟随机流。
+var _continue_match_seed: int = -1
+var _continue_random_states: Array = []
 
 var menu_title_label
 var menu_start_button
@@ -233,6 +236,8 @@ func _ready() -> void:
 		add_child(dev_speed)
 		dev_speed.setup(self)
 		dev_speed.clock.step_completed.connect(_flush_battle_view)
+	var rotation_raw: String = OS.get_environment("BALLWAR_SPAWN_ROTATION").strip_edges()
+	GameConfig.set_spawn_rotation(int(rotation_raw) if rotation_raw.is_valid_int() else 0)
 	_view_size = _resolve_view_size()
 	is_mobile_layout = _detect_mobile_layout()
 	player_settings = PlayerSettingsStore.load_settings()
@@ -279,7 +284,6 @@ func _on_viewport_resized() -> void:
 	if stale != null and is_instance_valid(stale):
 		stale.queue_free()
 	_create_control_buttons()
-
 
 func _physics_process(_delta: float) -> void:
 	if dev_speed != null:
@@ -401,9 +405,17 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	GameConfig.set_game_mode_by_name(selected_game_mode_name)
 	GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
 
+	if _continue_match_seed < 0:
+		# 新开一局回到启动时的旋转设置；续局沿用存档里的旋转（在建局前已应用）。
+		var rotation_raw: String = OS.get_environment("BALLWAR_SPAWN_ROTATION").strip_edges()
+		GameConfig.set_spawn_rotation(int(rotation_raw) if rotation_raw.is_valid_int() else 0)
+	var effective_seed: int = match_seed
+	if _continue_match_seed >= 0:
+		effective_seed = _continue_match_seed
 	var stream_map: Array = MatchRandom.parse_faction_stream_map(
-		OS.get_environment("BALLWAR_RNG_STREAM_MAP"))
-	var match_random := MatchRandom.new(match_seed, stream_map)
+		OS.get_environment("BALLWAR_RNG_STREAM_MAP"),
+		GameConfig.get_spawn_rotation())
+	var match_random := MatchRandom.new(effective_seed, stream_map)
 	if selected_palette_name == "默认随机":
 		GameConfig.set_random_palette(match_random.get_stream(MatchRandom.Stream.PALETTE))
 	else:
@@ -415,7 +427,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	get_tree().paused = false
 	_sync_runtime_context(grid_size)
 	# 对局配置只在开局时快照一次：窗口缩放、UI 重建都不应该重新解释地图与武器规则。
-	runtime.set_match_config(MatchConfig.capture_current(grid_size, match_seed))
+	runtime.set_match_config(MatchConfig.capture_current(grid_size, effective_seed))
 
 	game_layer = Node2D.new()
 	game_layer.name = "GameLayer"
@@ -443,6 +455,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	_apply_board_transform()
 
 	_create_battlefield(grid_size)
+	_apply_match_experiment_profiles()
 	_create_turrets()
 	_create_control_chambers()
 	_refresh_chassis()
@@ -624,7 +637,7 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 	if runtime.turrets.has(faction_id):
 		# 火力 → 弹种分配。P0 只解锁普通弹，分配总发数等于火力值，和旧行为一致；
 		# P2 起弹种真正进入弹幕时，只需改这里的发射方式，不动分配与配置。
-		var volley: Dictionary = _build_volley(int(bullet_count))
+		var volley: Dictionary = _build_volley(faction_id, int(bullet_count))
 		var shot_count: int = WeaponRuleset.total_shots(volley)
 		if shot_count <= 0:
 			chamber.set_locked(false)
@@ -632,12 +645,44 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 			return
 		chamber.start_locked(shot_count)
 		_refresh_add_ball_button(faction_id)
-		runtime.turrets[faction_id].fire_burst(shot_count)
+		runtime.turrets[faction_id].fire_volley(volley)
 
-func _build_volley(fire: int) -> Dictionary:
-	if runtime.match_config != null and runtime.match_config.has_method("allocate_volley"):
-		return runtime.match_config.allocate_volley(fire)
+func _build_volley(faction_id: int, fire: int) -> Dictionary:
+	var config = runtime.match_config
+	var chamber = runtime.chambers.get(faction_id, null)
+	if config != null and chamber != null and chamber.fire_ledger != null:
+		var shares: Dictionary = config.volley_shares()
+		var ledger = chamber.fire_ledger
+		if shares.is_empty() and ledger.remaining_units() == 0 and ledger.pending_units() == 0:
+			# 经典模式：完全不触碰记账账户（连 produced/consumed 都不记）。
+			return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
+		# 跨 burst 累计：不足一发的特殊火力留在账上，不返还普通弹。
+		return ledger.allocate(fire, shares, config.weapon_ruleset)
 	return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
+
+func _apply_match_experiment_profiles() -> void:
+	if runtime.bullet_pool == null or not is_instance_valid(runtime.bullet_pool):
+		return
+	if runtime.match_config == null:
+		return
+	if runtime.bullet_pool.has_method("set_experiment_profiles"):
+		runtime.bullet_pool.set_experiment_profiles(
+			int(runtime.match_config.piercing_captures),
+			int(runtime.match_config.explosion_radius)
+		)
+
+func _apply_saved_weapon_config(data: Dictionary) -> void:
+	if runtime.match_config == null:
+		return
+	var weapon = data.get("weapon_config", null)
+	if not (weapon is Dictionary):
+		return
+	runtime.match_config.piercing_captures = int(weapon.get("pierce", runtime.match_config.piercing_captures))
+	runtime.match_config.piercing_mix_percent = int(weapon.get("mix_pierce", runtime.match_config.piercing_mix_percent))
+	runtime.match_config.explosion_radius = int(weapon.get("blast", runtime.match_config.explosion_radius))
+	runtime.match_config.explosion_mix_percent = int(weapon.get("mix_blast", runtime.match_config.explosion_mix_percent))
+	runtime.match_config.sanitize()
+	_apply_match_experiment_profiles()
 
 func _on_turret_burst_progress(faction_id, remaining) -> void:
 	if runtime.chambers.has(faction_id):
@@ -974,7 +1019,10 @@ func _save_game_progress() -> Dictionary:
 		runtime.event_controller,
 		game_elapsed_time,
 		is_game_over,
-		_hud_ref("winner_label")
+		_hud_ref("winner_label"),
+		runtime.match_config,
+		runtime.match_random,
+		win_check_timer
 	)
 	if not bool(result.get("ok", false)):
 		pending_menu_status_message = str(result.get("error_message", "保存失败"))
@@ -1037,6 +1085,11 @@ func _apply_saved_state(restore_input) -> void:
 	var restore_plan: RestorePlan = restore_input if restore_input is RestorePlan else RestorePlan.build_from_clean_data(restore_input if restore_input is Dictionary else {})
 	var restore_data: Dictionary = restore_plan.to_restore_dictionary()
 
+	var win_timer_text: String = str(restore_data.get("win_check_timer_text", ""))
+	if win_timer_text.is_valid_float():
+		win_check_timer = win_timer_text.to_float()
+	else:
+		win_check_timer = float(restore_data.get("win_check_timer", win_check_timer))
 	SaveStateApplier.apply_owners(runtime.battlefield, restore_data, Callable(self, "_on_scores_changed"))
 	SaveStateApplier.apply_factions(
 		runtime.chambers,
@@ -1070,11 +1123,24 @@ func _continue_from_prepared_payload(prepared: Dictionary) -> void:
 func _apply_continue_start_plan(execution_plan: Dictionary, restore_plan: RestorePlan) -> void:
 	var execution_start_values: Dictionary = execution_plan.get("start_values", {})
 	var execution_banner: Dictionary = execution_plan.get("banner", {})
+	var execution_data: Dictionary = execution_plan.get("data", {})
 	SaveFlowController.apply_continue_start_plan(execution_plan, self)
+	# 出生点旋转会影响炮台/控制仓位置与弹道边界，必须在建局前恢复。
+	GameConfig.set_spawn_rotation(int(execution_data.get("spawn_rotation", 0)))
+	_continue_match_seed = int(execution_data.get("match_seed", -1))
+	var saved_states = execution_data.get("match_random_states", [])
+	_continue_random_states = saved_states if saved_states is Array else []
 	_start_game(int(execution_start_values.get("grid_size", 40)), true, false)
+	_apply_saved_weapon_config(execution_data)
 	game_elapsed_time = float(execution_start_values.get("game_elapsed_time", 0.0))
 	_sync_chamber_game_elapsed_time()
 	_apply_saved_state(restore_plan)
+	# 场景创建与存档状态恢复都会消费随机数；在这里覆盖，续局后的第一次抽取才与存档时一致。
+	if runtime.match_random != null and not _continue_random_states.is_empty():
+		if not runtime.match_random.restore_states(_continue_random_states):
+			push_warning("存档中的随机数状态无效，已按当前种子继续")
+	_continue_match_seed = -1
+	_continue_random_states = []
 	_show_center_banner(
 		str(execution_banner.get("title", "领土战争")),
 		str(execution_banner.get("subtitle", "继续作战")),

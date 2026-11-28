@@ -25,6 +25,63 @@ var turret_hit_check_timer: float = 0.0
 var trail_sample_timer: float = 0.0
 var last_trail_position: Vector2 = Vector2.INF
 
+# P1 弹属性（默认 = 普通弹 = 现有行为）。物理半径与渲染半径分开：
+# physical_radius 参与碰撞，_visual_radius() 只影响绘制。
+var type_id: int = 0
+var cost: int = 1
+var mass: float = 1.0
+var energy: int = 1
+var damage: int = GameConfig.BULLET_DAMAGE
+var physical_radius: float = GameConfig.BULLET_RADIUS
+var spawn_serial: int = 0
+var prev_position: Vector2 = Vector2.ZERO
+# P2 特殊弹：默认值等价于普通弹。max_enemy_captures = -1 表示无限穿透。
+var max_enemy_captures: int = 1
+var enemy_captures_done: int = 0
+var explosion_radius: int = 0
+var explosion_cells: int = 0
+# 由 BulletPool 统一推进（互撞模式）；为 false 时每颗弹自己走 _physics_process。
+var controlled: bool = false
+
+# 一次 tick 的待结算事件：先移动，再碰撞，最后结算，避免各自完整执行。
+var _pending_despawn: bool = false
+var _pending_expired: bool = false
+var _pending_cell: Vector2i = Vector2i(-999, -999)
+var _pending_has_cell: bool = false
+var _pending_turret = null
+
+func apply_standard_profile() -> void:
+	type_id = WeaponRuleset.BulletType.STANDARD
+	cost = 1
+	speed = GameConfig.BULLET_SPEED
+	physical_radius = GameConfig.BULLET_RADIUS
+	mass = 1.0
+	energy = 1
+	damage = GameConfig.BULLET_DAMAGE
+	max_enemy_captures = 1
+	enemy_captures_done = 0
+	explosion_radius = 0
+	explosion_cells = 0
+
+func apply_type_profile(new_type: int, pierce_captures: int, blast_radius: int) -> void:
+	# 速度/半径/伤害/碰撞规则在这一批保持一致，只改"越境后能占几格"。
+	apply_standard_profile()
+	type_id = new_type
+	match new_type:
+		WeaponRuleset.BulletType.PIERCING:
+			max_enemy_captures = pierce_captures
+		WeaponRuleset.BulletType.EXPLOSIVE:
+			max_enemy_captures = 0
+			explosion_radius = maxi(0, blast_radius)
+		_:
+			max_enemy_captures = 1
+
+func set_controlled(value: bool) -> void:
+	controlled = value
+	if is_active:
+		set_physics_process(not value)
+
+
 func get_trail_segment_count() -> int:
 	return maxi(0, trail_points.size() - 1)
 
@@ -39,7 +96,8 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
 	if battlefield != null:
 		_cached_map_size = float(battlefield.grid_size) * float(battlefield.cell_size)
 	target_turrets = new_target_turrets
-	speed = GameConfig.BULLET_SPEED
+	apply_standard_profile()
+	prev_position = new_position
 	last_cell = Vector2i(-999, -999)
 	age = 0.0
 	if random_source == null:
@@ -71,7 +129,7 @@ func activate() -> void:
 	is_active = true
 	visible = true
 	set_process(true)
-	set_physics_process(true)
+	set_physics_process(not controlled)
 	z_index = 30
 
 func deactivate() -> void:
@@ -80,6 +138,7 @@ func deactivate() -> void:
 	visible = false
 	set_process(false)
 	set_physics_process(false)
+	_reset_pending()
 	battlefield = null
 	target_turrets = {}
 	trail_points.clear()
@@ -116,15 +175,20 @@ func replace_trail_points(points: Array) -> void:
 
 func restore_from_state(state: Dictionary, new_battlefield, new_target_turrets = {}) -> void:
 	var restored_faction_id: int = clampi(int(state.get("faction_id", 0)), 0, 3)
-	var stored_position: Vector2 = SaveGameCodec.arr_to_vec2(state.get("position", [0, 0]), Vector2.ZERO)
+	var stored_position: Vector2 = SaveGameCodec.read_vec2_text(state, "position", Vector2.ZERO)
 	var has_battlefield_space: bool = is_instance_valid(new_battlefield) and state.get("position_space") == SaveGameCodec.BULLET_BATTLEFIELD_SPACE
 	var restored_position: Vector2 = new_battlefield.to_global(stored_position) if has_battlefield_space else stored_position
-	var restored_direction: Vector2 = SaveGameCodec.arr_to_vec2(state.get("direction", [1, 0]), Vector2.RIGHT).normalized()
+	var restored_direction: Vector2 = SaveGameCodec.read_vec2_text(state, "direction", Vector2.RIGHT).normalized()
 	if restored_direction.length() <= 0.001:
 		restored_direction = Vector2.RIGHT
 
 	setup(restored_faction_id, restored_position, restored_direction, new_battlefield, new_target_turrets)
-	age = clampf(float(state.get("age", 0.0)), 0.0, GameConfig.BULLET_MAX_LIFETIME)
+	var restored_type: int = clampi(int(state.get("type_id", WeaponRuleset.BulletType.STANDARD)), 0, WeaponRuleset.BulletType.HOMING)
+	var pierce_captures: int = int(pool.piercing_captures) if pool != null and is_instance_valid(pool) else 1
+	var blast_radius: int = int(pool.explosion_radius) if pool != null and is_instance_valid(pool) else 0
+	apply_type_profile(restored_type, pierce_captures, blast_radius)
+	enemy_captures_done = maxi(0, int(state.get("enemy_captures_done", 0)))
+	age = clampf(SaveGameCodec.read_float_text(state, "age", 0.0), 0.0, GameConfig.BULLET_MAX_LIFETIME)
 	last_cell = SaveGameCodec.arr_to_vec2i(state.get("last_cell", [-999, -999]))
 
 	var restored_trail_points: Array = []
@@ -146,17 +210,27 @@ func _despawn() -> void:
 
 func _physics_process(_delta: float) -> void:
 	var delta: float = MatchClock.STEP_SECONDS
+	# 经典路径：每颗弹自己完成 移动 → 炮台/领土结算。
+	# 互撞模式由 BulletPool.step_controlled() 统一调用 advance_tick() + resolve_tick()。
+	if controlled:
+		return
+	advance_tick(delta)
+	resolve_tick()
+
+
+func advance_tick(delta: float) -> void:
 	if not is_active:
 		return
+	_reset_pending()
+	prev_position = global_position
+
 	if battlefield == null:
-		_despawn()
+		_pending_despawn = true
 		return
 
 	age += delta
 	if age >= GameConfig.BULLET_MAX_LIFETIME:
-		if pool != null and is_instance_valid(pool) and pool.has_method("notify_bullet_expired"):
-			pool.notify_bullet_expired()
-		_despawn()
+		_pending_expired = true
 		return
 
 	var map_size: float = _cached_map_size
@@ -193,9 +267,7 @@ func _physics_process(_delta: float) -> void:
 	turret_hit_check_timer -= delta
 	if turret_hit_check_timer <= 0.0:
 		turret_hit_check_timer = GameConfig.TURRET_HIT_CHECK_INTERVAL
-		if _try_hit_enemy_turret():
-			_despawn()
-			return
+		_pending_turret = _find_hittable_turret()
 
 	var cell = battlefield.world_to_cell(global_position)
 	if not battlefield.is_inside(cell):
@@ -205,9 +277,58 @@ func _physics_process(_delta: float) -> void:
 		return
 
 	last_cell = cell
-	var result = battlefield.apply_bullet(cell, faction_id)
-	if result == "HIT_ENEMY_CELL":
+	_pending_cell = cell
+	_pending_has_cell = true
+
+func resolve_tick() -> void:
+	if not is_active:
+		return
+	if _pending_despawn:
 		_despawn()
+		return
+	if _pending_expired:
+		if pool != null and is_instance_valid(pool) and pool.has_method("notify_bullet_expired"):
+			pool.notify_bullet_expired()
+		_despawn()
+		return
+	if _pending_turret != null:
+		# 炮台可能在同一 tick 内已被先结算的弹摧毁。
+		if is_instance_valid(_pending_turret) and not _pending_turret.is_destroyed:
+			_pending_turret.take_damage(damage)
+		_despawn()
+		return
+	if _pending_has_cell:
+		var result = battlefield.apply_bullet(_pending_cell, faction_id)
+		if result == "HIT_ENEMY_CELL":
+			enemy_captures_done += 1
+			if explosion_radius > 0:
+				_explode(_pending_cell)
+				_despawn()
+				return
+			if max_enemy_captures >= 0 and enemy_captures_done >= max_enemy_captures:
+				_despawn()
+
+func _explode(center: Vector2i) -> void:
+	# 方形半径：r=1 → 3×3（最多 9 格），与设计文档的"最多 9 格"一致。
+	# 边界裁剪；已属己方的格不重复计数；同一颗弹只结算一次。
+	var captured: int = 0
+	for offset_x in range(-explosion_radius, explosion_radius + 1):
+		for offset_y in range(-explosion_radius, explosion_radius + 1):
+			var cell: Vector2i = center + Vector2i(offset_x, offset_y)
+			if not battlefield.is_inside(cell):
+				continue
+			if int(battlefield.owners[cell.x][cell.y]) == faction_id:
+				continue
+			battlefield.apply_bullet(cell, faction_id)
+			captured += 1
+	explosion_cells = captured
+
+func _reset_pending() -> void:
+	_pending_despawn = false
+	_pending_expired = false
+	_pending_has_cell = false
+	_pending_turret = null
+
 
 func _stabilize_bounce_direction(raw_direction: Vector2) -> Vector2:
 	# v1.9.28：防止正上/正下/正左/正右方向在边界之间无限来回弹。
@@ -297,7 +418,7 @@ func _update_visual_trace(delta: float) -> void:
 	_notify_trail_segments_if_needed(previous_segments)
 	_request_trail_redraw()
 
-func _try_hit_enemy_turret() -> bool:
+func _find_hittable_turret():
 	for target_faction_id in target_turrets:
 		if target_faction_id == faction_id:
 			continue
@@ -306,16 +427,24 @@ func _try_hit_enemy_turret() -> bool:
 			continue
 		if turret.is_destroyed:
 			continue
-		var hit_radius_sq: float = GameConfig.TURRET_HIT_RADIUS * GameConfig.TURRET_HIT_RADIUS
-		if global_position.distance_squared_to(turret.global_position) <= hit_radius_sq:
-			turret.take_damage(GameConfig.BULLET_DAMAGE)
-			return true
-	return false
+		# 物理半径参与命中：普通弹半径 = BULLET_RADIUS，判定圈与原版完全一致。
+		var hit_radius: float = GameConfig.TURRET_HIT_RADIUS + (physical_radius - GameConfig.BULLET_RADIUS)
+		if global_position.distance_squared_to(turret.global_position) <= hit_radius * hit_radius:
+			return turret
+	return null
+
+func _try_hit_enemy_turret() -> bool:
+	# 旧接口：立即结算炮台伤害并返回是否命中。保留给坐标/命中探针直接调用。
+	var turret = _find_hittable_turret()
+	if turret == null:
+		return false
+	turret.take_damage(damage)
+	return true
 
 func _visual_radius() -> float:
 	if battlefield != null:
-		return minf(GameConfig.BULLET_RADIUS, float(battlefield.cell_size) * 0.42)
-	return GameConfig.BULLET_RADIUS
+		return minf(physical_radius, float(battlefield.cell_size) * 0.42)
+	return physical_radius
 
 func _draw() -> void:
 	BulletRendererScript.draw(self, {

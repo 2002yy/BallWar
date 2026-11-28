@@ -262,9 +262,13 @@ static func apply_continue_game_config(config_state: Dictionary) -> Dictionary:
 
 
 static func build_continue_start_values(data: Dictionary) -> Dictionary:
+	var elapsed: float = float(data.get("game_elapsed_time", 0.0))
+	var elapsed_text: String = str(data.get("game_elapsed_time_text", ""))
+	if elapsed_text.is_valid_float():
+		elapsed = elapsed_text.to_float()
 	return {
 		"grid_size": int(data.get("grid_size", 40)),
-		"game_elapsed_time": float(data.get("game_elapsed_time", 0.0)),
+		"game_elapsed_time": elapsed,
 	}
 
 
@@ -399,7 +403,10 @@ static func write_game_progress_result(
 	event_roulette_controller,
 	game_elapsed_time: float,
 	is_game_over: bool,
-	winner_label
+	winner_label,
+	match_config = null,
+	match_random = null,
+	win_check_timer: float = 0.0
 ) -> Dictionary:
 	if battlefield == null:
 		return {
@@ -417,7 +424,10 @@ static func write_game_progress_result(
 		game_elapsed_time,
 		is_game_over,
 		selected_save_slot,
-		winner_label
+		winner_label,
+		match_config,
+		match_random,
+		win_check_timer
 	)
 	return _write_json_atomically(save_path, data)
 

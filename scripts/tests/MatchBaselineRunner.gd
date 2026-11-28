@@ -35,6 +35,21 @@ var _label: String = "run"
 #           has no subscriber at all (the strongest "audio does not exist" arm)
 var _audio_arm: String = "on"
 
+# 实验模式：绕过控制仓，定时让四个炮台同时齐射，用于制造高密度弹幕对照。
+# 默认关闭，不影响经典基线。
+var _experiment_fire: bool = false
+var _experiment_fire_interval: float = 1.0
+var _experiment_fire_count: int = 40
+var _active_samples: Array[float] = []
+var _trace_write_failed: bool = false
+var _max_share: float = 0.0
+var _max_reversal: float = 0.0
+var _min_share_seen: Dictionary = {0: 1.0, 1: 1.0, 2: 1.0, 3: 1.0}
+var _empty_ticks: int = 0
+var _low_ticks: int = 0
+var _metric_ticks: int = 0
+var _growth: Array = []
+
 var _trace_file: FileAccess = null
 var _trace_lines: Array[String] = []
 var _trace_path: String = ""
@@ -59,6 +74,8 @@ var _first_event_apply_tick: int = -1
 var _last_event_effect: String = ""
 
 var _end_reason: String = "unknown"
+var _save_resume_at: float = 0.0
+var _resumed: bool = false
 
 
 # Counts how many times each clock actually runs, and the real delta sums.
@@ -98,6 +115,10 @@ func _run() -> void:
 		printerr("[Probe] BALLWAR_AUDIO must be on|off|none, got '%s'." % _audio_arm)
 		quit(2)
 		return
+	_experiment_fire = _env_flag("BALLWAR_EXPERIMENT_FIRE", false)
+	_experiment_fire_interval = _env_float("BALLWAR_EXPERIMENT_FIRE_INTERVAL", 1.0)
+	_experiment_fire_count = _env_int("BALLWAR_EXPERIMENT_FIRE_COUNT", 40)
+	_save_resume_at = _env_float("BALLWAR_SAVE_RESUME_AT", 0.0)
 	_ticks_per_second = MatchClock.TICKS_PER_SECOND
 
 	if not IsolatedUserProfile.is_fresh("BALLWAR_PROBE_TOKEN", ".ballwar-probe"):
@@ -147,6 +168,9 @@ func _run() -> void:
 		quit(2)
 		return
 
+	if _main.runtime.bullet_pool != null and is_instance_valid(_main.runtime.bullet_pool):
+		_main.runtime.bullet_pool.collision_resolver.track_near_misses = _env_flag("BALLWAR_TRACK_NEAR_MISS", false)
+
 	_trace_path = "user://trace_%s.tsv" % _label
 	_trace_file = FileAccess.open(_trace_path, FileAccess.WRITE)
 	if _trace_file == null:
@@ -181,8 +205,10 @@ func _run() -> void:
 	var trace_error: Error = _trace_file.get_error()
 	_trace_file.close()
 	_close_detail()
-	if not footer_written or trace_error != OK:
-		printerr("[Probe] Cannot finish trace.")
+	if not footer_written or trace_error != OK or _trace_write_failed:
+		printerr("[Probe] Cannot finish trace (footer=%s error=%s failed=%s)." % [
+			str(footer_written), error_string(trace_error), str(_trace_write_failed)
+		])
 		quit(4)
 		return
 	_print_summary()
@@ -255,15 +281,40 @@ func _write_audio_report() -> void:
 
 
 func _capture_loop(max_ticks: int) -> void:
+	var resume_tick: int = int(round(_save_resume_at * float(_ticks_per_second)))
 	while _tick < max_ticks:
 		await physics_frame
 		_tick += 1
+		_maybe_experiment_fire()
+		if not _resumed and _save_resume_at > 0.0 and _tick >= resume_tick:
+			# Save/continue in the middle, then keep the same tick numbering. The
+			# trace after this point must match an uninterrupted run.
+			var saved: Dictionary = _main._save_game_progress()
+			if not bool(saved.get("ok", false)):
+				_end_reason = "resume_save_failed"
+				break
+			_main._save_and_exit_to_menu()
+			_main._continue_saved_game()
+			_resumed = true
 		_record_tick()
 		if _main.is_game_over:
 			_end_reason = "game_over"
 			break
 	if _end_reason == "unknown":
 		_end_reason = "time_cap"
+
+func _maybe_experiment_fire() -> void:
+	if not _experiment_fire or _main == null or _main.runtime == null:
+		return
+	var interval_ticks: int = maxi(1, int(round(_experiment_fire_interval * float(_ticks_per_second))))
+	if _tick % interval_ticks != 0:
+		return
+	var volley: Dictionary = {WeaponRuleset.BulletType.STANDARD: _experiment_fire_count}
+	if _main.runtime.match_config != null and _main.runtime.match_config.has_method("allocate_volley"):
+		volley = _main.runtime.match_config.allocate_volley(_experiment_fire_count)
+	for turret in _main.runtime.turrets.values():
+		if turret != null and is_instance_valid(turret) and not turret.is_destroyed:
+			turret.fire_volley(volley)
 
 
 func _record_tick() -> void:
@@ -291,6 +342,7 @@ func _record_tick() -> void:
 	])
 
 	_track_milestones(state)
+	_sample_metrics()
 	_write_detail(state)
 	if _trace_lines.size() >= TRACE_FLUSH_EVERY:
 		_flush_trace()
@@ -327,8 +379,10 @@ func _sim_state() -> Dictionary:
 			int(turret.burst_index)
 		])
 
-		turret_rules.append([fid, turret.sweep_phase, turret.rotation, turret.burst_total,
-			turret.burst_origin_angle, turret.burst_timer, turret.burst_locked])
+		# 存档走 JSON；角度/计时器只保留 1e-4，避免最后几位的二进制噪声被当成规则分歧。
+		turret_rules.append([fid, snappedf(turret.sweep_phase, 0.0001), snappedf(turret.rotation, 0.0001),
+			turret.burst_total, snappedf(turret.burst_origin_angle, 0.0001),
+			snappedf(turret.burst_timer, 0.0001), turret.burst_locked])
 
 	var chamber_sig: Array = []
 	var chamber_rules: Array = []
@@ -348,7 +402,7 @@ func _sim_state() -> Dictionary:
 			chamber.balls.size(),
 			float(chamber.jammed_time_left)
 		])
-		chamber_rules.append([fid, chamber.jammed_time_left, chamber.chamber_state.queued_round_modifiers])
+		chamber_rules.append([fid, snappedf(chamber.jammed_time_left, 0.001), chamber.chamber_state.queued_round_modifiers])
 		for index in range(chamber.balls.size()):
 			var ball = chamber.balls[index]
 			if not is_instance_valid(ball):
@@ -356,7 +410,8 @@ func _sim_state() -> Dictionary:
 				continue
 			var stuck: Dictionary = chamber.stuck_states.get(ball.get_instance_id(), {})
 			chamber_sig.append("%d:ball:%d:%s" % [fid, index, var_to_str([
-				ball.position, ball.velocity, ball.radius, chamber.get_ball_stay_time(ball), stuck
+				ball.position, ball.velocity, ball.radius,
+				snappedf(float(chamber.get_ball_stay_time(ball)), 0.001), stuck
 			]).replace("\n", "")])
 
 	var bullet_rules: Array[int] = []
@@ -364,8 +419,11 @@ func _sim_state() -> Dictionary:
 		for bullet in _main.runtime.bullet_pool.get_active_bullets():
 			if bullet == null or not is_instance_valid(bullet):
 				continue
-			bullet_rules.append(hash([bullet.faction_id, bullet.global_position, bullet.direction,
-				bullet.age, bullet.speed, bullet.last_cell, bullet.turret_hit_check_timer]))
+			bullet_rules.append(hash([bullet.faction_id,
+				Vector2(snappedf(bullet.global_position.x, 0.001), snappedf(bullet.global_position.y, 0.001)),
+				Vector2(snappedf(bullet.direction.x, 0.0001), snappedf(bullet.direction.y, 0.0001)),
+				snappedf(bullet.age, 0.001), bullet.speed, bullet.last_cell,
+				snappedf(bullet.turret_hit_check_timer, 0.001)]))
 			bullets.append("%d:%.2f:%.2f" % [
 				int(bullet.faction_id),
 				float(bullet.global_position.x),
@@ -388,7 +446,7 @@ func _sim_state() -> Dictionary:
 
 		var pending: Dictionary = controller._pending_payload
 		event_rules = [
-			controller.next_event_time_left, controller._presentation_time_left,
+			snappedf(controller.next_event_time_left, 0.001), snappedf(controller._presentation_time_left, 0.001),
 			pending.get("faction_id", -1), pending.get("final_effect", ""), pending.get("effect_sequence", [])
 		]
 
@@ -398,8 +456,9 @@ func _sim_state() -> Dictionary:
 	var event_h: int = hash([event_sig, event_rules])
 	var payload: Array = [
 		owners_hash, turret_h, chamber_h, bullet_h, event_h,
-		_main.game_elapsed_time, _main.win_check_timer, _main.is_game_over,
-		_main.runtime.match_random.simulation_states()
+		# 时钟只用于触发检查；1e-6 的量化避免存档 JSON 的最后一位噪声被当成分歧。
+		snappedf(_main.game_elapsed_time, 0.000001), snappedf(_main.win_check_timer, 0.000001),
+		_main.is_game_over, _main.runtime.match_random.simulation_states()
 	]
 	return {
 		"sim_hash": hash(payload),
@@ -579,7 +638,10 @@ func _flush_trace() -> void:
 	if _trace_file == null or _trace_lines.is_empty():
 		return
 	for line in _trace_lines:
-		_trace_file.store_line(line)
+		if not _trace_file.store_line(line):
+			printerr("[Probe] trace write failed at tick %d: %s" % [_tick, error_string(_trace_file.get_error())])
+			_trace_write_failed = true
+			break
 	_trace_lines.clear()
 	_trace_file.flush()
 
@@ -606,6 +668,13 @@ func _print_summary() -> void:
 	print("  first_event_start= %s" % _tick_text(_first_event_start_tick))
 	print("  first_event_apply= %s" % _tick_text(_first_event_apply_tick))
 	print("  lead_changes     = %d" % _lead_changes)
+	print("  experiment_fire  = %s (count=%d interval=%.2fs)" % [
+		str(_experiment_fire), _experiment_fire_count, _experiment_fire_interval
+	])
+	_print_final_cells()
+	_print_collision_summary()
+	_print_production_summary()
+	_print_load_summary()
 	# Perf is reported separately and never feeds the simulation digest.
 	print("[Probe] ---- clocks (perf, not state) ----")
 	print("  process_calls    = %d" % _probe.process_calls)
@@ -620,6 +689,169 @@ func _print_summary() -> void:
 	print("[Probe] ---- end ----")
 
 
+func _print_collision_summary() -> void:
+	var pool = null
+	if _main != null and _main.runtime != null:
+		pool = _main.runtime.bullet_pool
+	if pool == null or not is_instance_valid(pool) or not pool.has_method("get_collision_stats"):
+		return
+	print("[Probe] ---- collision (perf, not state) ----")
+	var stats: Dictionary = pool.get_collision_stats()
+	print("  enabled          = %s" % str(stats.get("enabled", false)))
+	print("  experiment       = pierce=%d mix_pierce=%d blast=%d mix_blast=%d" % [
+		int(stats.get("piercing_captures", 1)),
+		int(_main.runtime.match_config.piercing_mix_percent) if _main.runtime.match_config != null else 0,
+		int(stats.get("explosion_radius", 0)),
+		int(_main.runtime.match_config.explosion_mix_percent) if _main.runtime.match_config != null else 0,
+	])
+	print("  bucket_size      = %.1f (cells=%d)" % [
+		float(stats.get("bucket_size", 0.0)), int(stats.get("bucket_cells", 0))
+	])
+	print("  totals           = pairs=%d checks=%d near_misses=%d hits=%d" % [
+		int(stats.get("total_bucket_pairs", 0)),
+		int(stats.get("total_distance_checks", 0)),
+		int(stats.get("total_near_misses", 0)),
+		int(stats.get("total_hits", 0)),
+	])
+	print("  collision_usec   = avg=%.0f max=%d" % [
+		float(stats.get("usec_total", 0)) / maxf(1.0, float(_tick)),
+		int(stats.get("usec_max", 0)),
+	])
+	print("  pool_step        = avg=%.2fms max=%.2fms" % [
+		float(stats.get("step_usec_total", 0)) / maxf(1.0, float(_tick)) / 1000.0,
+		float(stats.get("step_usec_max", 0)) / 1000.0,
+	])
+	print("  depth / blast    = max_capture_depth=%d explosion_cells=%d" % [
+		int(stats.get("max_capture_depth", 0)),
+		int(stats.get("total_explosion_cells", 0)),
+	])
+	print("  spawned_total    = %d by_type=%s" % [
+		int(stats.get("total_spawned", 0)),
+		str(stats.get("spawned_by_type", {})),
+	])
+	print("  peak_active      = %d" % int(pool.get_peak_active_count()))
+
+func _print_production_summary() -> void:
+	if _main == null or _main.runtime == null:
+		return
+	print("[Probe] ---- production (perf, not state) ----")
+	var chambers: Dictionary = _main.runtime.chambers
+	var faction_ids: Array = chambers.keys()
+	faction_ids.sort()
+	for faction_id in faction_ids:
+		var chamber = chambers[faction_id]
+		if chamber == null or not is_instance_valid(chamber):
+			continue
+		var stats: Dictionary = chamber.get_production_stats()
+		print("  f%d balls=%d releases=%d fire=%d max=%d gates=%d relaunch=%d locks=%d locked=%.1fs" % [
+			int(faction_id),
+			int(stats.get("balls", 0)),
+			int(stats.get("releases", 0)),
+			int(stats.get("fire_released", 0)),
+			int(stats.get("max_release", 0)),
+			int(stats.get("gate_multiplier_hits", 0)),
+			int(stats.get("relaunches", 0)),
+			int(stats.get("lock_count", 0)),
+			float(stats.get("locked_seconds", 0.0)),
+		])
+		print("     ledger[%s] balanced=%s error=%s" % [
+			str(stats.get("ledger", "")),
+			str(stats.get("ledger_balanced", false)),
+			str(stats.get("ledger_error", "")),
+		])
+		print("     ledger_units converted=%d fired=%d pending=%d lost=%d remain=%d restore_ok=%s" % [
+			int(stats.get("ledger_converted_units", 0)),
+			int(stats.get("ledger_fired_units", 0)),
+			int(stats.get("ledger_pending_units", 0)),
+			int(stats.get("ledger_lost_units", 0)),
+			int(stats.get("ledger_remaining_units", 0)),
+			str(stats.get("ledger_restore_ok", true)),
+		])
+	var pool = _main.runtime.bullet_pool
+	if pool != null and is_instance_valid(pool):
+		var pool_stats: Dictionary = pool.get_collision_stats()
+		print("  shots_by_faction = %s" % str(pool_stats.get("spawned_by_faction", {})))
+
+func _sample_metrics() -> void:
+	if _main == null or _main.runtime == null:
+		return
+	var pool = _main.runtime.bullet_pool
+	var active: int = 0
+	if pool != null and is_instance_valid(pool):
+		active = int(pool.get_active_count())
+	_active_samples.append(float(active))
+	if active <= 0:
+		_empty_ticks += 1
+	if active < 10:
+		_low_ticks += 1
+	_metric_ticks += 1
+
+	var battlefield = _main.runtime.battlefield
+	if battlefield == null:
+		return
+	var total_cells: float = float(maxi(1, battlefield.grid_size * battlefield.grid_size))
+	var counts: Dictionary = battlefield.owner_counts
+	for faction_id in [0, 1, 2, 3]:
+		var share: float = float(int(counts.get(faction_id, 0))) / total_cells
+		_max_share = maxf(_max_share, share)
+		_max_reversal = maxf(_max_reversal, share - float(_min_share_seen.get(faction_id, 1.0)))
+		if share < float(_min_share_seen.get(faction_id, 1.0)):
+			_min_share_seen[faction_id] = share
+	if _tick % 600 == 0 and _growth.size() < 20:
+		_growth.append([
+			_tick / _ticks_per_second,
+			int(counts.get(0, 0)), int(counts.get(1, 0)), int(counts.get(2, 0)), int(counts.get(3, 0)),
+		])
+
+func _print_load_summary() -> void:
+	if _active_samples.is_empty():
+		return
+	print("[Probe] ---- load (perf, not state) ----")
+	print("  active           = p50=%.0f p95=%.0f peak=%.0f" % [
+		_percentile(_active_samples, 0.50),
+		_percentile(_active_samples, 0.95),
+		_array_max(_active_samples),
+	])
+	print("  territory        = max_share=%.1f%% max_reversal=%.1fpp" % [
+		_max_share * 100.0,
+		_max_reversal * 100.0,
+	])
+	print("  activity         = empty_ticks=%.1f%% low10_ticks=%.1f%%" % [
+		100.0 * float(_empty_ticks) / maxf(1.0, float(_metric_ticks)),
+		100.0 * float(_low_ticks) / maxf(1.0, float(_metric_ticks)),
+	])
+	var curve: Array[String] = []
+	for sample in _growth:
+		curve.append("%ds:%d/%d/%d/%d" % [int(sample[0]), int(sample[1]), int(sample[2]), int(sample[3]), int(sample[4])])
+	print("  growth           = %s" % " ".join(curve))
+
+func _percentile(values: Array[float], ratio: float) -> float:
+	if values.is_empty():
+		return 0.0
+	var sorted: Array[float] = values.duplicate()
+	sorted.sort()
+	var index: int = clampi(int(round(ratio * float(sorted.size() - 1))), 0, sorted.size() - 1)
+	return sorted[index]
+
+func _array_max(values: Array[float]) -> float:
+	var result: float = 0.0
+	for value in values:
+		result = maxf(result, value)
+	return result
+
+func _print_final_cells() -> void:
+	if _main == null or _main.runtime == null or _main.runtime.battlefield == null:
+		return
+	var counts: Dictionary = _main.runtime.battlefield.count_cells_by_team()
+	print("[Probe] ---- final cells ----")
+	print("  blue=%d red=%d green=%d yellow=%d" % [
+		int(counts.get(GameConfig.Faction.BLUE, 0)),
+		int(counts.get(GameConfig.Faction.RED, 0)),
+		int(counts.get(GameConfig.Faction.GREEN, 0)),
+		int(counts.get(GameConfig.Faction.YELLOW, 0)),
+	])
+
+
 func _tick_text(tick: int) -> String:
 	if tick < 0:
 		return "none"
@@ -629,6 +861,13 @@ func _tick_text(tick: int) -> String:
 func _env_string(key: String, fallback: String) -> String:
 	var raw: String = OS.get_environment(key)
 	return fallback if raw == "" else raw
+
+
+func _env_flag(key: String, fallback: bool) -> bool:
+	var raw: String = OS.get_environment(key).strip_edges().to_lower()
+	if raw == "":
+		return fallback
+	return raw == "1" or raw == "true" or raw == "yes" or raw == "on"
 
 
 func _env_int(key: String, fallback: int) -> int:
