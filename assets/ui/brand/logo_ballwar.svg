@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 140">
+  <!-- 领土战争 BALLWAR 品牌标：
+       左侧六边形徽标 = 四象限战场 + 中央弹珠（游戏本体的缩小记号）；
+       右侧双绶带 = 红蓝对抗的速度线，压在字标背后。
+       文字不进 SVG —— 中文在无字体环境会被替换成方框，字标一律用引擎原生 Label。 -->
+  <g>
+    <path d="M59.4 56.5 36 43 12.6 56.5 12.6 83.5 36 97 59.4 83.5Z" fill="#0d1721" stroke="#3e5b76" stroke-width="2.4" stroke-linejoin="round"/>
+    <rect x="19.5" y="59" width="11" height="11" fill="#d92e2e"/>
+    <rect x="30.5" y="59" width="11" height="11" fill="#2f7ce0"/>
+    <rect x="19.5" y="70" width="11" height="11" fill="#33d94a"/>
+    <rect x="30.5" y="70" width="11" height="11" fill="#f2d92a"/>
+    <path d="M19.5 70H41.5M30.5 59V81" stroke="#050a0e" stroke-width="1.2"/>
+    <circle cx="36" cy="70" r="4.2" fill="#f4f7fb"/>
+    <circle cx="34.6" cy="68.6" r="1.5" fill="#ffffff"/>
+    <path d="M59.4 56.5 36 43 12.6 56.5 12.6 83.5 36 97 59.4 83.5Z" fill="none" stroke="#e8b63c" stroke-width="1" opacity="0.65" stroke-linejoin="round"/>
+  </g>
+
+  <g opacity="0.96">
+    <path d="M64 58C136 20 292 8 396 32V50C296 28 144 40 78 78Z" fill="#b62a2a"/>
+    <path d="M64 58C136 20 292 8 396 32" fill="none" stroke="#f07a6a" stroke-width="1.6" opacity="0.55"/>
+    <path d="M70 92C144 56 292 48 396 74V92C296 68 148 76 86 116Z" fill="#2a5f9e"/>
+    <path d="M70 92C144 56 292 48 396 74" fill="none" stroke="#7fb2e8" stroke-width="1.6" opacity="0.5"/>
+    <path d="M64 75C136 38 292 28 396 53" fill="none" stroke="#e8b63c" stroke-width="2.2" opacity="0.95"/>
+    <path d="M72 81C144 46 292 38 396 62" fill="none" stroke="#a87f22" stroke-width="1" opacity="0.7"/>
+  </g>
+</svg>

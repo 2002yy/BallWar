@@ -40,6 +40,17 @@ if [ -z "$GODOT" ]; then
 	exit 2
 fi
 
+# Windows (MSYS/Git Bash) needs Windows-style paths handed to a native .exe:
+# PWD was POSIX (`/c/...`) and APPDATA was `/tmp/...`, and the engine died with
+# a silent access violation before printing its banner. `pwd -W` and cygpath
+# only exist under MSYS, so CI on Linux keeps the plain POSIX values.
+ROOT_RUN="$ROOT"
+to_native() { printf '%s' "$1"; }
+if command -v cygpath > /dev/null 2>&1; then
+	ROOT_RUN="$(cd "$ROOT" && pwd -W)"
+	to_native() { cygpath -w "$1"; }
+fi
+
 DEFAULT_RUNNERS=(
 	SmokeTestRunner
 	StartMenuSceneTestRunner
@@ -71,7 +82,8 @@ fail=0
 for script in "${RUNNERS[@]}"; do
 	iso="$(mktemp -d "${TMPDIR:-/tmp}/ballwar-user-XXXXXX")"
 	log="$LOGS/${script}.log"
-	APPDATA="$iso" "$GODOT" --headless --audio-driver Dummy --path "$ROOT" \
+	APPDATA="$(to_native "$iso")" PWD="$ROOT_RUN" MSYS2_ARG_CONV_EXCL='*' \
+		"$GODOT" --headless --audio-driver Dummy --path "$ROOT_RUN" \
 		--script "res://scripts/tests/${script}.gd" > "$log" 2>&1
 	status=$?
 	mark=""
