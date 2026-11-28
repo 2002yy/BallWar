@@ -1,7 +1,7 @@
 extends RefCounted
 class_name MatchRandom
 
-enum Stream { CHAMBER, TURRET, PROJECTILE, EVENT, PALETTE }
+enum Stream { CHAMBER, TURRET, PROJECTILE, EVENT, PALETTE, EXTRA_TURRET }
 
 var root_seed: int
 var _streams: Dictionary[Vector2i, RandomNumberGenerator] = {}

@@ -165,6 +165,13 @@ func _physics_process(_delta: float) -> void:
 	var next_position = global_position + direction * speed * delta
 	var local_position = battlefield.to_local(next_position)
 	var bounced = false
+	if battlefield is Battlefield and battlefield.fortress != null:
+		var start: Vector2 = battlefield.to_local(global_position)
+		var motion: Vector4 = battlefield.fortress.reflect_motion(start, local_position - start)
+		local_position = Vector2(motion.x, motion.y)
+		var heading := Vector2(motion.z, motion.w)
+		if not heading.is_zero_approx():
+			direction = heading
 
 	if local_position.x < 0.0:
 		local_position.x = 0.0
@@ -298,18 +305,16 @@ func _update_visual_trace(delta: float) -> void:
 	_request_trail_redraw()
 
 func _try_hit_enemy_turret() -> bool:
-	for target_faction_id in target_turrets:
-		if target_faction_id == faction_id:
-			continue
-		var turret = target_turrets[target_faction_id]
-		if turret == null:
+	for slot in target_turrets:
+		var turret = target_turrets[slot]
+		if turret == null or turret.faction_id == faction_id:
 			continue
 		if turret.is_destroyed:
 			continue
 		var hit_radius_sq: float = GameConfig.TURRET_HIT_RADIUS * GameConfig.TURRET_HIT_RADIUS
 		if global_position.distance_squared_to(turret.global_position) <= hit_radius_sq:
-			turret.take_damage(GameConfig.BULLET_DAMAGE)
-			return true
+			if turret.receive_projectile_hit(faction_id, GameConfig.BULLET_DAMAGE):
+				return true
 	return false
 
 func _visual_radius() -> float:

@@ -91,6 +91,8 @@ func _input(event: InputEvent) -> void:
 			if _finished_usec == 0:
 				clock.request_step()
 		KEY_ESCAPE:
+			if _main._construction_faction >= 0:
+				return
 			if not _tools.is_advancing() and clock.speed == 1:
 				return
 			_stop_advance("已取消，恢复 1×", false)

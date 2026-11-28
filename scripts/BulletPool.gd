@@ -12,7 +12,7 @@ var peak_active_count: int = 0
 var visual_pressure_update_timer: float = 0.0
 var trail_layer
 var tracked_turrets: Dictionary = {}
-var tracked_queue_by_faction: Dictionary = {}
+var tracked_queue_by_slot: Dictionary = {}
 var tracked_queue_total: int = 0
 var bullet_trail_segments: Dictionary = {}
 var trail_segments_total: int = 0
@@ -67,15 +67,15 @@ func set_trail_layer(new_trail_layer) -> void:
 func set_tracked_turrets(turret_map: Dictionary) -> void:
 	_disconnect_tracked_turrets()
 	tracked_turrets = turret_map
-	tracked_queue_by_faction.clear()
+	tracked_queue_by_slot.clear()
 	tracked_queue_total = 0
-	for faction_id in tracked_turrets.keys():
-		var turret = tracked_turrets[faction_id]
+	for slot in tracked_turrets:
+		var turret = tracked_turrets[slot]
 		if turret == null or not is_instance_valid(turret):
 			continue
-		tracked_queue_by_faction[faction_id] = int(turret.get("burst_remaining"))
-		tracked_queue_total += int(tracked_queue_by_faction[faction_id])
-		var progress_callable: Callable = Callable(self, "_on_tracked_turret_burst_progress")
+		tracked_queue_by_slot[slot] = int(turret.get("burst_remaining"))
+		tracked_queue_total += int(tracked_queue_by_slot[slot])
+		var progress_callable: Callable = Callable(self, "_on_tracked_turret_burst_progress").bind(slot)
 		if not turret.burst_progress.is_connected(progress_callable):
 			turret.burst_progress.connect(progress_callable)
 
@@ -333,20 +333,21 @@ func _estimate_visible_canvas_items() -> int:
 	return get_active_count() + estimate_trail_segments()
 
 func _disconnect_tracked_turrets() -> void:
-	var progress_callable: Callable = Callable(self, "_on_tracked_turret_burst_progress")
-	for turret in tracked_turrets.values():
+	for slot in tracked_turrets:
+		var turret = tracked_turrets[slot]
 		if turret == null or not is_instance_valid(turret):
 			continue
+		var progress_callable: Callable = Callable(self, "_on_tracked_turret_burst_progress").bind(slot)
 		if turret.burst_progress.is_connected(progress_callable):
 			turret.burst_progress.disconnect(progress_callable)
 
-func _on_tracked_turret_burst_progress(faction_id, remaining) -> void:
-	var previous_remaining: int = int(tracked_queue_by_faction.get(faction_id, 0))
+func _on_tracked_turret_burst_progress(_faction_id, remaining, slot) -> void:
+	var previous_remaining: int = int(tracked_queue_by_slot.get(slot, 0))
 	var next_remaining: int = maxi(0, int(remaining))
 	if previous_remaining == next_remaining:
 		return
 	tracked_queue_total += next_remaining - previous_remaining
-	tracked_queue_by_faction[faction_id] = next_remaining
+	tracked_queue_by_slot[slot] = next_remaining
 
 func _register_active_bullet(bullet) -> void:
 	if bullet == null or not is_instance_valid(bullet):

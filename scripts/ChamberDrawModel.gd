@@ -69,6 +69,15 @@ static func build_snapshot(input: Dictionary) -> Dictionary:
 		Vector2(x2_width + 2.0, chamber_size.y - gate_height - 6.0),
 		Vector2(maxf(0.0, chamber_size.x - x2_width - 12.0), gate_height - 4.0)
 	)
+	var reserve_gate_x: float = float(input.get("reserve_gate_x", -1.0))
+	var reserve_rect := Rect2()
+	if reserve_gate_x >= 0.0:
+		right_rect.position.x = x2_width + 0.5
+		right_rect.size.x = maxf(0.0, reserve_gate_x - 0.5 - right_rect.position.x)
+		reserve_rect = Rect2(
+			Vector2(reserve_gate_x + 0.5, right_rect.position.y),
+			Vector2(maxf(0.0, chamber_size.x - reserve_gate_x - 1.0), right_rect.size.y)
+		)
 
 	var left_color: Color = Color(0.74, 0.92, 0.22)
 	var right_color: Color = Color(1.0, 0.64, 0.16)
@@ -83,7 +92,10 @@ static func build_snapshot(input: Dictionary) -> Dictionary:
 		right_color = Color(0.32, 0.18, 0.18)
 
 	var left_gate_text: String = "短路" if jammed else ("X" if is_damaged else ("x3" if gate_multiplier == 3 else "x2"))
-	var right_gate_text: String = "短路" if jammed else ("X" if is_damaged else "发射")
+	var additive_gate_bonus: int = input.get("additive_gate_bonus", 0)
+	if additive_gate_bonus > 0 and not jammed and not is_damaged:
+		left_gate_text = "+%d" % additive_gate_bonus
+	var right_gate_text: String = "短路" if jammed else ("X" if is_damaged else ("射" if reserve_rect.has_area() else "发射"))
 
 	# Gate font sizes adapt to available rect width so text is never clipped.
 	var base_font_size: int = maxi(16, int(round(17.0 / maxf(0.5, float(input.get("scale_x", 1.0))))))
@@ -113,6 +125,8 @@ static func build_snapshot(input: Dictionary) -> Dictionary:
 		"gate_frame": gate_frame,
 		"left_rect": left_rect,
 		"right_rect": right_rect,
+		"reserve_rect": reserve_rect,
+		"resource_gate_label": input.get("resource_gate_label", "储"),
 		"shell_color": shell_color,
 		"border_color": border_color,
 		"inner_color": inner_color,
