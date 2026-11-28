@@ -16,6 +16,26 @@ const EVENT_LOG_WIDTH: float = 290.0
 const EVENT_LOG_MAX_HEIGHT: float = 230.0
 const EVENT_LOG_LINE_HEIGHT: float = 20.0
 
+# 四角 → 阵营 ID 的唯一权威映射。正式战斗的炮台/控制仓坐标与主菜单预览的
+# 四象限/炮台/控制仓都从这里取，避免两处各写一份导致角落错位。
+# 顺序固定为：左上、右上、左下、右下。
+const CORNER_KEYS := ["top_left", "top_right", "bottom_left", "bottom_right"]
+
+static func corner_factions() -> Dictionary:
+	return {
+		"top_left": GameConfig.Faction.BLUE,
+		"top_right": GameConfig.Faction.RED,
+		"bottom_left": GameConfig.Faction.GREEN,
+		"bottom_right": GameConfig.Faction.YELLOW,
+	}
+
+static func corner_faction_order() -> Array:
+	var factions := corner_factions()
+	var order: Array = []
+	for key in CORNER_KEYS:
+		order.append(int(factions[key]))
+	return order
+
 static func get_cell_size(grid_size: int) -> float:
 	match grid_size:
 		10:
@@ -102,11 +122,12 @@ static func calculate_layout(grid_size: int, viewport_size: Vector2, is_mobile: 
 static func _calculate_turret_positions(bf_rect: Rect2) -> Dictionary:
 	var size := bf_rect.size.x
 	var m := TURRET_MARGIN
+	var c := corner_factions()
 	return {
-		GameConfig.Faction.BLUE: bf_rect.position + Vector2(m, m),
-		GameConfig.Faction.RED: bf_rect.position + Vector2(size - m, m),
-		GameConfig.Faction.GREEN: bf_rect.position + Vector2(m, size - m),
-		GameConfig.Faction.YELLOW: bf_rect.position + Vector2(size - m, size - m),
+		c["top_left"]: bf_rect.position + Vector2(m, m),
+		c["top_right"]: bf_rect.position + Vector2(size - m, m),
+		c["bottom_left"]: bf_rect.position + Vector2(m, size - m),
+		c["bottom_right"]: bf_rect.position + Vector2(size - m, size - m),
 	}
 
 static func _calculate_chamber_positions(bf_rect: Rect2, turret_positions: Dictionary, chamber_size: Vector2, chamber_gap: float) -> Dictionary:
@@ -262,48 +283,88 @@ static func _calculate_roulette(grid_size: int, viewport_size: Vector2, is_mobil
 	stage_y = clampf(stage_y, 92.0, 126.0)
 	return Rect2(Vector2((viewport_size.x - stage_size.x) * 0.5, stage_y), stage_size)
 
+# PreviewScene 的内容包围盒：机身 672×540（含上下仪表带、左右散热带、
+# 四控制仓、四炮台），节点原点就是机身中心。这两个常数只用于把预览台居中，
+# 不参与任何战场坐标换算 —— 战场坐标仍然只在 Main / 模拟层里算。
+const START_MENU_PREVIEW_CONTENT := Vector2(672.0, 540.0)
+const START_MENU_PREVIEW_CONTENT_CENTER := Vector2.ZERO
+
+
 static func _calculate_start_menu_layout(viewport_size: Vector2, is_mobile: bool) -> Dictionary:
-	var root_panel_size: Vector2 = Vector2(792.0, 660.0) if is_mobile else Vector2(840.0, 684.0)
-	root_panel_size.x = minf(root_panel_size.x, viewport_size.x - 48.0)
-	root_panel_size.y = minf(root_panel_size.y, viewport_size.y - 36.0)
-	var vertical_offset: float = 6.0 if is_mobile else 8.0
-	var root_panel_pos := Vector2(
-		(viewport_size.x - root_panel_size.x) * 0.5,
-		clampf((viewport_size.y - root_panel_size.y) * 0.5 + vertical_offset, 12.0, viewport_size.y - root_panel_size.y - 12.0)
+	# 主菜单 = 一块机械控制台，整屏利用率优先。
+	#
+	# 旧的算法把面板缩到视口的 86%×88% 并夹在 1400×820 以内，结果 1120×720 上
+	# 四边各留 78px 纯黑，中心棋盘只剩 291px —— 读作"飘在背景上的一张卡片"，
+	# 而不是一台占满屏幕的机器。现在外留白只留一圈机框：桌面 26px、手机 14px，
+	# 面板直接等于视口减两倍留白，不再设上限。
+	var outer_margin: float = 14.0 if is_mobile else 26.0
+	outer_margin = clampf(outer_margin, 8.0, minf(viewport_size.x, viewport_size.y) * 0.06)
+	var panel_size := (viewport_size - Vector2(outer_margin, outer_margin) * 2.0).max(Vector2(480.0, 360.0))
+	panel_size.x = minf(panel_size.x, viewport_size.x - outer_margin * 2.0)
+	panel_size.y = minf(panel_size.y, viewport_size.y - outer_margin * 2.0)
+
+	var pad: float = 14.0 if is_mobile else 16.0
+	var footer_h: float = 22.0 if is_mobile else 26.0
+	var footer_gap: float = 8.0
+	var inner := Vector2(
+		maxf(320.0, panel_size.x - pad * 2.0),
+		maxf(240.0, panel_size.y - pad * 2.0)
 	)
-	var preview_size := Vector2(root_panel_size.x - 36.0, 192.0 if is_mobile else 224.0)
-	var preview_center := Vector2(preview_size.x * 0.5, 90.0 if is_mobile else 102.0)
+	# 双栏之上再切一条通栏状态条：版本号、操作提示、平台说明都归它，
+	# 不再挤在左栏最底部（那正是旧版左下角空一大块的原因之一）。
+	var columns_h: float = maxf(200.0, inner.y - footer_h - footer_gap)
 
-	var config_panel_rect := Rect2(Vector2(48.0, 364.0 if not is_mobile else 358.0), Vector2(root_panel_size.x - 96.0, 126.0))
-	var save_panel_rect := Rect2(Vector2(48.0, 494.0 if not is_mobile else 488.0), Vector2(root_panel_size.x - 96.0, 136.0))
-	var save_slot_container_rect := Rect2(Vector2(0.0, 32.0), Vector2(save_panel_rect.size.x, 40.0))
-	var slot_button_size := Vector2(136.0, 36.0)
-	var slot_gap: float = 8.0 if is_mobile else 8.0
-	var slot_start_x: float = 14.0
-	var slot_positions: Dictionary = {}
-	for slot in range(1, 6):
-		slot_positions[slot] = Vector2(slot_start_x + float(slot - 1) * (slot_button_size.x + slot_gap), 10.0)
+	# 左栏约 30%，右栏吃掉剩下的全部。不设 1400 上限之后这里不用再防"太宽"。
+	var action_width: float = clampf(round(inner.x * 0.30), 248.0, 420.0)
+	var column_gap: float = 12.0 if is_mobile else 16.0
+	var stage_width: float = maxf(240.0, inner.x - action_width - column_gap)
 
-	var continue_button_rect := Rect2(
-		Vector2(root_panel_size.x - 192.0, 590.0 if not is_mobile else 582.0),
-		Vector2(120.0, 36.0)
+	var columns_rect := Rect2(Vector2(pad, pad), Vector2(inner.x, columns_h))
+	var footer_rect := Rect2(
+		Vector2(pad, pad + columns_h + footer_gap),
+		Vector2(inner.x, footer_h)
+	)
+	var action_column_rect := Rect2(Vector2.ZERO, Vector2(action_width, columns_h))
+	var stage_rect := Rect2(Vector2(action_width + column_gap, 0.0), Vector2(stage_width, columns_h))
+
+	# 预览台内部：表头放标题，底部只留一条细刻度（全局状态条已经承担了版本号）。
+	var header_height: float = 30.0 if is_mobile else 34.0
+	var footer_height: float = 10.0 if is_mobile else 12.0
+	var side_pad: float = 8.0 if is_mobile else 10.0
+	var preview_size := Vector2(
+		maxf(80.0, stage_width - side_pad * 2.0),
+		maxf(60.0, columns_h - header_height - footer_height)
+	)
+
+	# 预览缩放由监控窗决定，保证整台机器完整可见再留一点气口。
+	var fit: float = minf(
+		preview_size.x / START_MENU_PREVIEW_CONTENT.x,
+		preview_size.y / START_MENU_PREVIEW_CONTENT.y
+	)
+	var preview_scale_value: float = clampf(fit * 0.97, 0.30, 2.20)
+	# 内容包围盒以机身中心为原点，所以直接把原点放到监控窗中心即可。
+	var preview_center := Vector2(
+		preview_size.x * 0.5 - START_MENU_PREVIEW_CONTENT_CENTER.x * preview_scale_value,
+		preview_size.y * 0.5 - START_MENU_PREVIEW_CONTENT_CENTER.y * preview_scale_value
 	)
 
 	return {
 		"shade_rect": Rect2(Vector2.ZERO, viewport_size),
-		"root_panel_rect": Rect2(root_panel_pos, root_panel_size),
-		"title_rect": Rect2(Vector2(150.0, 16.0), Vector2(root_panel_size.x - 300.0, 56.0)),
-		"subtitle_rect": Rect2(Vector2(180.0, 72.0), Vector2(root_panel_size.x - 360.0, 24.0)),
-		"mobile_hint_rect": Rect2(Vector2(180.0, 98.0), Vector2(root_panel_size.x - 360.0, 23.0)),
-		"preview_position": Vector2(root_panel_size.x * 0.5, 250.0 if not is_mobile else 240.0),
+		"root_panel_rect": Rect2(Vector2(outer_margin, outer_margin), panel_size),
+		"outer_margin": outer_margin,
+		"panel_pad": pad,
+		"columns_rect": columns_rect,
+		"footer_rect": footer_rect,
+		"footer_height": footer_h,
+		"columns_margin": columns_rect.position,
+		"columns_margin_bottom": footer_h + footer_gap,
+		"column_gap": column_gap,
+		"action_column_rect": action_column_rect,
+		"stage_rect": stage_rect,
+		"preview_header_height": header_height,
+		"preview_footer_height": footer_height,
+		"preview_side_pad": side_pad,
 		"preview_size": preview_size,
 		"preview_center": preview_center,
-		"preview_scale": Vector2(0.40, 0.40) if not is_mobile else Vector2(0.36, 0.36),
-		"config_panel_rect": config_panel_rect,
-		"save_panel_rect": save_panel_rect,
-		"continue_button_rect": continue_button_rect,
-		"status_rect": Rect2(Vector2(120.0, 626.0 if not is_mobile else 616.0), Vector2(root_panel_size.x - 240.0, 22.0)),
-		"save_slot_container_rect": save_slot_container_rect,
-		"save_slot_button_positions": slot_positions,
-		"save_slot_button_size": slot_button_size,
+		"preview_scale": Vector2(preview_scale_value, preview_scale_value),
 	}

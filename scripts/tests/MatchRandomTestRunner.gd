@@ -40,6 +40,20 @@ func _run() -> void:
 	if not _check(swapped.get_stream(Stream.CHAMBER, 0).randi() == plain.get_stream(Stream.CHAMBER, 1).randi(),
 		"faction stream map separates identity from stream"):
 		return
+	# 非 identity 映射下，存档里的阵营字段已经是映射后的流身份；
+	# 恢复不能再次套用映射，否则状态会写到错误的流。
+	var mapped := MatchRandom.new(777, [1, 2, 3, 0])
+	for faction in range(4):
+		mapped.get_stream(Stream.CHAMBER, faction).randi()
+	var mapped_states: Array = mapped.serialize_states()
+	var mapped_restored := MatchRandom.new(777, [1, 2, 3, 0])
+	if not _check(mapped_restored.restore_states(mapped_states), "mapped state restores"):
+		return
+	for faction in range(4):
+		if not _check(mapped_restored.get_stream(Stream.CHAMBER, faction).randi()
+			== mapped.get_stream(Stream.CHAMBER, faction).randi(),
+			"mapped stream %d resumes without double mapping" % faction):
+			return
 
 	var serialized := a.serialize_states()
 	var restored := MatchRandom.new(999)
