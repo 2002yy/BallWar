@@ -92,6 +92,9 @@ static func build_snapshot(input: Dictionary) -> Dictionary:
 		right_color = Color(0.32, 0.18, 0.18)
 
 	var left_gate_text: String = "短路" if jammed else ("X" if is_damaged else ("x3" if gate_multiplier == 3 else "x2"))
+	var additive_gate_bonus: int = input.get("additive_gate_bonus", 0)
+	if additive_gate_bonus > 0 and not jammed and not is_damaged:
+		left_gate_text = "+%d" % additive_gate_bonus
 	var right_gate_text: String = "短路" if jammed else ("X" if is_damaged else ("射" if reserve_rect.has_area() else "发射"))
 
 	# Gate font sizes adapt to available rect width so text is never clipped.
