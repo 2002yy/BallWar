@@ -142,7 +142,8 @@ func _despawn() -> void:
 	else:
 		queue_free()
 
-func _physics_process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
+	var delta: float = MatchClock.STEP_SECONDS
 	if not is_active:
 		return
 	if battlefield == null:
