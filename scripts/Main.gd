@@ -218,6 +218,8 @@ func _sync_runtime_context(grid_size: int) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	var rotation_raw: String = OS.get_environment("BALLWAR_SPAWN_ROTATION").strip_edges()
+	GameConfig.set_spawn_rotation(int(rotation_raw) if rotation_raw.is_valid_int() else 0)
 	if match_seed >= 0:
 		seed(match_seed)
 	else:
@@ -608,8 +610,13 @@ func _build_volley(faction_id: int, fire: int) -> Dictionary:
 	var config = runtime.match_config
 	var chamber = runtime.chambers.get(faction_id, null)
 	if config != null and chamber != null and chamber.fire_ledger != null:
+		var shares: Dictionary = config.volley_shares()
+		var ledger = chamber.fire_ledger
+		if shares.is_empty() and ledger.remaining_units() == 0 and ledger.pending_units() == 0:
+			# 经典模式：完全不触碰记账账户（连 produced/consumed 都不记）。
+			return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
 		# 跨 burst 累计：不足一发的特殊火力留在账上，不返还普通弹。
-		return chamber.fire_ledger.allocate(fire, config.volley_shares(), config.weapon_ruleset)
+		return ledger.allocate(fire, shares, config.weapon_ruleset)
 	return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
 
 func _apply_match_experiment_profiles() -> void:

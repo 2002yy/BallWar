@@ -770,6 +770,25 @@ func _test_fire_ledger() -> void:
 	_assert.eq(locked.last_error, "unlocked:2", "ledger: a locked type is rejected, not silently ignored")
 	_assert.eq(int(locked_volley.get(WeaponRuleset.BulletType.STANDARD, 0)), 5, "ledger: locked type keeps all fire standard")
 
+	# 已兑换 / 已发射 / 待发射 必须分开。
+	var fired := FireLedger.new()
+	fired.allocate(10, {WeaponRuleset.BulletType.PIERCING: 50}, piercing_only)
+	fired.note_fired(WeaponRuleset.BulletType.PIERCING, 1)
+	fired.note_fired(WeaponRuleset.BulletType.STANDARD, 5)
+	_assert.eq(fired.pending_units(), 0, "ledger: fired shots leave no pending units")
+	_assert.that(fired.is_balanced(), "ledger: fired accounting is conserved")
+
+	var lost := FireLedger.new()
+	lost.allocate(10, {WeaponRuleset.BulletType.PIERCING: 50}, piercing_only)
+	lost.note_lost(WeaponRuleset.BulletType.PIERCING, 1)
+	_assert.eq(lost.lost_units, 500, "ledger: a cancelled piercing shot is recorded as 5 fire lost")
+	_assert.eq(lost.pending_units(), 500, "ledger: the rest of the converted fire is still pending")
+	_assert.that(lost.is_balanced(), "ledger: lost accounting is conserved")
+
+	var broken := FireLedger.new()
+	broken.restore({"special": [[2, 50000]], "standard": 0, "consumed_fire": 1, "converted_units": 0})
+	_assert.that(not broken.restore_ok, "ledger: an unbalanced snapshot is flagged on restore")
+
 	# 存档契约：weapon_config 的边界值要被清洗，而不是原样回放。
 	var raw: Dictionary = Fixtures.build_minimal_save_payload("2.1.0")
 	raw["weapon_config"] = {"pierce": -3, "mix_pierce": 150, "blast": 9, "mix_blast": -1}

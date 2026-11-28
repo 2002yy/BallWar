@@ -132,7 +132,12 @@ func get_production_stats() -> Dictionary:
 	stats["locked"] = is_locked
 	stats["ledger"] = fire_ledger.debug_line()
 	stats["ledger_balanced"] = fire_ledger.is_balanced()
+	stats["ledger_restore_ok"] = fire_ledger.restore_ok
 	stats["ledger_remaining_units"] = fire_ledger.remaining_units()
+	stats["ledger_converted_units"] = fire_ledger.converted_units
+	stats["ledger_fired_units"] = fire_ledger.fired_units
+	stats["ledger_pending_units"] = fire_ledger.pending_units()
+	stats["ledger_lost_units"] = fire_ledger.lost_units
 	stats["ledger_error"] = fire_ledger.last_error
 	return stats
 

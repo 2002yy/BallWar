@@ -34,6 +34,7 @@ var burst_remaining: int = 0
 var burst_total: int = 0
 var burst_types: Array[int] = []
 var burst_type_cursor: int = 0
+var fire_ledger = null
 var _burst_interval_scale: float = 1.0
 var burst_interval: float = GameConfig.BURST_FIRE_INTERVAL
 var burst_timer: float = 0.0
@@ -56,6 +57,9 @@ func setup(new_faction_id: int, new_position: Vector2, new_battlefield, new_bull
 
 func set_all_turrets(turret_map: Dictionary) -> void:
 	all_turrets = turret_map
+
+func set_fire_ledger(ledger) -> void:
+	fire_ledger = ledger
 
 func _ready() -> void:
 	center_angle = _inward_center_angle()
@@ -113,7 +117,7 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 func _inward_center_angle() -> float:
-	match faction_id:
+	match GameConfig.spawn_slot(faction_id):
 		GameConfig.Faction.BLUE:
 			return PI * 0.25
 		GameConfig.Faction.RED:
@@ -184,6 +188,7 @@ func _build_volley_queue(volley: Dictionary) -> Array[int]:
 
 func cancel_burst() -> int:
 	var remaining: int = burst_remaining
+	_note_pending_loss()
 	burst_remaining = 0
 	burst_total = 0
 	burst_index = 0
@@ -305,13 +310,16 @@ func _spawn_bullet() -> void:
 	# 移除 lateral_wave 出生点横向摆动，避免炮口方向与弹道看起来不一致。
 	var muzzle_distance: float = GameConfig.TURRET_RADIUS + 17.0
 	var spawn_position: Vector2 = global_position + shot_direction * muzzle_distance
+	var type_id: int = _next_burst_type()
+	if fire_ledger != null:
+		fire_ledger.note_fired(type_id, 1)
 
 	if _bullet_container_can_spawn:
-		bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets, _next_burst_type())
+		bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets, type_id)
 	else:
 		var bullet = Bullet.new()
 		bullet.setup(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
-		bullet.apply_type_profile(_next_burst_type(), 1, 0)
+		bullet.apply_type_profile(type_id, 1, 0)
 		bullet_container.add_child(bullet)
 
 func _next_burst_type() -> int:
@@ -320,6 +328,12 @@ func _next_burst_type() -> int:
 		burst_type_cursor += 1
 		return type_id
 	return WeaponRuleset.BulletType.STANDARD
+
+func _note_pending_loss() -> void:
+	if fire_ledger == null:
+		return
+	for index in range(burst_type_cursor, burst_types.size()):
+		fire_ledger.note_lost(int(burst_types[index]), 1)
 
 func _current_burst_shot_angle() -> float:
 	# v1.9.6 修正：
@@ -357,6 +371,7 @@ func _destroy() -> void:
 		return
 	is_destroyed = true
 	destroy_anim_time = 0.0
+	_note_pending_loss()
 	burst_remaining = 0
 	burst_total = 0
 	burst_types.clear()

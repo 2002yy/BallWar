@@ -10,8 +10,13 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ="$(cd "$HERE/../.." && pwd)"
-RUN_WIN="${RUN_WIN:-/c/Users/Zhang/AppData/Local/Temp/bwaudit/run-iso.sh}"
+RUN_WIN="${RUN_WIN:-}"
 OUT_ROOT="${OUT_ROOT:-$(cd "$PROJ/.." && pwd)/p2_matrix}"
+if [ -n "$RUN_WIN" ]; then
+	RUNNER=(bash "$RUN_WIN" bash)
+else
+	RUNNER=(bash)
+fi
 FIRE="${FIRE:-dense}"
 DURATION="${DURATION:-120}"
 SEEDS="${SEEDS:-12345}"
@@ -60,10 +65,14 @@ for variant in A_classic_off B_classic_on C_p5_m50_off D_p5_m50_on D_p3_m100_on 
 		env GODOT_BIN="$GODOT_BIN" OUT_ROOT="$OUT_ROOT" BALLWAR_MATCH_SEED="$seed" \
 			BALLWAR_EXPERIMENT_FIRE="$FORCED" BALLWAR_TRACK_NEAR_MISS=1 \
 			$envs \
-			bash "$RUN_WIN" bash "$HERE/determinism_probe.sh" "$name" "$DURATION" >/dev/null 2>&1
+			"${RUNNER[@]}" "$HERE/determinism_probe.sh" "$name" "$DURATION" >/dev/null 2>&1
 		log=$(ls -d "$OUT_ROOT/$name".*/probe.log 2>/dev/null | head -1)
 		if [ -z "$log" ] || [ ! -f "$log" ]; then
 			echo -e "$variant\t$seed\tMISSING" >> "$RESULTS"
+			continue
+		fi
+		if ! grep -q -- "---- end ----" "$log" || grep -q "Cannot finish" "$log"; then
+			echo -e "$variant\t$seed\tINVALID_TRACE" >> "$RESULTS"
 			continue
 		fi
 		end=$(extract "$log" "end_reason")

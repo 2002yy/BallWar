@@ -3,7 +3,14 @@ class_name FireLedger
 
 # P2.3 跨 burst 火力记账：按阵营、按弹种累计"特殊弹火力"，整数定点（1 发 = 100 单位）。
 # 混合比例是**火力占比**，不是炮弹数量占比；余额不足时火力留在账上，不返还普通弹。
-# 生产火力守恒：consumed * 100 == spent + remaining + lost。
+#
+# 四个量必须分开：
+#   consumed_fire  控制仓释放进来的火力（生产）
+#   converted_units 已兑换成炮弹的火力（含还在发射队列里的）
+#   fired_units    真正已经发射出去的火力
+#   lost_units     已兑换但永远不会发射的火力（取消发射、炮台/控制仓被毁）
+# 恒等式：consumed * 100 == converted + remaining  （分配守恒）
+#         converted == fired + pending + lost     （兑换守恒）
 
 const UNIT_SCALE: int = 100
 
@@ -11,22 +18,24 @@ var special_units: Dictionary = {}
 var standard_units: int = 0
 var produced_fire: int = 0
 var consumed_fire: int = 0
-var spent_units: int = 0
+var converted_units: int = 0
+var fired_units: int = 0
 var lost_units: int = 0
 var last_error: String = ""
+var restore_ok: bool = true
 
 func reset() -> void:
 	special_units.clear()
 	standard_units = 0
 	produced_fire = 0
 	consumed_fire = 0
-	spent_units = 0
+	converted_units = 0
+	fired_units = 0
 	lost_units = 0
 	last_error = ""
+	restore_ok = true
 
 func allocate(fire: int, shares: Dictionary, ruleset) -> Dictionary:
-	# 返回 {type_id: 发数}。fire 是本次释放的火力（整数），按 shares 的百分比分配到
-	# 各弹种账户；不足一发的余额留在账户里，等下一次释放继续累计。
 	last_error = ""
 	var granted: int = maxi(0, int(fire))
 	if granted <= 0:
@@ -84,16 +93,32 @@ func _convert(ruleset) -> Dictionary:
 		if count <= 0:
 			continue
 		special_units[type_id] = balance - count * cost_units
-		spent_units += count * cost_units
+		converted_units += count * cost_units
 		volley[type_id] = count
 
 	var standard_cost_units: int = UNIT_SCALE
 	var standard_count: int = standard_units / standard_cost_units
 	if standard_count > 0:
 		standard_units -= standard_count * standard_cost_units
-		spent_units += standard_count * standard_cost_units
+		converted_units += standard_count * standard_cost_units
 		volley[WeaponRuleset.BulletType.STANDARD] = standard_count
 	return volley
+
+func note_fired(type_id: int, count: int) -> void:
+	if count <= 0:
+		return
+	fired_units += _cost(type_id) * UNIT_SCALE * count
+
+func note_lost(type_id: int, count: int) -> void:
+	if count <= 0:
+		return
+	lost_units += _cost(type_id) * UNIT_SCALE * count
+
+func _cost(type_id: int) -> int:
+	return maxi(1, int(WeaponRuleset.DEFAULT_COSTS.get(type_id, 1)))
+
+func pending_units() -> int:
+	return maxi(0, converted_units - fired_units - lost_units)
 
 func remaining_units() -> int:
 	var total: int = standard_units
@@ -105,7 +130,9 @@ func remaining_fire() -> float:
 	return float(remaining_units()) / float(UNIT_SCALE)
 
 func is_balanced() -> bool:
-	return consumed_fire * UNIT_SCALE == spent_units + remaining_units() + lost_units
+	var allocation_ok: bool = consumed_fire * UNIT_SCALE == converted_units + remaining_units()
+	var conversion_ok: bool = converted_units == fired_units + pending_units() + lost_units
+	return allocation_ok and conversion_ok and fired_units <= converted_units
 
 func snapshot() -> Dictionary:
 	var special: Array = []
@@ -118,13 +145,16 @@ func snapshot() -> Dictionary:
 		"standard": standard_units,
 		"produced_fire": produced_fire,
 		"consumed_fire": consumed_fire,
-		"spent_units": spent_units,
+		"converted_units": converted_units,
+		"fired_units": fired_units,
 		"lost_units": lost_units,
 	}
 
 func restore(data) -> void:
 	reset()
 	if not (data is Dictionary):
+		restore_ok = false
+		last_error = "restore:not_dict"
 		return
 	var special = data.get("special", [])
 	if special is Array:
@@ -138,8 +168,12 @@ func restore(data) -> void:
 	standard_units = maxi(0, int(data.get("standard", 0)))
 	produced_fire = maxi(0, int(data.get("produced_fire", 0)))
 	consumed_fire = maxi(0, int(data.get("consumed_fire", 0)))
-	spent_units = maxi(0, int(data.get("spent_units", 0)))
+	converted_units = maxi(0, int(data.get("converted_units", data.get("spent_units", 0))))
+	fired_units = maxi(0, int(data.get("fired_units", 0)))
 	lost_units = maxi(0, int(data.get("lost_units", 0)))
+	restore_ok = is_balanced()
+	if not restore_ok:
+		last_error = "restore:unbalanced"
 
 func debug_line() -> String:
 	var parts: Array[String] = []
@@ -149,4 +183,11 @@ func debug_line() -> String:
 		if int(special_units[type_id]) > 0:
 			parts.append("t%d=%.2f" % [int(type_id), float(special_units[type_id]) / float(UNIT_SCALE)])
 	parts.append("std=%.2f" % (float(standard_units) / float(UNIT_SCALE)))
-	return "produced=%d spent=%d remain=%s" % [produced_fire, spent_units / UNIT_SCALE, ",".join(parts)]
+	return "prod=%d conv=%.1f fired=%.1f pend=%.1f lost=%.1f remain=%s" % [
+		produced_fire,
+		float(converted_units) / float(UNIT_SCALE),
+		float(fired_units) / float(UNIT_SCALE),
+		float(pending_units()) / float(UNIT_SCALE),
+		float(lost_units) / float(UNIT_SCALE),
+		",".join(parts),
+	]

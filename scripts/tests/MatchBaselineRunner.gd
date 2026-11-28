@@ -41,6 +41,13 @@ var _experiment_fire_interval: float = 1.0
 var _experiment_fire_count: int = 40
 var _active_samples: Array[float] = []
 var _trace_write_failed: bool = false
+var _max_share: float = 0.0
+var _max_reversal: float = 0.0
+var _min_share_seen: Dictionary = {0: 1.0, 1: 1.0, 2: 1.0, 3: 1.0}
+var _empty_ticks: int = 0
+var _low_ticks: int = 0
+var _metric_ticks: int = 0
+var _growth: Array = []
 
 var _trace_file: FileAccess = null
 var _trace_lines: Array[String] = []
@@ -702,6 +709,14 @@ func _print_production_summary() -> void:
 			str(stats.get("ledger_balanced", false)),
 			str(stats.get("ledger_error", "")),
 		])
+		print("     ledger_units converted=%d fired=%d pending=%d lost=%d remain=%d restore_ok=%s" % [
+			int(stats.get("ledger_converted_units", 0)),
+			int(stats.get("ledger_fired_units", 0)),
+			int(stats.get("ledger_pending_units", 0)),
+			int(stats.get("ledger_lost_units", 0)),
+			int(stats.get("ledger_remaining_units", 0)),
+			str(stats.get("ledger_restore_ok", true)),
+		])
 	var pool = _main.runtime.bullet_pool
 	if pool != null and is_instance_valid(pool):
 		var pool_stats: Dictionary = pool.get_collision_stats()
@@ -711,8 +726,32 @@ func _sample_metrics() -> void:
 	if _main == null or _main.runtime == null:
 		return
 	var pool = _main.runtime.bullet_pool
+	var active: int = 0
 	if pool != null and is_instance_valid(pool):
-		_active_samples.append(float(pool.get_active_count()))
+		active = int(pool.get_active_count())
+	_active_samples.append(float(active))
+	if active <= 0:
+		_empty_ticks += 1
+	if active < 10:
+		_low_ticks += 1
+	_metric_ticks += 1
+
+	var battlefield = _main.runtime.battlefield
+	if battlefield == null:
+		return
+	var total_cells: float = float(maxi(1, battlefield.grid_size * battlefield.grid_size))
+	var counts: Dictionary = battlefield.owner_counts
+	for faction_id in [0, 1, 2, 3]:
+		var share: float = float(int(counts.get(faction_id, 0))) / total_cells
+		_max_share = maxf(_max_share, share)
+		_max_reversal = maxf(_max_reversal, share - float(_min_share_seen.get(faction_id, 1.0)))
+		if share < float(_min_share_seen.get(faction_id, 1.0)):
+			_min_share_seen[faction_id] = share
+	if _tick % 600 == 0 and _growth.size() < 20:
+		_growth.append([
+			_tick / _ticks_per_second,
+			int(counts.get(0, 0)), int(counts.get(1, 0)), int(counts.get(2, 0)), int(counts.get(3, 0)),
+		])
 
 func _print_load_summary() -> void:
 	if _active_samples.is_empty():
@@ -723,6 +762,18 @@ func _print_load_summary() -> void:
 		_percentile(_active_samples, 0.95),
 		_array_max(_active_samples),
 	])
+	print("  territory        = max_share=%.1f%% max_reversal=%.1fpp" % [
+		_max_share * 100.0,
+		_max_reversal * 100.0,
+	])
+	print("  activity         = empty_ticks=%.1f%% low10_ticks=%.1f%%" % [
+		100.0 * float(_empty_ticks) / maxf(1.0, float(_metric_ticks)),
+		100.0 * float(_low_ticks) / maxf(1.0, float(_metric_ticks)),
+	])
+	var curve: Array[String] = []
+	for sample in _growth:
+		curve.append("%ds:%d/%d/%d/%d" % [int(sample[0]), int(sample[1]), int(sample[2]), int(sample[3]), int(sample[4])])
+	print("  growth           = %s" % " ".join(curve))
 
 func _percentile(values: Array[float], ratio: float) -> float:
 	if values.is_empty():

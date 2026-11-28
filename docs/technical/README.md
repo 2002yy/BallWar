@@ -10,7 +10,7 @@ Key entry points at `docs/` root: [`ARCHITECTURE.md`](../ARCHITECTURE.md), [`TES
 
 - `TECHNICAL_GUIDE.md` — engineering boundaries, editor workflow, validation policy / 工程边界、编辑器协作、验证规则
 - `BULLET_COLLISION_P1.md` — 弹珠互撞原型：开关、统一执行顺序、分桶性能矩阵、密火 A/B 与顺序偏差（未合并）
-- `SPECIAL_BULLETS_P2.md` — 穿透弹 / 爆炸弹原型：参数、执行语义、筛选矩阵、多种子与性能（未合并）
+- `SPECIAL_BULLETS_P2.md` — 穿透弹 / 爆炸弹 + 跨 burst 火力记账 + 自然火力生产链：参数、语义、矩阵、多种子与性能（未合并）
 - `README_TEST_MATRIX.md` — (superseded by `../TESTING.md`) superseded / 已被 `../TESTING.md` 替代
 - `AI_HANDOFF_CURRENT.md` — fast handoff card for the next AI/Codex session / AI/Codex 快速接管卡
 - `README_ANDROID_EXPORT.md` — (superseded by `../ANDROID_EXPORT.md`) superseded / 已被 `../ANDROID_EXPORT.md` 替代
