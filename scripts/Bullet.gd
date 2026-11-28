@@ -35,6 +35,11 @@ var damage: int = GameConfig.BULLET_DAMAGE
 var physical_radius: float = GameConfig.BULLET_RADIUS
 var spawn_serial: int = 0
 var prev_position: Vector2 = Vector2.ZERO
+# P2 特殊弹：默认值等价于普通弹。max_enemy_captures = -1 表示无限穿透。
+var max_enemy_captures: int = 1
+var enemy_captures_done: int = 0
+var explosion_radius: int = 0
+var explosion_cells: int = 0
 # 由 BulletPool 统一推进（互撞模式）；为 false 时每颗弹自己走 _physics_process。
 var controlled: bool = false
 
@@ -53,6 +58,23 @@ func apply_standard_profile() -> void:
 	mass = 1.0
 	energy = 1
 	damage = GameConfig.BULLET_DAMAGE
+	max_enemy_captures = 1
+	enemy_captures_done = 0
+	explosion_radius = 0
+	explosion_cells = 0
+
+func apply_type_profile(new_type: int, pierce_captures: int, blast_radius: int) -> void:
+	# 速度/半径/伤害/碰撞规则在这一批保持一致，只改"越境后能占几格"。
+	apply_standard_profile()
+	type_id = new_type
+	match new_type:
+		WeaponRuleset.BulletType.PIERCING:
+			max_enemy_captures = pierce_captures
+		WeaponRuleset.BulletType.EXPLOSIVE:
+			max_enemy_captures = 0
+			explosion_radius = maxi(0, blast_radius)
+		_:
+			max_enemy_captures = 1
 
 func set_controlled(value: bool) -> void:
 	controlled = value
@@ -161,6 +183,11 @@ func restore_from_state(state: Dictionary, new_battlefield, new_target_turrets =
 		restored_direction = Vector2.RIGHT
 
 	setup(restored_faction_id, restored_position, restored_direction, new_battlefield, new_target_turrets)
+	var restored_type: int = clampi(int(state.get("type_id", WeaponRuleset.BulletType.STANDARD)), 0, WeaponRuleset.BulletType.HOMING)
+	var pierce_captures: int = int(pool.piercing_captures) if pool != null and is_instance_valid(pool) else 1
+	var blast_radius: int = int(pool.explosion_radius) if pool != null and is_instance_valid(pool) else 0
+	apply_type_profile(restored_type, pierce_captures, blast_radius)
+	enemy_captures_done = maxi(0, int(state.get("enemy_captures_done", 0)))
 	age = clampf(float(state.get("age", 0.0)), 0.0, GameConfig.BULLET_MAX_LIFETIME)
 	last_cell = SaveGameCodec.arr_to_vec2i(state.get("last_cell", [-999, -999]))
 
@@ -273,7 +300,28 @@ func resolve_tick() -> void:
 	if _pending_has_cell:
 		var result = battlefield.apply_bullet(_pending_cell, faction_id)
 		if result == "HIT_ENEMY_CELL":
-			_despawn()
+			enemy_captures_done += 1
+			if explosion_radius > 0:
+				_explode(_pending_cell)
+				_despawn()
+				return
+			if max_enemy_captures >= 0 and enemy_captures_done >= max_enemy_captures:
+				_despawn()
+
+func _explode(center: Vector2i) -> void:
+	# 方形半径：r=1 → 3×3（最多 9 格），与设计文档的"最多 9 格"一致。
+	# 边界裁剪；已属己方的格不重复计数；同一颗弹只结算一次。
+	var captured: int = 0
+	for offset_x in range(-explosion_radius, explosion_radius + 1):
+		for offset_y in range(-explosion_radius, explosion_radius + 1):
+			var cell: Vector2i = center + Vector2i(offset_x, offset_y)
+			if not battlefield.is_inside(cell):
+				continue
+			if int(battlefield.owners[cell.x][cell.y]) == faction_id:
+				continue
+			battlefield.apply_bullet(cell, faction_id)
+			captured += 1
+	explosion_cells = captured
 
 func _reset_pending() -> void:
 	_pending_despawn = false

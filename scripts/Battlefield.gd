@@ -97,16 +97,20 @@ func reset_quadrants() -> void:
 	owners.clear()
 	owner_counts = {0: 0, 1: 0, 2: 0, 3: 0}
 	var half_grid: int = grid_size >> 1
+	var slot_to_faction: Dictionary = {}
+	for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+		slot_to_faction[GameConfig.spawn_slot(faction_id)] = faction_id
 	for x in range(grid_size):
 		var col: Array = []
 		for y in range(grid_size):
-			var f: int = GameConfig.Faction.BLUE
+			var slot: int = 0
 			if x >= half_grid and y < half_grid:
-				f = GameConfig.Faction.RED
+				slot = 1
 			elif x < half_grid and y >= half_grid:
-				f = GameConfig.Faction.GREEN
+				slot = 2
 			elif x >= half_grid and y >= half_grid:
-				f = GameConfig.Faction.YELLOW
+				slot = 3
+			var f: int = int(slot_to_faction.get(slot, GameConfig.Faction.BLUE))
 			col.append(f)
 			owner_counts[f] += 1
 		owners.append(col)

@@ -48,6 +48,17 @@ static var _palette_colors: Array = [
 ]
 static var _palette_names: Array = ["蓝方", "红方", "绿方", "黄方"]
 static var _palette_nicknames: Array = ["小蓝", "小红", "小绿", "小黄"]
+# 实验用出生点旋转：0 = 原布局。阵营 f 占据 slot (f + rotation) % 4。
+static var _spawn_rotation: int = 0
+
+static func set_spawn_rotation(value: int) -> void:
+	_spawn_rotation = posmod(value, 4)
+
+static func get_spawn_rotation() -> int:
+	return _spawn_rotation
+
+static func spawn_slot(faction_id: int) -> int:
+	return posmod(faction_id + _spawn_rotation, 4)
 
 static func get_turret_max_health(grid_size: int) -> int:
 	match grid_size:
@@ -371,6 +382,7 @@ static func reset_runtime_defaults() -> void:
 	_game_mode_name = GAME_MODE_BASIC
 	_timed_mode_minutes = DEFAULT_TIMED_MODE_MINUTES
 	_quality_name = QUALITY_MEDIUM
+	_spawn_rotation = 0
 	set_palette_by_name("经典")
 
 static func _normalize_palette_name(name: String) -> String:
