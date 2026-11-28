@@ -162,6 +162,7 @@ var facility_lab_enabled: bool = false
 var fortress_lab_enabled: bool = false
 var breach_lab_enabled: bool = false
 var collision_lab_enabled: bool = false
+var velocity_lab_enabled: bool = false
 var _construction_faction: int = -1
 var _construction_preview: ConstructionPreview
 var _construction_touch_cell := Vector2i(-1, -1)
@@ -245,7 +246,8 @@ func _ready() -> void:
 		add_child(dev_speed)
 		dev_speed.setup(self)
 		dev_speed.clock.step_completed.connect(_flush_battle_view)
-	collision_lab_enabled = dev_speed != null and args.has("--collision-lab")
+	velocity_lab_enabled = dev_speed != null and args.has("--velocity-lab")
+	collision_lab_enabled = velocity_lab_enabled or (dev_speed != null and args.has("--collision-lab"))
 	breach_lab_enabled = OS.is_debug_build() and args.has("--breach-lab")
 	fortress_lab_enabled = breach_lab_enabled or (OS.is_debug_build() and args.has("--fortress-lab"))
 	facility_lab_enabled = fortress_lab_enabled or (OS.is_debug_build() and args.has("--facility-lab"))
@@ -268,7 +270,12 @@ func _ready() -> void:
 	if collision_lab_enabled:
 		_prepare_lab_match()
 		_start_game(selected_grid_size, true, false)
-		if args.has("--collision-fixture"):
+		if velocity_lab_enabled:
+			if args.has("--velocity-fixture"):
+				_launch_velocity_comparison()
+			else:
+				_show_center_banner("高速弹实验", "2 点火力换一发，可占两格", Color(0.74, 0.92, 0.22), true)
+		elif args.has("--collision-fixture"):
 			_launch_collision_duel()
 		else:
 			_show_center_banner("炮弹互撞实验", "敌对炮弹相遇时同时抵消", Color(0.74, 0.92, 0.22), true)
@@ -315,6 +322,17 @@ func _prepare_lab_match() -> void:
 	if match_seed < 0:
 		match_seed = 7341
 	selected_palette_name = "经典"
+
+func _launch_velocity_comparison() -> void:
+	var field: Battlefield = runtime.battlefield
+	var center := field.grid_size * field.cell_size * 0.5
+	for lane in range(4):
+		var start := Vector2(center - 120.0, center - (lane * 2 + 2.5) * field.cell_size)
+		# Pair with 2 points of ordinary fire on the neighboring lane.
+		var ordinary := start + Vector2.UP * field.cell_size
+		runtime.bullet_pool.spawn_bullet(GameConfig.Faction.BLUE, field.to_global(start), Vector2.RIGHT, field, {}, WeaponRuleset.BulletType.VELOCITY)
+		for offset in [0.0, 26.0]:
+			runtime.bullet_pool.spawn_bullet(GameConfig.Faction.BLUE, field.to_global(ordinary - Vector2(offset, 0)), Vector2.RIGHT, field)
 
 func _launch_collision_duel() -> void:
 	var field: Battlefield = runtime.battlefield
@@ -530,7 +548,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	if fortress_lab_enabled and construction_enabled:
 		match_config.map_id = MatchConfig.BREACH_FORTRESS_ID if breach_lab_enabled else MatchConfig.CENTRAL_FORTRESS_ID
 	if collision_lab_enabled and match_config.map_id == MatchConfig.CLASSIC_MAP_ID:
-		match_config.weapon_ruleset_id = WeaponRuleset.COLLISION_LAB_ID
+		match_config.weapon_ruleset_id = WeaponRuleset.VELOCITY_LAB_ID if velocity_lab_enabled else WeaponRuleset.COLLISION_LAB_ID
 		match_config.sanitize()
 	match_config.reserve_economy_enabled = reserve_economy_enabled
 	match_config.reserve_price_preset = reserve_price_preset
@@ -962,8 +980,7 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 				chamber.set_locked(false)
 				return
 			chamber.set_linked_turret(turret)
-		# 火力 → 弹种分配。P0 只解锁普通弹，分配总发数等于火力值，和旧行为一致；
-		# P2 起弹种真正进入弹幕时，只需改这里的发射方式，不动分配与配置。
+		# The chamber lock shows queued shots. A refund uses the unspent firepower cost.
 		var volley: Dictionary = _build_volley(int(bullet_count))
 		var shot_count: int = WeaponRuleset.total_shots(volley)
 		if shot_count <= 0:
@@ -972,11 +989,14 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 			return
 		chamber.start_locked(shot_count)
 		_refresh_add_ball_button(faction_id)
-		turret.fire_burst(shot_count)
+		if volley.has(WeaponRuleset.BulletType.VELOCITY):
+			turret.fire_volley(volley)
+		else:
+			turret.fire_burst(shot_count)
 
 func _build_volley(fire: int) -> Dictionary:
 	if runtime.match_config != null and runtime.match_config.has_method("allocate_volley"):
-		return runtime.match_config.allocate_volley(fire)
+		return runtime.match_config.allocate_volley(fire, runtime.match_config.weapon_ruleset.default_shares)
 	return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
 
 func _on_turret_burst_progress(faction_id, remaining, source: Turret = null) -> void:
@@ -991,8 +1011,9 @@ func _on_turret_burst_lock_changed(faction_id, locked, source: Turret = null) ->
 		var chamber: ControlChamber = runtime.chambers[faction_id]
 		if source == null or source == chamber.linked_turret:
 			chamber.set_locked(locked)
-			if locked and source != null:
-				chamber.update_locked_remaining(source.burst_remaining)
+			var active_turret: Turret = source if source != null else chamber.linked_turret
+			if locked and is_instance_valid(active_turret):
+				chamber.update_locked_remaining(active_turret.burst_remaining)
 	_refresh_add_ball_button(faction_id)
 
 func _on_turret_destroyed(faction_id: int) -> void:

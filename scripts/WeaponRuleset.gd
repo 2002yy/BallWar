@@ -1,7 +1,7 @@
 extends RefCounted
 class_name WeaponRuleset
 
-# 弹种与火力成本。P0 只解锁普通弹，其余类型只是数据：
+# 弹种与火力成本。常规对局只解锁普通弹：
 # 一个类型必须在 unlocked_types 里，才可能被 allocate() 产出。
 # 数值来自 docs/design/BULLET_AND_MAP_SYSTEMS.md §3.2，属原型参数，未实测。
 enum BulletType {
@@ -17,7 +17,8 @@ enum BulletType {
 
 const CLASSIC_ID: String = "standard"
 const COLLISION_LAB_ID: String = "collision_lab"
-const KNOWN_IDS: Array[String] = [CLASSIC_ID, COLLISION_LAB_ID]
+const VELOCITY_LAB_ID: String = "velocity_lab"
+const KNOWN_IDS: Array[String] = [CLASSIC_ID, COLLISION_LAB_ID, VELOCITY_LAB_ID]
 
 const DEFAULT_COSTS: Dictionary = {
 	BulletType.STANDARD: 1,
@@ -31,6 +32,7 @@ const DEFAULT_COSTS: Dictionary = {
 }
 
 var projectile_collision: bool = false
+var default_shares: Dictionary = {}
 var unlocked_types: Array[int] = [BulletType.STANDARD]
 var costs: Dictionary = DEFAULT_COSTS.duplicate()
 
@@ -39,7 +41,10 @@ static func classic() -> WeaponRuleset:
 
 static func for_id(ruleset_id: String) -> WeaponRuleset:
 	var ruleset := WeaponRuleset.new()
-	ruleset.projectile_collision = ruleset_id == COLLISION_LAB_ID
+	ruleset.projectile_collision = ruleset_id in [COLLISION_LAB_ID, VELOCITY_LAB_ID]
+	if ruleset_id == VELOCITY_LAB_ID:
+		ruleset.unlocked_types.append(BulletType.VELOCITY)
+		ruleset.default_shares[BulletType.VELOCITY] = 100
 	return ruleset
 
 static func with_unlocked(types: Array) -> WeaponRuleset:

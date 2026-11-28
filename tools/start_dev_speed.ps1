@@ -10,7 +10,9 @@ param(
     [switch]$BreachLab,
     [switch]$BreachFixture,
     [switch]$CollisionLab,
-    [switch]$CollisionFixture
+    [switch]$CollisionFixture,
+    [switch]$VelocityLab,
+    [switch]$VelocityFixture
 )
 $ErrorActionPreference = 'Stop'
 if ($CheckControls -and $CheckBattleTools) {
@@ -21,7 +23,11 @@ $breachMode = $BreachLab -or $BreachFixture
 if ($fortressMode -and $breachMode) {
     throw 'Select one experimental map at a time.'
 }
-$collisionMode = $CollisionLab -or $CollisionFixture
+$velocityMode = $VelocityLab -or $VelocityFixture
+if ($velocityMode -and ($CollisionLab -or $CollisionFixture)) {
+    throw 'Select one experimental weapon ruleset at a time.'
+}
+$collisionMode = $CollisionLab -or $CollisionFixture -or $velocityMode
 if ($collisionMode -and ($fortressMode -or $breachMode)) {
     throw 'The collision experiment uses the classic map.'
 }
@@ -54,11 +60,16 @@ if ($breachMode) {
 if ($FortressFixture -or $BreachFixture) {
     $gameArgs += '--construction-fixture'
 }
-if ($collisionMode) {
+if ($velocityMode) {
+    $gameArgs += '--velocity-lab'
+} elseif ($collisionMode) {
     $gameArgs += '--collision-lab'
 }
 if ($CollisionFixture) {
     $gameArgs += '--collision-fixture'
+}
+if ($VelocityFixture) {
+    $gameArgs += '--velocity-fixture'
 }
 & $engine --path $project @flags -- @gameArgs
 exit $LASTEXITCODE
