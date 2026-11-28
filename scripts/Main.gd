@@ -160,6 +160,7 @@ var additive_lab_enabled: bool = false
 var construction_lab_enabled: bool = false
 var facility_lab_enabled: bool = false
 var fortress_lab_enabled: bool = false
+var breach_lab_enabled: bool = false
 var _construction_faction: int = -1
 var _construction_preview: ConstructionPreview
 var _construction_touch_cell := Vector2i(-1, -1)
@@ -243,7 +244,8 @@ func _ready() -> void:
 		add_child(dev_speed)
 		dev_speed.setup(self)
 		dev_speed.clock.step_completed.connect(_flush_battle_view)
-	fortress_lab_enabled = OS.is_debug_build() and args.has("--fortress-lab")
+	breach_lab_enabled = OS.is_debug_build() and args.has("--breach-lab")
+	fortress_lab_enabled = breach_lab_enabled or (OS.is_debug_build() and args.has("--fortress-lab"))
 	facility_lab_enabled = fortress_lab_enabled or (OS.is_debug_build() and args.has("--facility-lab"))
 	construction_lab_enabled = facility_lab_enabled or (OS.is_debug_build() and args.has("--construction-lab"))
 	additive_lab_enabled = not construction_lab_enabled and OS.is_debug_build() and args.has("--additive-lab")
@@ -281,12 +283,12 @@ func _ready() -> void:
 				_launch_facility_demo_shot()
 		var title := "设施实验" if facility_lab_enabled else "建设实验"
 		if fortress_lab_enabled:
-			title = "中央要塞"
+			title = "破墙要塞" if breach_lab_enabled else "中央要塞"
 		if args.has("--construction-fixture"):
 			title += " · 演示"
 		var hint := "先击中中央中立炮塔即可夺取" if facility_lab_enabled else "50 建材可选己方地块建造"
 		if fortress_lab_enabled:
-			hint = "反射墙改写弹道，抢先击中中央炮塔"
+			hint = "击中墙体 %d 次可打开通路" % FortressTerrain.WALL_HEALTH if breach_lab_enabled else "反射墙改写弹道，抢先击中中央炮塔"
 		_show_center_banner(title, hint, Color(0.74, 0.92, 0.22), true)
 	else:
 		_create_start_menu()
@@ -313,6 +315,12 @@ func _launch_facility_demo_shot() -> void:
 	var direction := Vector2.DOWN
 	if field.fortress != null:
 		var wall: Rect2 = field.fortress.wall_rects[0]
+		if field.fortress.breakable:
+			var lane := wall.position.y + field.cell_size * 0.5
+			for shot in range(FortressTerrain.WALL_HEALTH + 1):
+				start = field.to_global(Vector2(wall.end.x + 3.0 + shot * 6.0, lane))
+				runtime.bullet_pool.spawn_bullet(GameConfig.Faction.BLUE, start, Vector2.LEFT, field, _turret_targets())
+			return
 		var impact := wall.end - Vector2(0.0, field.cell_size * 0.5)
 		var toward_center := field.to_local(neutral.global_position) - impact
 		var incoming := Vector2(-toward_center.x, toward_center.y)
@@ -391,7 +399,7 @@ func _process(delta: float) -> void:
 	hud_meta_update_timer -= delta
 	if hud_meta_update_timer <= 0.0:
 		hud_meta_update_timer = HUD_META_UPDATE_INTERVAL
-		RuntimeHudController.update_meta(_hud_ref("timer_label"), _hud_ref("stage_label"), _hud_ref("leader_label"), current_score_counts, game_elapsed_time)
+		RuntimeHudController.update_meta(_hud_ref("timer_label"), _hud_ref("stage_label"), _hud_ref("leader_label"), current_score_counts, game_elapsed_time, _claimable_score_cells())
 
 	UIAnimationController.animate_menu_and_title(
 		ui_time,
@@ -501,7 +509,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	# 对局配置只在开局时快照一次：窗口缩放、UI 重建都不应该重新解释地图与武器规则。
 	var match_config := MatchConfig.capture_current(grid_size, match_seed)
 	if fortress_lab_enabled and construction_enabled:
-		match_config.map_id = MatchConfig.CENTRAL_FORTRESS_ID
+		match_config.map_id = MatchConfig.BREACH_FORTRESS_ID if breach_lab_enabled else MatchConfig.CENTRAL_FORTRESS_ID
 	match_config.reserve_economy_enabled = reserve_economy_enabled
 	match_config.reserve_price_preset = reserve_price_preset
 	match_config.additive_gate_bonus = maxi(0, additive_gate_bonus)
@@ -551,8 +559,8 @@ func _create_battlefield(grid_size: int) -> void:
 	runtime.bullet_pool = scene_nodes.get("bullet_container", null)
 	if is_instance_valid(runtime.bullet_pool):
 		runtime.bullet_pool.match_random = runtime.match_random
-	if runtime.match_config.map_id == MatchConfig.CENTRAL_FORTRESS_ID:
-		runtime.battlefield.configure_fortress()
+	if runtime.match_config.map_id in [MatchConfig.CENTRAL_FORTRESS_ID, MatchConfig.BREACH_FORTRESS_ID]:
+		runtime.battlefield.configure_fortress(runtime.match_config.map_id == MatchConfig.BREACH_FORTRESS_ID)
 	chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
 
 func _on_release_sfx(faction_id = null, count = null, _chamber = null) -> void:
@@ -780,7 +788,7 @@ func _construction_site_issue(faction_id: int, cell: Vector2i) -> String:
 		return "非己方领土"
 	var position := _construction_position(cell)
 	if field.fortress != null and not field.fortress.has_turret_clearance(field.to_local(position), Turret.MUZZLE_DISTANCE):
-		return "太靠近反射墙"
+		return "太靠近可破坏墙" if field.fortress.breakable else "太靠近反射墙"
 	for turret_id in runtime.turret_roster.by_id:
 		var turret: Turret = runtime.turret_roster.live_turret(turret_id)
 		if turret != null and position.distance_to(turret.global_position) < 2.0 * GameConfig.TURRET_RADIUS:
@@ -1018,6 +1026,9 @@ func _stop_all_actions_for_game_over() -> void:
 		runtime.event_view
 	)
 
+func _claimable_score_cells() -> int:
+	return runtime.battlefield.claimable_cell_count() if is_instance_valid(runtime.battlefield) else 0
+
 func _on_scores_changed(counts: Dictionary) -> void:
 	current_score_counts = counts.duplicate()
 	if runtime.construction != null:
@@ -1031,9 +1042,10 @@ func _on_scores_changed(counts: Dictionary) -> void:
 		_ui_runtime_ref("top_bar_labels", {}),
 		_ui_runtime_ref("top_bar_name_labels", {}),
 		float(_ui_runtime_ref("top_bar_total_width", 0.0)),
-		is_mobile_layout
+		is_mobile_layout,
+		_claimable_score_cells()
 	)
-	RuntimeHudController.update_meta(_hud_ref("timer_label"), _hud_ref("stage_label"), _hud_ref("leader_label"), current_score_counts, game_elapsed_time)
+	RuntimeHudController.update_meta(_hud_ref("timer_label"), _hud_ref("stage_label"), _hud_ref("leader_label"), current_score_counts, game_elapsed_time, _claimable_score_cells())
 
 func _show_center_banner(title_text: String, sub_text: String, accent: Color, auto_hide: bool) -> void:
 	_set_hud_ref(

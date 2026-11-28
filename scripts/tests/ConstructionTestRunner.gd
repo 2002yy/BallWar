@@ -159,6 +159,7 @@ func _run() -> void:
 
 	_check_neutral_facility(main, t, site)
 	_check_fortress_map(main, t, site)
+	_check_breach_map(main, t)
 	main.queue_free()
 	await process_frame
 	t.report("ConstructionTestRunner")
@@ -279,6 +280,49 @@ func _check_fortress_map(main, t: TestAssert, site: Vector2i) -> void:
 		t.eq(main.runtime.bullet_pool.get_tracked_queue_total(), 9, "fortress volley conserves faction firepower")
 		tower.cancel_burst()
 	t.that(not main._save_game_progress().ok, "experimental terrain uses isolated match persistence")
+
+func _check_breach_map(main, t: TestAssert) -> void:
+	main.breach_lab_enabled = true
+	main._start_game(40, true, false, false, ReserveEconomy.PricePreset.STANDARD, 0, true)
+	var field: Battlefield = main.runtime.battlefield
+	var terrain: FortressTerrain = field.fortress
+	t.eq(main.runtime.match_config.map_id, MatchConfig.BREACH_FORTRESS_ID, "breach is a separate map variant")
+	var wall: Rect2 = terrain.wall_rects[0]
+	var origin := Vector2i(wall.position / field.cell_size)
+	var entry_cell := origin + Vector2i.RIGHT
+	var lane := wall.position.y + field.cell_size * 0.5
+	var start := Vector2(wall.end.x + 18.0, lane)
+	var counts := field.count_cells_by_team()
+	var denominator := field.claimable_cell_count()
+	t.eq(terrain.first_wall_hit(Vector2(10, lane), Vector2(500, 0)), wall, "swept contact picks the nearest wall")
+	t.eq(terrain.wall_health[wall], 3, "experimental walls start with three hit points")
+	for remaining in [2, 1, 0]:
+		var bullet: Bullet = main.runtime.bullet_pool.spawn_bullet(BLUE, field.to_global(start), Vector2.LEFT, field, main._turret_targets())
+		for step in range(30):
+			bullet._physics_process(MatchClock.STEP_SECONDS)
+			if not bullet.is_active:
+				break
+		t.that(not bullet.is_active, "a wall consumes the shot, including the breaking shot")
+		t.eq(int(terrain.wall_health.get(wall, 0)), remaining, "each shot removes one hit point")
+		t.eq(field.claimable_cell_count(), denominator + (4 if remaining == 0 else 0), "only the third hit opens the four cells")
+	t.eq(terrain.wall_rects.size(), 3, "the broken wall no longer blocks movement")
+	t.that(terrain.has_turret_clearance(wall.get_center(), Turret.MUZZLE_DISTANCE), "the breach clears the wall restriction for construction")
+	for dx in range(2):
+		for dy in range(2):
+			t.eq(field.owners[origin.x + dx][origin.y + dy], Battlefield.NEUTRAL_OWNER, "each opened cell starts neutral")
+	field.rebuild_owner_counts()
+	t.eq(field.count_cells_by_team(), counts, "even rebuilding counts leaves neutral cells unassigned")
+	var followup: Bullet = main.runtime.bullet_pool.spawn_bullet(BLUE, field.to_global(start), Vector2.LEFT, field, main._turret_targets())
+	for step in range(30):
+		followup._physics_process(MatchClock.STEP_SECONDS)
+		if not followup.is_active:
+			break
+	t.eq(field.owners[entry_cell.x][entry_cell.y], BLUE, "the next projectile captures the neutral ground through the breach")
+	counts[BLUE] += 1
+	t.eq(field.count_cells_by_team(), counts, "capturing neutral ground adds one point without charging another team")
+	t.that(not main._save_game_progress().ok, "breach fixtures cannot write normal saves")
+	main._start_game(40, true, false, false, ReserveEconomy.PricePreset.STANDARD, 0, true)
+	t.eq(main.runtime.battlefield.fortress.wall_cells.size(), 16, "a new match restores all walls")
 
 func _land(chamber: ControlChamber, x: float) -> void:
 	var ball: ControlBall = chamber.balls[0]

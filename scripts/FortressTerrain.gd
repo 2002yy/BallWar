@@ -3,19 +3,55 @@ class_name FortressTerrain
 
 const CONTACT_OFFSET: float = 0.01
 const MAX_REFLECTIONS: int = 4
+const WALL_HEALTH: int = 3
 
 var wall_rects: Array[Rect2] = []
 var wall_cells: Dictionary = {}
+var wall_health: Dictionary = {}
+var breakable: bool
+var _cell_size: int
 
-func _init(grid_size: int, cell_size: int) -> void:
+func _init(grid_size: int, cell_size: int, walls_breakable: bool = false) -> void:
+	breakable = walls_breakable
+	_cell_size = cell_size
 	var center := grid_size >> 1
 	var gap := clampi(ceili(28.0 / cell_size), 2, center - 2)
 	for x in [center - gap - 2, center + gap]:
 		for y in [center - gap - 2, center + gap]:
-			wall_rects.append(Rect2(x * cell_size, y * cell_size, 2 * cell_size, 2 * cell_size))
+			var wall := Rect2(x * cell_size, y * cell_size, 2 * cell_size, 2 * cell_size)
+			wall_rects.append(wall)
+			if breakable:
+				wall_health[wall] = WALL_HEALTH
 			for dx in range(2):
 				for dy in range(2):
 					wall_cells[Vector2i(x + dx, y + dy)] = true
+
+func first_wall_hit(start: Vector2, movement: Vector2) -> Rect2:
+	var first_wall := Rect2()
+	var first_entry := INF
+	for wall in wall_rects:
+		var entry := _wall_entry(start, movement, wall).x
+		if entry < first_entry:
+			first_entry = entry
+			first_wall = wall
+	return first_wall
+
+# Returns the newly available cells if this hit destroys the wall.
+func damage_wall(wall: Rect2, damage: int) -> Array[Vector2i]:
+	var opened: Array[Vector2i] = []
+	wall_health[wall] -= damage
+	if wall_health[wall] > 0:
+		return opened
+	wall_health.erase(wall)
+	wall_rects.erase(wall)
+	var origin := Vector2i(wall.position / _cell_size)
+	var size := Vector2i(wall.size / _cell_size)
+	for dx in range(size.x):
+		for dy in range(size.y):
+			var cell := origin + Vector2i(dx, dy)
+			wall_cells.erase(cell)
+			opened.append(cell)
+	return opened
 
 func has_turret_clearance(position: Vector2, distance: float) -> bool:
 	for wall in wall_rects:
