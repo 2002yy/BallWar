@@ -153,6 +153,7 @@ var is_game_over: bool = false
 var match_seed: int = -1
 var reserve_lab_enabled: bool = false
 var additive_lab_enabled: bool = false
+var construction_lab_enabled: bool = false
 const ADDITIVE_LAB_BONUS: int = 2
 
 var menu_title_label
@@ -221,8 +222,10 @@ func _sync_runtime_context(grid_size: int) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	additive_lab_enabled = OS.is_debug_build() and OS.get_cmdline_user_args().has("--additive-lab")
-	reserve_lab_enabled = not additive_lab_enabled and _reserve_lab_requested()
+	var args := OS.get_cmdline_user_args()
+	construction_lab_enabled = OS.is_debug_build() and args.has("--construction-lab")
+	additive_lab_enabled = not construction_lab_enabled and OS.is_debug_build() and args.has("--additive-lab")
+	reserve_lab_enabled = not construction_lab_enabled and not additive_lab_enabled and _reserve_lab_requested()
 	if match_seed >= 0:
 		seed(match_seed)
 	else:
@@ -246,6 +249,18 @@ func _ready() -> void:
 		_prepare_lab_match()
 		_start_game(selected_grid_size, true, false, false, ReserveEconomy.PricePreset.STANDARD, ADDITIVE_LAB_BONUS)
 		_show_center_banner("稳产实验", "加法门每次增加 %d 发" % ADDITIVE_LAB_BONUS, Color(0.74, 0.92, 0.22), true)
+	elif construction_lab_enabled:
+		_prepare_lab_match()
+		_start_game(selected_grid_size, true, false, false, ReserveEconomy.PricePreset.STANDARD, 0, true)
+		if args.has("--construction-fixture"):
+			var chamber: ControlChamber = runtime.chambers[GameConfig.Faction.BLUE]
+			var ball: ControlBall = chamber.balls[0]
+			chamber.pending_count = ConstructionState.COST * 4
+			var gate_x := chamber._reserve_gate_x(chamber._current_x2_width())
+			ball.position = Vector2(lerpf(gate_x, chamber.chamber_size.x, 0.5), chamber.chamber_size.y - ball.radius - 1.0)
+			ball.velocity = Vector2(0, 120)
+		var title := "建设实验 · 构造落门" if args.has("--construction-fixture") else "建设实验"
+		_show_center_banner(title, "建门转存火力，50 建材可造辅助炮塔", Color(0.74, 0.92, 0.22), true)
 	else:
 		_create_start_menu()
 	var size_cb: Callable = Callable(self, "_on_viewport_resized")
@@ -256,7 +271,7 @@ func _reserve_lab_requested() -> bool:
 	return ReserveLab.is_requested(OS.is_debug_build(), OS.get_cmdline_user_args())
 
 func _is_lab_session() -> bool:
-	return reserve_lab_enabled or additive_lab_enabled
+	return reserve_lab_enabled or additive_lab_enabled or construction_lab_enabled
 
 func _prepare_lab_match() -> void:
 	if match_seed < 0:
@@ -397,13 +412,14 @@ func _create_start_menu() -> void:
 
 func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool = true,
 		reserve_economy_enabled: bool = false,
-		reserve_price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD, additive_gate_bonus: int = 0) -> void:
+		reserve_price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD,
+		additive_gate_bonus: int = 0, construction_enabled: bool = false) -> void:
 	grid_size = LayoutProfiles.sanitize_grid_size(grid_size)
 	selected_grid_size = grid_size
 	game_elapsed_time = 0.0
 	is_game_over = false
 
-	if clear_save and not reserve_economy_enabled and additive_gate_bonus <= 0 and _has_save_file(selected_save_slot):
+	if clear_save and not reserve_economy_enabled and not construction_enabled and additive_gate_bonus <= 0 and _has_save_file(selected_save_slot):
 		var save_path: String = _get_save_path(selected_save_slot)
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveFlowController.get_backup_path(save_path)))
@@ -430,6 +446,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	match_config.reserve_economy_enabled = reserve_economy_enabled
 	match_config.reserve_price_preset = reserve_price_preset
 	match_config.additive_gate_bonus = maxi(0, additive_gate_bonus)
+	match_config.construction_enabled = construction_enabled
 	runtime.set_match_config(match_config)
 
 	game_layer = Node2D.new()
@@ -517,7 +534,11 @@ func _refresh_chassis() -> void:
 
 
 func _create_turrets() -> void:
-	runtime.turrets = GameSceneBuilder.create_turrets(self, board_root, runtime.battlefield, runtime.bullet_pool, _board_layout)
+	runtime.turrets = GameSceneBuilder.create_turrets(self, board_root, runtime.battlefield, runtime.bullet_pool, _board_layout, runtime.construction != null)
+	if runtime.construction != null:
+		runtime.construction.targets = runtime.turrets.duplicate()
+		for turret in runtime.turrets.values():
+			turret.set_all_turrets(runtime.construction.targets)
 	for fid in runtime.turrets.keys():
 		var t = runtime.turrets[fid]
 		if t == null or not is_instance_valid(t):
@@ -531,7 +552,10 @@ func _create_turrets() -> void:
 			if not t.damaged.is_connected(cb_damaged):
 				t.damaged.connect(cb_damaged)
 	if runtime.bullet_pool != null and is_instance_valid(runtime.bullet_pool) and runtime.bullet_pool.has_method("set_tracked_turrets"):
-		runtime.bullet_pool.set_tracked_turrets(runtime.turrets)
+		runtime.bullet_pool.set_tracked_turrets(_turret_targets())
+
+func _turret_targets() -> Dictionary:
+	return runtime.construction.targets if runtime.construction != null else runtime.turrets
 
 func _create_control_chambers() -> void:
 	runtime.chambers = GameSceneBuilder.create_control_chambers(self, board_root, runtime.battlefield, runtime.turrets, _board_layout, chamber_scale, BOARD_SPACE)
@@ -542,6 +566,9 @@ func _create_control_chambers() -> void:
 		ch.additive_gate_bonus = runtime.match_config.additive_gate_bonus
 		if runtime.reserve_economy != null:
 			ch.reserve_conversion = runtime.reserve_economy.convert_pending.bind(fid)
+		elif runtime.construction != null:
+			ch.reserve_conversion = _convert_construction_materials.bind(fid)
+			ch.resource_gate_label = "建"
 		for pair in [
 			["release_requested", "_on_release_sfx"],
 			["ball_landed", "_on_ball_landed_sfx"],
@@ -622,6 +649,9 @@ func _create_control_buttons() -> void:
 		_refresh_add_ball_button(faction_id)
 
 func _add_ball_to_chamber(faction_id: int) -> void:
+	if runtime.construction != null:
+		_try_build_auxiliary(faction_id)
+		return
 	if not runtime.chambers.has(faction_id):
 		return
 	var chamber: ControlChamber = runtime.chambers[faction_id]
@@ -646,7 +676,79 @@ func _buy_lucky_blast(faction_id: int) -> int:
 	return changed
 
 func _refresh_add_ball_button(faction_id: int) -> void:
+	if runtime.construction != null:
+		_refresh_construction_button(faction_id)
+		return
 	GameHudView.refresh_add_ball_button(faction_id, _ui_runtime_ref("add_ball_buttons", {}), runtime.chambers)
+
+func _convert_construction_materials(pending: int, faction_id: int) -> int:
+	var remaining: int = runtime.construction.convert_pending(pending, faction_id)
+	_refresh_construction_button(faction_id)
+	return remaining
+
+func _construction_site(faction_id: int) -> Vector2i:
+	return runtime.construction.auxiliary_cell(faction_id, runtime.battlefield.grid_size)
+
+func _construction_position(cell: Vector2i) -> Vector2:
+	var field: Battlefield = runtime.battlefield
+	return field.to_global((Vector2(cell) + Vector2(0.5, 0.5)) * field.cell_size)
+
+func _construction_site_is_legal(faction_id: int) -> bool:
+	var field: Battlefield = runtime.battlefield
+	var cell := _construction_site(faction_id)
+	if not field.is_inside(cell) or field.owners[cell.x][cell.y] != faction_id:
+		return false
+	var position := _construction_position(cell)
+	for slot in runtime.construction.targets:
+		var turret: Turret = runtime.construction.live_turret(slot)
+		if turret != null and position.distance_to(turret.global_position) < 2.0 * GameConfig.TURRET_RADIUS:
+			return false
+	return true
+
+func _refresh_construction_button(faction_id: int) -> void:
+	var button: EnergyButton = _ui_runtime_ref("add_ball_buttons", {}).get(faction_id)
+	if button == null:
+		return
+	var state: ConstructionState = runtime.construction
+	var built: Turret = state.targets.get(state.auxiliary_slot(faction_id))
+	var amount := state.balance(faction_id)
+	button.tooltip_text = "建材 %d/%d，预设建造格 %s" % [amount, ConstructionState.COST, _construction_site(faction_id)]
+	if is_game_over or state.select_turret(faction_id) == null:
+		button.set_button_status("damaged", "停建")
+	elif built != null:
+		button.set_button_status("full", "已毁" if built.is_destroyed else "已建")
+	elif not _construction_site_is_legal(faction_id):
+		button.set_button_status("locked", "地块")
+	elif amount < ConstructionState.COST:
+		button.set_button_status("locked", "%d/%d" % [amount, ConstructionState.COST])
+	else:
+		button.set_button_status("normal", "建造")
+
+func _try_build_auxiliary(faction_id: int) -> bool:
+	var state: ConstructionState = runtime.construction
+	if state == null or is_game_over or get_tree().paused or state.select_turret(faction_id) == null:
+		return false
+	if state.targets.has(state.auxiliary_slot(faction_id)) or state.balance(faction_id) < ConstructionState.COST:
+		return false
+	if not _construction_site_is_legal(faction_id):
+		return false
+
+	var turret := Turret.new()
+	turret.name = "AuxiliaryTurret_%d" % faction_id
+	turret.setup(faction_id, _construction_position(_construction_site(faction_id)), runtime.battlefield, runtime.bullet_pool)
+	turret.max_health = ceili(turret.max_health / 2.0)
+	turret.health = turret.max_health
+	turret.set_all_turrets(state.targets)
+	turret.burst_progress.connect(_on_turret_burst_progress.bind(turret))
+	turret.burst_lock_changed.connect(_on_turret_burst_lock_changed.bind(turret))
+	turret.destroyed.connect(_on_turret_destroyed)
+	turret.destroyed.connect(_on_turret_destroyed_sfx)
+	turret.damaged.connect(_on_turret_damaged_sfx)
+	board_root.add_child(turret)
+	state.add_auxiliary(faction_id, turret)
+	runtime.bullet_pool.set_tracked_turrets(state.targets)
+	_refresh_construction_button(faction_id)
+	return true
 
 func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 	if is_game_over:
@@ -656,6 +758,12 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 
 	if runtime.turrets.has(faction_id):
 		var turret: Turret = runtime.turrets[faction_id]
+		if runtime.construction != null:
+			turret = runtime.construction.select_turret(faction_id, chamber.linked_turret)
+			if turret == null:
+				chamber.set_locked(false)
+				return
+			chamber.set_linked_turret(turret)
 		# 火力 → 弹种分配。P0 只解锁普通弹，分配总发数等于火力值，和旧行为一致；
 		# P2 起弹种真正进入弹幕时，只需改这里的发射方式，不动分配与配置。
 		var volley: Dictionary = _build_volley(int(bullet_count))
@@ -673,19 +781,32 @@ func _build_volley(fire: int) -> Dictionary:
 		return runtime.match_config.allocate_volley(fire)
 	return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
 
-func _on_turret_burst_progress(faction_id, remaining) -> void:
+func _on_turret_burst_progress(faction_id, remaining, source: Turret = null) -> void:
 	if runtime.chambers.has(faction_id):
-		runtime.chambers[faction_id].update_locked_remaining(remaining)
+		var chamber: ControlChamber = runtime.chambers[faction_id]
+		if source == null or source == chamber.linked_turret:
+			chamber.update_locked_remaining(remaining)
 	_refresh_add_ball_button(faction_id)
 
-func _on_turret_burst_lock_changed(faction_id, locked) -> void:
+func _on_turret_burst_lock_changed(faction_id, locked, source: Turret = null) -> void:
 	if runtime.chambers.has(faction_id):
-		runtime.chambers[faction_id].set_locked(locked)
+		var chamber: ControlChamber = runtime.chambers[faction_id]
+		if source == null or source == chamber.linked_turret:
+			chamber.set_locked(locked)
+			if locked and source != null:
+				chamber.update_locked_remaining(source.burst_remaining)
 	_refresh_add_ball_button(faction_id)
 
 func _on_turret_destroyed(faction_id: int) -> void:
 	if runtime.chambers.has(faction_id):
-		runtime.chambers[faction_id].set_damaged()
+		var chamber: ControlChamber = runtime.chambers[faction_id]
+		var survivor: Turret = runtime.construction.select_turret(faction_id) if runtime.construction != null else null
+		if survivor == null:
+			chamber.set_damaged()
+		else:
+			runtime.turrets[faction_id] = survivor
+			if chamber.linked_turret.is_destroyed:
+				chamber.set_linked_turret(survivor)
 	_refresh_add_ball_button(faction_id)
 	_check_winner()
 
@@ -720,7 +841,7 @@ func _finish_as_draw(sub_text: String) -> void:
 
 func _stop_all_actions_for_game_over() -> void:
 	GameStateCoordinator.stop_actions_for_game_over(
-		runtime.turrets,
+		_turret_targets(),
 		runtime.chambers,
 		Callable(self, "_refresh_add_ball_button"),
 		Callable(self, "_clear_bullets"),
@@ -730,6 +851,9 @@ func _stop_all_actions_for_game_over() -> void:
 
 func _on_scores_changed(counts: Dictionary) -> void:
 	current_score_counts = counts.duplicate()
+	if runtime.construction != null:
+		for faction in runtime.chambers:
+			_refresh_construction_button(faction)
 	RuntimeHudController.update_top_bar(
 		counts,
 		_ui_runtime_ref("top_bar_segments", {}),
@@ -986,6 +1110,8 @@ func _process_pending_bullet_restore() -> void:
 			runtime.bullet_pool.add_child(bullet)
 
 func _save_game_progress() -> Dictionary:
+	if runtime.construction != null:
+		return {"ok": false, "error_message": "建设实验未写入普通存档。"}
 	if runtime.match_config != null and runtime.match_config.additive_gate_bonus > 0:
 		return {"ok": false, "error_message": "稳产实验未写入普通存档。"}
 	if runtime.reserve_economy != null:

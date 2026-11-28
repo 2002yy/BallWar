@@ -41,6 +41,7 @@ const MAX_RESTORE_CONTROL_BALLS: int = 8
 var faction_id: int = GameConfig.Faction.BLUE
 var chamber_state: ChamberState = ChamberState.new()
 var reserve_conversion: Callable
+var resource_gate_label: String = "储"
 var additive_gate_bonus: int = 0
 # Classic keeps its existing pending value through the burst-lock transition.
 var _classic_pending_count: int = 1
@@ -653,6 +654,7 @@ func _build_draw_snapshot() -> Dictionary:
 		"chamber_size": chamber_size,
 		"gate_height": gate_height,
 		"reserve_gate_x": _reserve_gate_x(_current_x2_width()),
+		"resource_gate_label": resource_gate_label,
 		"peg_radius": peg_radius,
 		"pegs": pegs,
 		"is_damaged": is_damaged,

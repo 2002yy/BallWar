@@ -295,11 +295,9 @@ func _update_visual_trace(delta: float) -> void:
 	_request_trail_redraw()
 
 func _try_hit_enemy_turret() -> bool:
-	for target_faction_id in target_turrets:
-		if target_faction_id == faction_id:
-			continue
-		var turret = target_turrets[target_faction_id]
-		if turret == null:
+	for slot in target_turrets:
+		var turret = target_turrets[slot]
+		if turret == null or turret.faction_id == faction_id:
 			continue
 		if turret.is_destroyed:
 			continue

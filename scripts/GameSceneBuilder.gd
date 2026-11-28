@@ -40,7 +40,7 @@ static func create_battlefield(owner, game_layer: Node, grid_size: int, current_
         "chamber_scale": current_layout.get("chamber_scale", 0.80),
     }
 
-static func create_turrets(owner, game_layer: Node, battlefield, bullet_container, current_layout: Dictionary = {}) -> Dictionary:
+static func create_turrets(owner, game_layer: Node, battlefield, bullet_container, current_layout: Dictionary = {}, bind_burst_source: bool = false) -> Dictionary:
     var turrets: Dictionary = {}
     var positions: Dictionary = current_layout.get("turret_positions", {})
     if positions.is_empty():
@@ -59,8 +59,10 @@ static func create_turrets(owner, game_layer: Node, battlefield, bullet_containe
         turret.setup(faction_id, positions[faction_id], battlefield, bullet_container)
         turret.name = "Turret_%s" % GameConfig.faction_name(faction_id)
         turret.destroyed.connect(Callable(owner, "_on_turret_destroyed"))
-        turret.burst_lock_changed.connect(Callable(owner, "_on_turret_burst_lock_changed"))
-        turret.burst_progress.connect(Callable(owner, "_on_turret_burst_progress"))
+        var lock_callback := Callable(owner, "_on_turret_burst_lock_changed")
+        var progress_callback := Callable(owner, "_on_turret_burst_progress")
+        turret.burst_lock_changed.connect(lock_callback.bind(turret) if bind_burst_source else lock_callback)
+        turret.burst_progress.connect(progress_callback.bind(turret) if bind_burst_source else progress_callback)
         game_layer.add_child(turret)
         turrets[faction_id] = turret
 
