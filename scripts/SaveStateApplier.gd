@@ -40,7 +40,11 @@ static func apply_factions(chambers: Dictionary, turrets: Dictionary, factions: 
 			if chambers.has(faction_id) and turrets.has(faction_id):
 				var chamber = chambers[faction_id]
 				var turret = turrets[faction_id]
-				if chamber.is_locked and chamber.locked_remaining > 0 and turret.burst_remaining <= 0:
+				# 存档可能落在“burst 刚打完、解锁信号尚未发出”的 tick：
+				# 只有存档里 turret_burst_locked 仍为 true 时才补解锁，
+				# 避免把手工构造的锁定状态误判成边界。
+				if chamber.is_locked and turret.burst_remaining <= 0 \
+					and bool(faction_state.get("turret_burst_locked", false)):
 					on_chamber_unlock.call(chamber)
 
 			if on_button_refresh.is_valid():

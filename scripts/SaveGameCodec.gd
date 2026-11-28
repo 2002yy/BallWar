@@ -101,9 +101,18 @@ static func get_release_ball_index(chamber) -> int:
 			return i
 	return -1
 
+static func vec2_to_text(value: Vector2) -> String:
+	# 不用 var_to_str(Vector2)：它按默认精度打印分量，最后几位会丢。
+	return "%s,%s" % [String.num(value.x, 17), String.num(value.y, 17)]
+
+
 static func read_vec2_text(state: Dictionary, key: String, fallback: Vector2) -> Vector2:
 	var text: String = str(state.get(key + "_text", ""))
-	if text != "":
+	if text.contains(",") and not text.begins_with("Vector2"):
+		var parts: PackedStringArray = text.split(",")
+		if parts.size() == 2 and parts[0].strip_edges().is_valid_float() and parts[1].strip_edges().is_valid_float():
+			return Vector2(parts[0].strip_edges().to_float(), parts[1].strip_edges().to_float())
+	if text.begins_with("Vector2"):
 		var parsed = str_to_var(text)
 		if parsed is Vector2:
 			return parsed
@@ -128,14 +137,16 @@ static func collect_control_ball_states(chamber) -> Array:
 			continue
 		result.append({
 			"position": vec2_to_arr(ball.position),
-			"position_text": var_to_str(ball.position),
+			"position_text": vec2_to_text(ball.position),
 			"velocity": vec2_to_arr(ball.velocity),
-			"velocity_text": var_to_str(ball.velocity),
+			"velocity_text": vec2_to_text(ball.velocity),
 			"radius": ball.radius,
 			"stay_time": chamber.get_ball_stay_time(ball),
 			"stay_time_text": var_to_str(float(chamber.get_ball_stay_time(ball))),
 			"stuck_state": chamber.stuck_states.get(ball.get_instance_id(), {}),
-			"stuck_state_text": var_to_str(chamber.stuck_states.get(ball.get_instance_id(), {})),
+			"stuck_pos_text": vec2_to_text(chamber.stuck_states.get(ball.get_instance_id(), {}).get("pos", ball.position)),
+			"stuck_y_text": String.num(float(chamber.stuck_states.get(ball.get_instance_id(), {}).get("y", ball.position.y)), 17),
+			"stuck_time_text": String.num(float(chamber.stuck_states.get(ball.get_instance_id(), {}).get("time", 0.0)), 17),
 		})
 	return result
 
@@ -156,9 +167,9 @@ static func collect_bullet_states(bullet_container) -> Array:
 			var entry: Dictionary = {
 				"faction_id": node.faction_id,
 				"position": vec2_to_arr(stored_pos),
-				"position_text": var_to_str(stored_pos),
+				"position_text": vec2_to_text(stored_pos),
 				"direction": vec2_to_arr(node.direction),
-				"direction_text": var_to_str(node.direction),
+				"direction_text": vec2_to_text(node.direction),
 				"age": node.age,
 				"age_text": var_to_str(float(node.age)),
 				"last_cell": vec2i_to_arr(node.last_cell),
@@ -303,7 +314,9 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
 							"stay_time": maxf(0.0, float(ball.get("stay_time", 0.0))),
 							"stay_time_text": str(ball.get("stay_time_text", "")),
 							"stuck_state": ball.get("stuck_state", {}),
-							"stuck_state_text": str(ball.get("stuck_state_text", "")),
+							"stuck_pos_text": str(ball.get("stuck_pos_text", "")),
+							"stuck_y_text": str(ball.get("stuck_y_text", "")),
+							"stuck_time_text": str(ball.get("stuck_time_text", "")),
 						})
 				fixed["control_balls"] = clean_balls.slice(0, mini(clean_balls.size(), MAX_RESTORE_CONTROL_BALLS))
 			else:

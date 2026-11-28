@@ -83,11 +83,10 @@ static func _sanitize_control_ball_state(ball_state: Dictionary, chamber_size: V
 	var stuck_raw = ball_state.get("stuck_state", {})
 	if stuck_raw is Dictionary:
 		stuck = (stuck_raw as Dictionary).duplicate(true)
-	var stuck_text: String = str(ball_state.get("stuck_state_text", ""))
-	if stuck_text != "":
-		var parsed_stuck = str_to_var(stuck_text)
-		if parsed_stuck is Dictionary:
-			stuck = (parsed_stuck as Dictionary).duplicate(true)
+	if not stuck.is_empty() and str(ball_state.get("stuck_pos_text", "")) != "":
+		stuck["pos"] = SaveGameCodec.read_vec2_text(ball_state, "stuck_pos", Vector2.ZERO)
+		stuck["y"] = SaveGameCodec.read_float_text(ball_state, "stuck_y", 0.0)
+		stuck["time"] = SaveGameCodec.read_float_text(ball_state, "stuck_time", 0.0)
 	return {
 		"radius": radius,
 		"position": pos,
