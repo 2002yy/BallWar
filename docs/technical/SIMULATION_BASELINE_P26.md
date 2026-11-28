@@ -1,9 +1,10 @@
 # P2.6 · 统一技术基线与公平性归因
 
 Date: 2026-11-28
-Status: 集成分支验证中；实验开关默认关闭
+Status: draft PR #44；实验开关默认关闭
 Base: `main@30e0008`
-Integration: `feat/p26-integration`
+Integration: `feat/p26-integration` @ `0205aad`
+CI: run `46128038164` 三项全绿
 
 ## 1. 集成顺序与实际落地
 
