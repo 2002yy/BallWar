@@ -16,7 +16,8 @@ enum BulletType {
 }
 
 const CLASSIC_ID: String = "standard"
-const KNOWN_IDS: Array[String] = [CLASSIC_ID]
+const COLLISION_LAB_ID: String = "collision_lab"
+const KNOWN_IDS: Array[String] = [CLASSIC_ID, COLLISION_LAB_ID]
 
 const DEFAULT_COSTS: Dictionary = {
 	BulletType.STANDARD: 1,
@@ -29,15 +30,17 @@ const DEFAULT_COSTS: Dictionary = {
 	BulletType.HOMING: 6,
 }
 
+var projectile_collision: bool = false
 var unlocked_types: Array[int] = [BulletType.STANDARD]
 var costs: Dictionary = DEFAULT_COSTS.duplicate()
 
 static func classic() -> WeaponRuleset:
 	return WeaponRuleset.new()
 
-static func for_id(_ruleset_id: String) -> WeaponRuleset:
-	# 目前只有一套规则，未知 id 与经典等价；新规则集以后在这里按 id 分派。
-	return WeaponRuleset.new()
+static func for_id(ruleset_id: String) -> WeaponRuleset:
+	var ruleset := WeaponRuleset.new()
+	ruleset.projectile_collision = ruleset_id == COLLISION_LAB_ID
+	return ruleset
 
 static func with_unlocked(types: Array) -> WeaponRuleset:
 	# 普通弹不可关闭：它是所有分配结果的兜底，也是实验对照组。

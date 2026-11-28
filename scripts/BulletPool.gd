@@ -2,6 +2,9 @@ extends Node2D
 class_name BulletPool
 
 var match_random: MatchRandom
+var collision_resolver: BulletCollisionResolver
+var _collision_step: Array = []
+var _collision_survivors: Array = []
 
 var inactive_bullets: Array = []
 var active_bullets: Array = []
@@ -42,6 +45,28 @@ const PRIORITY: Dictionary = {
 	"fps_low": 5,
 }
 const ACTIVE_SPAWN_ORDER_COMPACT_CURSOR_THRESHOLD: int = 256
+
+func _ready() -> void:
+	set_physics_process(false)
+
+func enable_projectile_collision(cell_size: float) -> void:
+	collision_resolver = BulletCollisionResolver.new(cell_size)
+	set_physics_process(true)
+
+func _physics_process(_delta: float) -> void:
+	if collision_resolver == null or active_bullets.is_empty():
+		return
+	# Snapshot before advancing: the pool swaps entries when a bullet expires.
+	_collision_step.assign(active_bullets)
+	_collision_survivors.clear()
+	for bullet in _collision_step:
+		if is_instance_valid(bullet) and bullet.is_active and bullet.advance_tick():
+			_collision_survivors.append(bullet)
+	if _collision_survivors.size() > 1:
+		collision_resolver.resolve(_collision_survivors, self)
+	for bullet in _collision_survivors:
+		if bullet.is_active:
+			bullet.resolve_tick()
 
 func _process(delta: float) -> void:
 	visual_pressure_update_timer -= delta
@@ -381,6 +406,7 @@ func _obtain_bullet_with_visual_profile():
 	bullet.simple_draw = bool(visual_profile.get("simple_draw", false))
 	bullet.reduce_visual_effects = bool(visual_profile.get("reduce_visual_effects", false))
 	bullet.trail_max_points = int(visual_profile.get("trail_points", GameConfig.get_normal_trail_points()))
+	bullet.controlled_by_pool = collision_resolver != null
 	return bullet
 
 func _finalize_spawned_bullet(bullet):

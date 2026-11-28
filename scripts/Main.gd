@@ -161,6 +161,7 @@ var construction_lab_enabled: bool = false
 var facility_lab_enabled: bool = false
 var fortress_lab_enabled: bool = false
 var breach_lab_enabled: bool = false
+var collision_lab_enabled: bool = false
 var _construction_faction: int = -1
 var _construction_preview: ConstructionPreview
 var _construction_touch_cell := Vector2i(-1, -1)
@@ -244,6 +245,7 @@ func _ready() -> void:
 		add_child(dev_speed)
 		dev_speed.setup(self)
 		dev_speed.clock.step_completed.connect(_flush_battle_view)
+	collision_lab_enabled = dev_speed != null and args.has("--collision-lab")
 	breach_lab_enabled = OS.is_debug_build() and args.has("--breach-lab")
 	fortress_lab_enabled = breach_lab_enabled or (OS.is_debug_build() and args.has("--fortress-lab"))
 	facility_lab_enabled = fortress_lab_enabled or (OS.is_debug_build() and args.has("--facility-lab"))
@@ -263,7 +265,14 @@ func _ready() -> void:
 	if not _is_lab_session():
 		_load_menu_preferences()
 	_create_background()
-	if reserve_lab_enabled:
+	if collision_lab_enabled:
+		_prepare_lab_match()
+		_start_game(selected_grid_size, true, false)
+		if args.has("--collision-fixture"):
+			_launch_collision_duel()
+		else:
+			_show_center_banner("炮弹互撞实验", "敌对炮弹相遇时同时抵消", Color(0.74, 0.92, 0.22), true)
+	elif reserve_lab_enabled:
 		_start_reserve_lab_match()
 	elif additive_lab_enabled:
 		_prepare_lab_match()
@@ -300,12 +309,22 @@ func _reserve_lab_requested() -> bool:
 	return ReserveLab.is_requested(OS.is_debug_build(), OS.get_cmdline_user_args())
 
 func _is_lab_session() -> bool:
-	return reserve_lab_enabled or additive_lab_enabled or construction_lab_enabled
+	return collision_lab_enabled or reserve_lab_enabled or additive_lab_enabled or construction_lab_enabled
 
 func _prepare_lab_match() -> void:
 	if match_seed < 0:
 		match_seed = 7341
 	selected_palette_name = "经典"
+
+func _launch_collision_duel() -> void:
+	var field: Battlefield = runtime.battlefield
+	var center := field.grid_size * field.cell_size * 0.5
+	for lane in range(8):
+		var y := center - (lane + 0.5) * field.cell_size
+		var blue_start := field.to_global(Vector2(center - 78.0, y))
+		var red_start := field.to_global(Vector2(center + 78.0, y))
+		runtime.bullet_pool.spawn_bullet(GameConfig.Faction.BLUE, blue_start, Vector2.RIGHT, field)
+		runtime.bullet_pool.spawn_bullet(GameConfig.Faction.RED, red_start, Vector2.LEFT, field)
 
 func _launch_facility_demo_shot() -> void:
 	var neutral: Turret = runtime.turret_roster.next_live_turret(Turret.NEUTRAL_FACTION)
@@ -510,6 +529,9 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	var match_config := MatchConfig.capture_current(grid_size, match_seed)
 	if fortress_lab_enabled and construction_enabled:
 		match_config.map_id = MatchConfig.BREACH_FORTRESS_ID if breach_lab_enabled else MatchConfig.CENTRAL_FORTRESS_ID
+	if collision_lab_enabled and match_config.map_id == MatchConfig.CLASSIC_MAP_ID:
+		match_config.weapon_ruleset_id = WeaponRuleset.COLLISION_LAB_ID
+		match_config.sanitize()
 	match_config.reserve_economy_enabled = reserve_economy_enabled
 	match_config.reserve_price_preset = reserve_price_preset
 	match_config.additive_gate_bonus = maxi(0, additive_gate_bonus)
@@ -559,6 +581,8 @@ func _create_battlefield(grid_size: int) -> void:
 	runtime.bullet_pool = scene_nodes.get("bullet_container", null)
 	if is_instance_valid(runtime.bullet_pool):
 		runtime.bullet_pool.match_random = runtime.match_random
+		if runtime.match_config.weapon_ruleset.projectile_collision:
+			runtime.bullet_pool.enable_projectile_collision(runtime.battlefield.cell_size)
 	if runtime.match_config.map_id in [MatchConfig.CENTRAL_FORTRESS_ID, MatchConfig.BREACH_FORTRESS_ID]:
 		runtime.battlefield.configure_fortress(runtime.match_config.map_id == MatchConfig.BREACH_FORTRESS_ID)
 	chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
@@ -1309,6 +1333,8 @@ func _process_pending_bullet_restore() -> void:
 			runtime.bullet_pool.add_child(bullet)
 
 func _save_game_progress() -> Dictionary:
+	if collision_lab_enabled:
+		return {"ok": false, "error_message": "互撞实验未写入普通存档。"}
 	if runtime.construction != null:
 		return {"ok": false, "error_message": "建设实验未写入普通存档。"}
 	if runtime.match_config != null and runtime.match_config.additive_gate_bonus > 0:
