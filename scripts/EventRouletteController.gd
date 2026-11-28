@@ -92,6 +92,7 @@ var event_label_update_timer: float = 0.0
 var event_label_dirty: bool = true
 
 var _pending_payload: Dictionary = {}
+var _presentation_time_left: float = 0.0
 
 func setup(new_main_ref, new_battlefield, new_chambers: Dictionary, new_turrets: Dictionary, new_event_label, new_view_ref) -> void:
 	main_ref = new_main_ref
@@ -102,10 +103,6 @@ func setup(new_main_ref, new_battlefield, new_chambers: Dictionary, new_turrets:
 	view_ref = new_view_ref
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 
-	if view_ref != null and is_instance_valid(view_ref):
-		var finished_callable: Callable = Callable(self, "_on_view_presentation_finished")
-		if not view_ref.presentation_finished.is_connected(finished_callable):
-			view_ref.presentation_finished.connect(finished_callable)
 
 	reset_for_new_game()
 
@@ -126,7 +123,8 @@ func reset_for_new_game() -> void:
 	})
 	_force_event_label_refresh()
 
-func _process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
+	var delta: float = MatchClock.STEP_SECONDS
 	if not event_roulette_enabled:
 		_update_event_label_if_dirty()
 		return
@@ -134,6 +132,11 @@ func _process(delta: float) -> void:
 		_update_event_label_if_dirty()
 		return
 	if is_presenting_event:
+		_presentation_time_left -= delta
+		if _presentation_time_left <= 0.0:
+			var payload: Dictionary = _pending_payload.duplicate()
+			_apply_resolved_event(payload)
+			_finish_event_round(payload)
 		_update_event_label_if_dirty()
 		return
 
@@ -197,11 +200,9 @@ func _start_event_round() -> void:
 	_force_event_label_refresh()
 	event_round_started.emit(resolved)
 
+	_presentation_time_left = EventRouletteView.duration_for_effect_count(resolved["effect_sequence"].size())
 	if view_ref != null and is_instance_valid(view_ref):
 		view_ref.play_event(resolved)
-	else:
-		_apply_resolved_event(resolved)
-		_finish_event_round(resolved)
 
 func _resolve_event_result() -> Dictionary:
 	var effect_sequence: Array = []
@@ -552,12 +553,6 @@ func _build_last_event_status_text() -> String:
 			return "%s触发 %s" % [faction_name, effect_text]
 		_:
 			return "%s获得 %s" % [faction_name, effect_text]
-
-func _on_view_presentation_finished(_payload_from_view: Dictionary) -> void:
-	if _pending_payload.is_empty():
-		return
-	_apply_resolved_event(_pending_payload)
-	_finish_event_round(_pending_payload)
 
 func get_event_log_text(max_entries: int = 8) -> String:
 	if not event_log_visible:
