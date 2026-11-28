@@ -218,6 +218,8 @@ func _sync_runtime_context(grid_size: int) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	var rotation_raw: String = OS.get_environment("BALLWAR_SPAWN_ROTATION").strip_edges()
+	GameConfig.set_spawn_rotation(int(rotation_raw) if rotation_raw.is_valid_int() else 0)
 	if match_seed >= 0:
 		seed(match_seed)
 	else:
@@ -417,6 +419,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	_apply_board_transform()
 
 	_create_battlefield(grid_size)
+	_apply_match_experiment_profiles()
 	_create_turrets()
 	_create_control_chambers()
 	_refresh_chassis()
@@ -593,7 +596,7 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 	if runtime.turrets.has(faction_id):
 		# 火力 → 弹种分配。P0 只解锁普通弹，分配总发数等于火力值，和旧行为一致；
 		# P2 起弹种真正进入弹幕时，只需改这里的发射方式，不动分配与配置。
-		var volley: Dictionary = _build_volley(int(bullet_count))
+		var volley: Dictionary = _build_volley(faction_id, int(bullet_count))
 		var shot_count: int = WeaponRuleset.total_shots(volley)
 		if shot_count <= 0:
 			chamber.set_locked(false)
@@ -601,12 +604,44 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 			return
 		chamber.start_locked(shot_count)
 		_refresh_add_ball_button(faction_id)
-		runtime.turrets[faction_id].fire_burst(shot_count)
+		runtime.turrets[faction_id].fire_volley(volley)
 
-func _build_volley(fire: int) -> Dictionary:
-	if runtime.match_config != null and runtime.match_config.has_method("allocate_volley"):
-		return runtime.match_config.allocate_volley(fire)
+func _build_volley(faction_id: int, fire: int) -> Dictionary:
+	var config = runtime.match_config
+	var chamber = runtime.chambers.get(faction_id, null)
+	if config != null and chamber != null and chamber.fire_ledger != null:
+		var shares: Dictionary = config.volley_shares()
+		var ledger = chamber.fire_ledger
+		if shares.is_empty() and ledger.remaining_units() == 0 and ledger.pending_units() == 0:
+			# 经典模式：完全不触碰记账账户（连 produced/consumed 都不记）。
+			return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
+		# 跨 burst 累计：不足一发的特殊火力留在账上，不返还普通弹。
+		return ledger.allocate(fire, shares, config.weapon_ruleset)
 	return {WeaponRuleset.BulletType.STANDARD: maxi(0, fire)}
+
+func _apply_match_experiment_profiles() -> void:
+	if runtime.bullet_pool == null or not is_instance_valid(runtime.bullet_pool):
+		return
+	if runtime.match_config == null:
+		return
+	if runtime.bullet_pool.has_method("set_experiment_profiles"):
+		runtime.bullet_pool.set_experiment_profiles(
+			int(runtime.match_config.piercing_captures),
+			int(runtime.match_config.explosion_radius)
+		)
+
+func _apply_saved_weapon_config(data: Dictionary) -> void:
+	if runtime.match_config == null:
+		return
+	var weapon = data.get("weapon_config", null)
+	if not (weapon is Dictionary):
+		return
+	runtime.match_config.piercing_captures = int(weapon.get("pierce", runtime.match_config.piercing_captures))
+	runtime.match_config.piercing_mix_percent = int(weapon.get("mix_pierce", runtime.match_config.piercing_mix_percent))
+	runtime.match_config.explosion_radius = int(weapon.get("blast", runtime.match_config.explosion_radius))
+	runtime.match_config.explosion_mix_percent = int(weapon.get("mix_blast", runtime.match_config.explosion_mix_percent))
+	runtime.match_config.sanitize()
+	_apply_match_experiment_profiles()
 
 func _on_turret_burst_progress(faction_id, remaining) -> void:
 	if runtime.chambers.has(faction_id):
@@ -929,7 +964,8 @@ func _save_game_progress() -> Dictionary:
 		runtime.event_controller,
 		game_elapsed_time,
 		is_game_over,
-		_hud_ref("winner_label")
+		_hud_ref("winner_label"),
+		runtime.match_config
 	)
 	if not bool(result.get("ok", false)):
 		pending_menu_status_message = str(result.get("error_message", "保存失败"))
@@ -1027,6 +1063,7 @@ func _apply_continue_start_plan(execution_plan: Dictionary, restore_plan: Restor
 	var execution_banner: Dictionary = execution_plan.get("banner", {})
 	SaveFlowController.apply_continue_start_plan(execution_plan, self)
 	_start_game(int(execution_start_values.get("grid_size", 40)), true, false)
+	_apply_saved_weapon_config(execution_plan.get("data", {}))
 	game_elapsed_time = float(execution_start_values.get("game_elapsed_time", 0.0))
 	_sync_chamber_game_elapsed_time()
 	_apply_saved_state(restore_plan)

@@ -55,9 +55,11 @@ static func create_turrets(owner, game_layer: Node, battlefield, bullet_containe
             GameConfig.Faction.YELLOW: origin + Vector2(size - margin, size - margin),
         }
 
-    for faction_id in positions.keys():
+    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+        var slot: int = GameConfig.spawn_slot(faction_id)
+        var turret_position: Vector2 = positions.get(slot, positions.get(faction_id, Vector2.ZERO))
         var turret = Turret.new()
-        turret.setup(faction_id, positions[faction_id], battlefield, bullet_container)
+        turret.setup(faction_id, turret_position, battlefield, bullet_container)
         turret.name = "Turret_%s" % GameConfig.faction_name(faction_id)
         turret.destroyed.connect(Callable(owner, "_on_turret_destroyed"))
         turret.burst_lock_changed.connect(Callable(owner, "_on_turret_burst_lock_changed"))
@@ -119,10 +121,15 @@ static func create_control_chambers(owner, game_layer: Node, battlefield, turret
             GameConfig.Faction.YELLOW: Vector2(right_x, bottom_y),
         }
 
-    for faction_id in chamber_positions.keys():
+    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+        var slot: int = GameConfig.spawn_slot(faction_id)
+        var chamber_position: Vector2 = chamber_positions.get(slot, chamber_positions.get(faction_id, Vector2.ZERO))
         var chamber = ControlChamber.new()
-        chamber.setup(faction_id, chamber_positions[faction_id])
+        chamber.setup(faction_id, chamber_position)
         chamber.set_linked_turret(turrets.get(faction_id, null))
+        var linked_turret = turrets.get(faction_id, null)
+        if linked_turret != null and linked_turret.has_method("set_fire_ledger"):
+            linked_turret.set_fire_ledger(chamber.fire_ledger)
         chamber.scale = Vector2.ONE * chamber_scale
         chamber.name = "Chamber_%s" % GameConfig.faction_name(faction_id)
         chamber.release_requested.connect(Callable(owner, "_on_chamber_release_requested"))
