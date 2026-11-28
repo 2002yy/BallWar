@@ -52,7 +52,7 @@ func goal_reached() -> bool:
 		Goal.NEXT_EVENT:
 			return _finished_events >= _target_event
 		Goal.LOW_HEALTH, Goal.FIRST_DESTROY:
-			for turret in runtime.turrets.values():
+			for turret in _main._turret_targets().values():
 				if not is_instance_valid(turret):
 					continue
 				if _goal == Goal.FIRST_DESTROY and turret.is_destroyed:
@@ -63,7 +63,7 @@ func goal_reached() -> bool:
 		Goal.TERRITORY:
 			var field = runtime.battlefield
 			if is_instance_valid(field) and field.grid_size > 0:
-				var total: int = field.grid_size * field.grid_size
+				var total: int = field.claimable_cell_count()
 				for faction in field.owner_counts:
 					if (_faction == -1 or _faction == int(faction)) and 100.0 * field.owner_counts[faction] / total >= _threshold:
 						return true
@@ -89,7 +89,7 @@ func construct(action: Action, faction: int, amount: int) -> String:
 			if added > 0:
 				return "加入 %d 个控制球" % added
 		Action.FIRE_BURST:
-			if not is_instance_valid(turret) or not is_instance_valid(chamber) or turret.is_destroyed or turret.burst_remaining > 0:
+			if not is_instance_valid(turret) or not is_instance_valid(chamber) or turret.is_destroyed or chamber.is_locked:
 				return ""
 			var count: int = clampi(amount, 1, GameConfig.get_max_pending_count())
 			_main._on_chamber_release_requested(faction, count, chamber)
@@ -126,7 +126,7 @@ func _spawn_dense_bullets(faction: int, count: int) -> bool:
 	var owned_cells: Array[Vector2] = []
 	for x in range(field.grid_size):
 		for y in range(field.grid_size):
-			if field.owners[x][y] == faction:
+			if field.owners[x][y] == faction and (field.fortress == null or not field.fortress.wall_cells.has(Vector2i(x, y))):
 				owned_cells.append(Vector2(x, y))
 	if owned_cells.is_empty():
 		return false
@@ -136,5 +136,5 @@ func _spawn_dense_bullets(faction: int, count: int) -> bool:
 		var cell: Vector2 = owned_cells[i % owned_cells.size()]
 		var offset := Vector2(0.3 + (i % 11) / 25.0, 0.3 + (i % 13) / 30.0)
 		var direction := Vector2.RIGHT.rotated(TAU * ((i * 137) % 360) / 360.0)
-		pool.spawn_bullet(faction, field.to_global((cell + offset) * field.cell_size), direction, field, _main.runtime.turrets)
+		pool.spawn_bullet(faction, field.to_global((cell + offset) * field.cell_size), direction, field, _main._turret_targets())
 	return true

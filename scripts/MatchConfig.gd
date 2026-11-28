@@ -6,7 +6,8 @@ class_name MatchConfig
 # 后续地图/弹种接入时，新字段只在这里扩展，不再散落到 GameConfig 静态变量。
 
 const CLASSIC_MAP_ID: String = "classic_plains"
-const KNOWN_MAP_IDS: Array[String] = [CLASSIC_MAP_ID]
+const CENTRAL_FORTRESS_ID: String = "central_fortress"
+const KNOWN_MAP_IDS: Array[String] = [CLASSIC_MAP_ID, CENTRAL_FORTRESS_ID]
 
 var map_id: String = CLASSIC_MAP_ID
 var weapon_ruleset_id: String = WeaponRuleset.CLASSIC_ID
@@ -15,6 +16,10 @@ var grid_size: int = GameConfig.GRID_SIZE
 var mode_name: String = GameConfig.GAME_MODE_BASIC
 var quality_name: String = GameConfig.QUALITY_MEDIUM
 var seed_value: int = -1
+var reserve_economy_enabled: bool = false
+var additive_gate_bonus: int = 0
+var construction_enabled: bool = false
+var reserve_price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD
 
 func _init() -> void:
 	weapon_ruleset = WeaponRuleset.for_id(weapon_ruleset_id)

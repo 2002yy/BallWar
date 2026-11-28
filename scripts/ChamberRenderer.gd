@@ -82,6 +82,11 @@ static func draw(canvas_item: CanvasItem, snapshot: Dictionary) -> void:
 	var gate_font = ThemeDB.fallback_font
 	_draw_gate_text(canvas_item, gate_font, left_rect, left_gate_text, left_gate_font_size, gate_outline_size)
 	_draw_gate_text(canvas_item, gate_font, right_rect, right_gate_text, right_gate_font_size, gate_outline_size)
+	var reserve_rect: Rect2 = snapshot.get("reserve_rect", Rect2())
+	if reserve_rect.has_area():
+		canvas_item.draw_rect(reserve_rect, Color(0.26, 0.83, 0.74), true)
+		canvas_item.draw_rect(reserve_rect, Color(0.0, 0.0, 0.0, 0.55), false, 1.2)
+		_draw_gate_text(canvas_item, gate_font, reserve_rect, snapshot.get("resource_gate_label", "储"), right_gate_font_size, gate_outline_size)
 
 	if jammed:
 		for i in range(8):

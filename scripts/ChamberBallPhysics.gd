@@ -4,6 +4,7 @@ class_name ChamberBallPhysics
 const GATE_RESULT_NONE: String = "none"
 const GATE_RESULT_LEFT: String = "left"
 const GATE_RESULT_RIGHT: String = "right"
+const GATE_RESULT_RESERVE: String = "reserve"
 const GATE_RESULT_JAMMED_FLOOR: String = "jammed_floor"
 
 static func step_ball(ball, delta: float, physics_input: Dictionary, stuck_state: Dictionary, stay_time: float, random_source: RandomNumberGenerator = null) -> Dictionary:
@@ -14,6 +15,7 @@ static func step_ball(ball, delta: float, physics_input: Dictionary, stuck_state
 	var peg_collision_radii: Array = physics_input.get("peg_collision_radii", [])
 	var gravity: float = float(physics_input.get("gravity", 0.0))
 	var gate_x: float = float(physics_input.get("gate_x", chamber_size.x * 0.5))
+	var reserve_gate_x: float = float(physics_input.get("reserve_gate_x", -1.0))
 	var jammed: bool = bool(physics_input.get("jammed", false))
 	var gate_divider_width: float = float(physics_input.get("gate_divider_width", 0.0))
 	var gate_height: float = float(physics_input.get("gate_height", 0.0))
@@ -52,6 +54,14 @@ static func step_ball(ball, delta: float, physics_input: Dictionary, stuck_state
 	next_position = divider_collision["position"]
 	next_velocity = divider_collision["velocity"]
 
+	if reserve_gate_x >= 0.0 and not jammed:
+		divider_collision = _handle_gate_divider_collision(
+			next_position, next_velocity, ball.radius, chamber_size,
+			reserve_gate_x, gate_divider_width, gate_height, gate_divider_rise
+		)
+		next_position = divider_collision["position"]
+		next_velocity = divider_collision["velocity"]
+
 	clamped = _clamp_ball_to_walls(next_position, next_velocity, ball.radius, chamber_size)
 	next_position = clamped["position"]
 	next_velocity = clamped["velocity"]
@@ -72,6 +82,8 @@ static func step_ball(ball, delta: float, physics_input: Dictionary, stuck_state
 			gate_result = GATE_RESULT_JAMMED_FLOOR
 		elif next_position.x < gate_x:
 			gate_result = GATE_RESULT_LEFT
+		elif reserve_gate_x >= 0.0 and next_position.x >= reserve_gate_x:
+			gate_result = GATE_RESULT_RESERVE
 		else:
 			gate_result = GATE_RESULT_RIGHT
 
