@@ -157,11 +157,12 @@ func restore_from_state(state: Dictionary) -> void:
 
 	sweep_phase = float(state.get("turret_sweep_phase", sweep_phase))
 	rotation = float(state.get("turret_rotation", rotation))
-	burst_origin_angle = rotation
+	burst_origin_angle = float(state.get("turret_burst_origin_angle", rotation))
 	burst_remaining = clampi(int(state.get("turret_burst_remaining", 0)), 0, GameConfig.get_max_pending_count())
 	burst_total = clampi(int(state.get("turret_burst_total", burst_remaining)), burst_remaining, GameConfig.get_max_pending_count())
 	burst_index = clampi(int(state.get("turret_burst_index", 0)), 0, GameConfig.get_max_pending_count())
-	burst_timer = clampf(float(state.get("turret_burst_timer", 0.0)), 0.0, 1.0)
+	# 负值表示本 tick 已到发射点，是正常追赶状态，不能夹成 0。
+	burst_timer = clampf(float(state.get("turret_burst_timer", 0.0)), -1.0, 1.0)
 	burst_progress_emit_timer = 0.0
 	burst_last_reported_remaining = burst_remaining
 

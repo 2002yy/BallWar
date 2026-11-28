@@ -59,6 +59,8 @@ var _first_event_apply_tick: int = -1
 var _last_event_effect: String = ""
 
 var _end_reason: String = "unknown"
+var _save_resume_at: float = 0.0
+var _resumed: bool = false
 
 
 # Counts how many times each clock actually runs, and the real delta sums.
@@ -98,6 +100,7 @@ func _run() -> void:
 		printerr("[Probe] BALLWAR_AUDIO must be on|off|none, got '%s'." % _audio_arm)
 		quit(2)
 		return
+	_save_resume_at = _env_float("BALLWAR_SAVE_RESUME_AT", 0.0)
 	_ticks_per_second = MatchClock.TICKS_PER_SECOND
 
 	if not IsolatedUserProfile.is_fresh("BALLWAR_PROBE_TOKEN", ".ballwar-probe"):
@@ -255,9 +258,18 @@ func _write_audio_report() -> void:
 
 
 func _capture_loop(max_ticks: int) -> void:
+	var resume_tick: int = int(round(_save_resume_at * float(_ticks_per_second)))
 	while _tick < max_ticks:
 		await physics_frame
 		_tick += 1
+		if not _resumed and _save_resume_at > 0.0 and _tick >= resume_tick:
+			var saved: Dictionary = _main._save_game_progress()
+			if not bool(saved.get("ok", false)):
+				_end_reason = "resume_save_failed"
+				break
+			_main._save_and_exit_to_menu()
+			_main._continue_saved_game()
+			_resumed = true
 		_record_tick()
 		if _main.is_game_over:
 			_end_reason = "game_over"

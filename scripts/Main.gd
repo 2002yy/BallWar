@@ -155,6 +155,8 @@ var is_game_over: bool = false
 # Negative keeps the historical behavior (time-based randomization).
 # A non-negative value starts each new match with the same random streams.
 var match_seed: int = -1
+var _continue_match_seed: int = -1
+var _continue_random_states: Array = []
 
 var menu_title_label
 var menu_start_button
@@ -401,9 +403,12 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	GameConfig.set_game_mode_by_name(selected_game_mode_name)
 	GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
 
+	var effective_seed: int = match_seed
+	if _continue_match_seed >= 0:
+		effective_seed = _continue_match_seed
 	var stream_map: Array = MatchRandom.parse_faction_stream_map(
 		OS.get_environment("BALLWAR_RNG_STREAM_MAP"))
-	var match_random := MatchRandom.new(match_seed, stream_map)
+	var match_random := MatchRandom.new(effective_seed, stream_map)
 	if selected_palette_name == "默认随机":
 		GameConfig.set_random_palette(match_random.get_stream(MatchRandom.Stream.PALETTE))
 	else:
@@ -415,7 +420,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	get_tree().paused = false
 	_sync_runtime_context(grid_size)
 	# 对局配置只在开局时快照一次：窗口缩放、UI 重建都不应该重新解释地图与武器规则。
-	runtime.set_match_config(MatchConfig.capture_current(grid_size, match_seed))
+	runtime.set_match_config(MatchConfig.capture_current(grid_size, effective_seed))
 
 	game_layer = Node2D.new()
 	game_layer.name = "GameLayer"
@@ -974,7 +979,9 @@ func _save_game_progress() -> Dictionary:
 		runtime.event_controller,
 		game_elapsed_time,
 		is_game_over,
-		_hud_ref("winner_label")
+		_hud_ref("winner_label"),
+		runtime.match_random,
+		win_check_timer
 	)
 	if not bool(result.get("ok", false)):
 		pending_menu_status_message = str(result.get("error_message", "保存失败"))
@@ -1037,6 +1044,11 @@ func _apply_saved_state(restore_input) -> void:
 	var restore_plan: RestorePlan = restore_input if restore_input is RestorePlan else RestorePlan.build_from_clean_data(restore_input if restore_input is Dictionary else {})
 	var restore_data: Dictionary = restore_plan.to_restore_dictionary()
 
+	var win_timer_text: String = str(restore_data.get("win_check_timer_text", ""))
+	if win_timer_text.is_valid_float():
+		win_check_timer = win_timer_text.to_float()
+	else:
+		win_check_timer = float(restore_data.get("win_check_timer", win_check_timer))
 	SaveStateApplier.apply_owners(runtime.battlefield, restore_data, Callable(self, "_on_scores_changed"))
 	SaveStateApplier.apply_factions(
 		runtime.chambers,
@@ -1070,11 +1082,20 @@ func _continue_from_prepared_payload(prepared: Dictionary) -> void:
 func _apply_continue_start_plan(execution_plan: Dictionary, restore_plan: RestorePlan) -> void:
 	var execution_start_values: Dictionary = execution_plan.get("start_values", {})
 	var execution_banner: Dictionary = execution_plan.get("banner", {})
+	var execution_data: Dictionary = execution_plan.get("data", {})
 	SaveFlowController.apply_continue_start_plan(execution_plan, self)
+	_continue_match_seed = int(execution_data.get("match_seed", -1))
+	var saved_states = execution_data.get("match_random_states", [])
+	_continue_random_states = saved_states if saved_states is Array else []
 	_start_game(int(execution_start_values.get("grid_size", 40)), true, false)
 	game_elapsed_time = float(execution_start_values.get("game_elapsed_time", 0.0))
 	_sync_chamber_game_elapsed_time()
 	_apply_saved_state(restore_plan)
+	if runtime.match_random != null and not _continue_random_states.is_empty():
+		if not runtime.match_random.restore_states(_continue_random_states):
+			push_warning("存档中的随机数状态无效，已按当前种子继续")
+	_continue_match_seed = -1
+	_continue_random_states = []
 	_show_center_banner(
 		str(execution_banner.get("title", "领土战争")),
 		str(execution_banner.get("subtitle", "继续作战")),

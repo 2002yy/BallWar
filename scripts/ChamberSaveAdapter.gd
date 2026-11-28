@@ -83,5 +83,9 @@ static func _sanitize_control_ball_state(ball_state: Dictionary, chamber_size: V
 		"radius": radius,
 		"position": pos,
 		"velocity": vel,
-		"stay_time": clampf(float(ball_state.get("stay_time", 0.0)), 0.0, ControlChamber.CONTROL_BALL_MAX_STAY_TIME),
+		"stay_time": clampf(_float_text(ball_state, "stay_time", 0.0), 0.0, ControlChamber.CONTROL_BALL_MAX_STAY_TIME),
 	}
+
+
+static func _float_text(state: Dictionary, key: String, fallback: float) -> float:
+	return SaveGameCodec.text_to_float(str(state.get(key + "_text", "")), float(state.get(key, fallback)))

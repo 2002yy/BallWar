@@ -371,6 +371,7 @@ func get_ball_stay_time(ball) -> float:
 	return float(ball_stay_times.get(ball.get_instance_id(), 0.0))
 
 func set_ball_stay_time(ball, value: float) -> void:
+	value = snappedf(value, 0.000001)
 	if ball == null:
 		return
 	ball_stay_times[ball.get_instance_id()] = clampf(value, 0.0, CONTROL_BALL_MAX_STAY_TIME)
@@ -493,7 +494,7 @@ func _physics_process(_delta: float) -> void:
 		ball.position = ball_state_update.get("position", ball.position)
 		ball.velocity = ball_state_update.get("velocity", ball.velocity)
 		stuck_states[ball_id] = ball_state_update.get("stuck_state", stuck_states.get(ball_id, {}))
-		ball_stay_times[ball_id] = float(ball_state_update.get("stay_time", ball_stay_times.get(ball_id, 0.0)))
+		ball_stay_times[ball_id] = snappedf(float(ball_state_update.get("stay_time", ball_stay_times.get(ball_id, 0.0))), 0.000001)
 
 		if bool(step_result.get("relaunch_request", false)):
 			_relaunch_control_ball(ball)
