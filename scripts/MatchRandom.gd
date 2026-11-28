@@ -23,7 +23,11 @@ func set_faction_stream_map(values: Array) -> void:
 
 
 func get_stream(channel: Stream, faction: int = -1) -> RandomNumberGenerator:
-	var stream_faction: int = _stream_faction(channel, faction)
+	return get_stream_raw(channel, _stream_faction(channel, faction))
+
+
+func get_stream_raw(channel: int, stream_faction: int) -> RandomNumberGenerator:
+	# 存档里的阵营字段已经是“映射后的流身份”，恢复时必须绕过映射，避免二次映射。
 	var key := Vector2i(channel, stream_faction)
 	if not _streams.has(key):
 		# Fixed derivation keeps one stream independent of creation or draw order.
@@ -125,6 +129,6 @@ func restore_states(entries) -> bool:
 		fresh.seed = bytes.decode_s64(0)
 		_streams[key].state = fresh.state
 	for key in saved.keys():
-		var stream := get_stream(key.x, key.y)
+		var stream := get_stream_raw(key.x, key.y)
 		stream.state = saved[key]
 	return true
