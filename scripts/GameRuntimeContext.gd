@@ -2,6 +2,7 @@ extends RefCounted
 class_name GameRuntimeContext
 
 var battlefield = null
+var match_random: MatchRandom
 var bullet_pool = null
 var turrets: Dictionary = {}
 var chambers: Dictionary = {}
@@ -15,6 +16,7 @@ var match_config = null
 
 func reset() -> void:
     battlefield = null
+    match_random = null
     bullet_pool = null
     turrets.clear()
     chambers.clear()
