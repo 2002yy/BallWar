@@ -16,6 +16,7 @@ var mode_name: String = GameConfig.GAME_MODE_BASIC
 var quality_name: String = GameConfig.QUALITY_MEDIUM
 var seed_value: int = -1
 var reserve_economy_enabled: bool = false
+var reserve_price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD
 
 func _init() -> void:
 	weapon_ruleset = WeaponRuleset.for_id(weapon_ruleset_id)

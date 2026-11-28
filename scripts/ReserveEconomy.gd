@@ -1,6 +1,8 @@
 extends RefCounted
 class_name ReserveEconomy
 
+enum PricePreset { STANDARD, HALF_PRICE }
+
 const CAPACITY: int = 400
 const CONVERSION_DIVISOR: int = 4
 const ADD_BALL_COST: int = 100
@@ -10,8 +12,16 @@ const LUCKY_BLAST_SEED_SALT: int = 0x4c55434b59424c41
 
 var _balances: Dictionary = {}
 var _blast_random := RandomNumberGenerator.new()
+var price_preset: PricePreset
+var add_ball_cost: int:
+	get:
+		return 50 if price_preset == PricePreset.HALF_PRICE else ADD_BALL_COST
+var lucky_blast_cost: int:
+	get:
+		return 100 if price_preset == PricePreset.HALF_PRICE else LUCKY_BLAST_COST
 
-func _init(match_seed: int) -> void:
+func _init(match_seed: int, preset: PricePreset = PricePreset.STANDARD) -> void:
+	price_preset = preset
 	if match_seed < 0:
 		_blast_random.randomize()
 	else:
@@ -31,10 +41,10 @@ func convert_pending(firepower: int, faction_id: int) -> int:
 func try_buy_control_ball(chamber: ControlChamber) -> bool:
 	if chamber.is_jammed():
 		return false
-	return _try_purchase(chamber.faction_id, ADD_BALL_COST, chamber.add_control_ball) > 0
+	return _try_purchase(chamber.faction_id, add_ball_cost, chamber.add_control_ball) > 0
 
 func try_buy_lucky_blast(faction_id: int, battlefield: Battlefield) -> int:
-	return _try_purchase(faction_id, LUCKY_BLAST_COST, _apply_lucky_blast.bind(faction_id, battlefield))
+	return _try_purchase(faction_id, lucky_blast_cost, _apply_lucky_blast.bind(faction_id, battlefield))
 
 func _try_purchase(faction_id: int, cost: int, apply_effect: Callable) -> int:
 	var stored := balance(faction_id)
