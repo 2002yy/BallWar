@@ -13,4 +13,5 @@ Key entry points at `docs/` root: [`ARCHITECTURE.md`](../ARCHITECTURE.md), [`TES
 - `AI_HANDOFF_CURRENT.md` — fast handoff card for the next AI/Codex session / AI/Codex 快速接管卡
 - `README_ANDROID_EXPORT.md` — (superseded by `../ANDROID_EXPORT.md`) superseded / 已被 `../ANDROID_EXPORT.md` 替代
 - `PROJECT_PRINCIPLES.md` — short project-level maintenance rules / 项目级维护规则
+- `SAVE_DETERMINISM_T21.md` — 经典存档逐 tick 定位：负 burst_timer、origin angle、stay_time 浮点（T2.1）
 - `Godot素材导入与格式速查手册.docx` — Godot asset import reference / Godot 素材导入参考

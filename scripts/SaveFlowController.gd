@@ -399,7 +399,9 @@ static func write_game_progress_result(
 	event_roulette_controller,
 	game_elapsed_time: float,
 	is_game_over: bool,
-	winner_label
+	winner_label,
+	match_random = null,
+	win_check_timer: float = 0.0
 ) -> Dictionary:
 	if battlefield == null:
 		return {
@@ -417,7 +419,9 @@ static func write_game_progress_result(
 		game_elapsed_time,
 		is_game_over,
 		selected_save_slot,
-		winner_label
+		winner_label,
+		match_random,
+		win_check_timer
 	)
 	return _write_json_atomically(save_path, data)
 
@@ -462,7 +466,8 @@ static func _read_save_dictionary(path: String) -> Dictionary:
 	var json := JSON.new()
 	var parse_result: Error = json.parse(file.get_as_text())
 	if parse_result == OK and json.data is Dictionary:
-		var integrity_result: Dictionary = SaveGameCodec.inspect_payload_integrity(json.data)
+		var payload: Dictionary = SaveGameCodec.decode_floats(json.data)
+		var integrity_result: Dictionary = SaveGameCodec.inspect_payload_integrity(payload)
 		var integrity_status: String = str(integrity_result.get("integrity_status", SaveGameCodec.INTEGRITY_STATUS_MISSING))
 		return {
 			"ok": true,
@@ -508,7 +513,7 @@ static func _merge_message(base_message: String, extra_message: String) -> Strin
 static func _write_json_atomically(save_path: String, data: Dictionary) -> Dictionary:
 	var temp_path: String = get_temp_path(save_path)
 	var backup_path: String = get_backup_path(save_path)
-	var json_text: String = JSON.stringify(data)
+	var json_text: String = JSON.stringify(SaveGameCodec.encode_floats(data), "", true, true)
 	var had_existing: bool = FileAccess.file_exists(save_path)
 
 	_remove_if_exists(temp_path)

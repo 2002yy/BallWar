@@ -71,6 +71,7 @@ var peg_radius: float = PEG_RADIUS
 var random_source := RandomNumberGenerator.new()
 var stuck_states: Dictionary = {}
 var ball_stay_times: Dictionary = {}
+var _t21_trace_steps: int = 0
 var jammed_time_left: float = 0.0
 var queued_round_modifiers: Array = []
 
@@ -494,6 +495,16 @@ func _physics_process(_delta: float) -> void:
 		ball.velocity = ball_state_update.get("velocity", ball.velocity)
 		stuck_states[ball_id] = ball_state_update.get("stuck_state", stuck_states.get(ball_id, {}))
 		ball_stay_times[ball_id] = float(ball_state_update.get("stay_time", ball_stay_times.get(ball_id, 0.0)))
+		if OS.get_environment("BALLWAR_T21_TRACE") == "1" and _t21_trace_steps < 3:
+			print("[T21P4] faction=%d ball=%d step=%d bits=%s value=%s" % [
+				faction_id,
+				ball_id,
+				_t21_trace_steps,
+				SaveGameCodec.float_to_text(float(ball_stay_times[ball_id])),
+				String.num(float(ball_stay_times[ball_id]), 17),
+			])
+			if ball_id == balls[balls.size() - 1].get_instance_id():
+				_t21_trace_steps += 1
 
 		if bool(step_result.get("relaunch_request", false)):
 			_relaunch_control_ball(ball)
@@ -511,7 +522,8 @@ func _physics_process(_delta: float) -> void:
 
 func _on_left_gate(ball) -> void:
 	var gate_multiplier: int = GameConfig.get_gate_multiplier()
-	pending_count = clampi(pending_count * gate_multiplier, 1, GameConfig.get_max_pending_count())
+	chamber_state.apply_pending_multiplier(gate_multiplier, GameConfig.get_max_pending_count())
+	pending_count = chamber_state.pending_count
 	_update_label()
 	gate_multiplier_applied.emit(faction_id, gate_multiplier, pending_count)
 	_relaunch_control_ball(ball)

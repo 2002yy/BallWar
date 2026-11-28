@@ -27,10 +27,11 @@ static func build_faction_states(chambers: Dictionary, turrets: Dictionary) -> A
 		faction_state["turret_burst_index"] = turret.burst_index if turret != null else 0
 		faction_state["turret_burst_timer"] = turret.burst_timer if turret != null else 0.0
 		faction_state["turret_burst_locked"] = turret.burst_locked if turret != null else false
+		faction_state["turret_burst_origin_angle"] = turret.burst_origin_angle if turret != null else 0.0
 		factions.append(faction_state)
 	return factions
 
-static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battlefield, bullet_container, event_roulette_controller, game_elapsed_time: float, is_game_over: bool, selected_save_slot: int, winner_label) -> Dictionary:
+static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battlefield, bullet_container, event_roulette_controller, game_elapsed_time: float, is_game_over: bool, selected_save_slot: int, winner_label, match_random = null, win_check_timer: float = 0.0) -> Dictionary:
 	var core_payload: Dictionary = {
 		"save_version": SaveGameCodec.get_current_save_version(),
 		"save_slot": selected_save_slot,
@@ -41,6 +42,9 @@ static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battle
 		"time_limit_minutes": GameConfig.get_time_limit_minutes(),
 		"owners": battlefield.owners,
 		"game_elapsed_time": game_elapsed_time,
+		"game_elapsed_time_text": SaveGameCodec.float_to_text(game_elapsed_time),
+		"win_check_timer": float(win_check_timer),
+		"win_check_timer_text": SaveGameCodec.float_to_text(float(win_check_timer)),
 		"is_game_over": is_game_over,
 		"match_finished": is_game_over || winner_label != null and is_instance_valid(winner_label) and winner_label.text != "",
 		"factions": build_faction_states(chambers, turrets),
@@ -48,4 +52,7 @@ static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battle
 		"winner_text": winner_label.text if winner_label != null else "",
 		"event_state": event_roulette_controller.export_save_state() if event_roulette_controller != null else {},
 	}
+	if match_random != null:
+		core_payload["match_seed"] = int(match_random.root_seed)
+		core_payload["match_random_states"] = match_random.serialize_states()
 	return SaveGameCodec.attach_payload_hash(core_payload)

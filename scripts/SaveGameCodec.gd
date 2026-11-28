@@ -7,6 +7,7 @@ const BULLET_BATTLEFIELD_SPACE: String = "battlefield"
 const CURRENT_SAVE_VERSION: String = SAVE_SCHEMA_VERSION
 const MAX_RESTORE_CONTROL_BALLS: int = 8
 const PAYLOAD_HASH_KEY: String = "payload_hash"
+const FLOAT_MARKER_KEY: String = "__f64"
 const INTEGRITY_STATUS_MISSING: String = "missing"
 const INTEGRITY_STATUS_VALID: String = "valid"
 const INTEGRITY_STATUS_MISMATCH: String = "mismatch"
@@ -101,6 +102,64 @@ static func get_release_ball_index(chamber) -> int:
 			return i
 	return -1
 
+static func float_to_text(value: float) -> String:
+	# 逐位保存 float64：var_to_str + to_float 仍可能差 1 ULP。
+	return var_to_bytes(value).hex_encode()
+
+
+# Godot 的 JSON 写出/解析不能保证 float64 逐位往返：1/60 这类值会偏 1 ULP
+# （full_precision 也一样）。模拟状态必须逐位一致，所以 float 在文件边界
+# 通过 var_to_bytes() 的十六进制文本承载。
+static func encode_floats(value):
+	if value is float:
+		return {FLOAT_MARKER_KEY: var_to_bytes(value).hex_encode()}
+	if value is Dictionary:
+		var encoded: Dictionary = {}
+		for key in value.keys():
+			encoded[key] = encode_floats(value[key])
+		return encoded
+	if value is Array:
+		var encoded_array: Array = []
+		encoded_array.resize(value.size())
+		for i in range(value.size()):
+			encoded_array[i] = encode_floats(value[i])
+		return encoded_array
+	return value
+
+
+static func decode_floats(value):
+	if value is Dictionary:
+		if value.size() == 1 and value.has(FLOAT_MARKER_KEY):
+			return hex_to_float(str(value[FLOAT_MARKER_KEY]))
+		var decoded: Dictionary = {}
+		for key in value.keys():
+			decoded[key] = decode_floats(value[key])
+		return decoded
+	if value is Array:
+		var decoded_array: Array = []
+		decoded_array.resize(value.size())
+		for i in range(value.size()):
+			decoded_array[i] = decode_floats(value[i])
+		return decoded_array
+	return value
+
+
+static func hex_to_float(text: String, fallback: float = 0.0) -> float:
+	if text.is_empty():
+		return fallback
+	var bytes: PackedByteArray = text.hex_decode()
+	if bytes.is_empty():
+		return fallback
+	var value = bytes_to_var(bytes)
+	return float(value) if value is float else fallback
+
+
+static func text_to_float(text: String, fallback: float) -> float:
+	if text.is_empty():
+		return fallback
+	return hex_to_float(text, fallback)
+
+
 static func collect_control_ball_states(chamber) -> Array:
 	var result: Array = []
 	if chamber == null:
@@ -114,7 +173,14 @@ static func collect_control_ball_states(chamber) -> Array:
 			"velocity": vec2_to_arr(ball.velocity),
 			"radius": ball.radius,
 			"stay_time": chamber.get_ball_stay_time(ball),
+			"stay_time_text": float_to_text(float(chamber.get_ball_stay_time(ball))),
 		})
+		if OS.get_environment("BALLWAR_T21_TRACE") == "1":
+			print("[T21P1] ball=%d bits=%s value=%s" % [
+				result.size() - 1,
+				float_to_text(float(chamber.get_ball_stay_time(ball))),
+				String.num(float(chamber.get_ball_stay_time(ball)), 17),
+			])
 	return result
 
 static func collect_bullet_states(bullet_container) -> Array:
@@ -159,6 +225,12 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
 	if not (str(clean.get("game_mode_name", GameConfig.GAME_MODE_BASIC)) in GameConfig.get_game_mode_names()):
 		clean["game_mode_name"] = GameConfig.GAME_MODE_BASIC
 	clean["time_limit_minutes"] = clampi(int(clean.get("time_limit_minutes", GameConfig.DEFAULT_TIMED_MODE_MINUTES)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)
+	clean["match_seed"] = int(clean.get("match_seed", -1))
+	var random_states = clean.get("match_random_states", [])
+	if not (random_states is Array):
+		clean["match_random_states"] = []
+	elif random_states.size() > 32:
+		clean["match_random_states"] = random_states.slice(0, 32)
 
 	var owners = clean.get("owners", [])
 	var grid_size: int = int(clean["grid_size"])
@@ -239,6 +311,7 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
 							"velocity": ball.get("velocity", []),
 							"radius": maxf(0.0, float(ball.get("radius", 0.0))),
 							"stay_time": maxf(0.0, float(ball.get("stay_time", 0.0))),
+							"stay_time_text": str(ball.get("stay_time_text", "")),
 						})
 				fixed["control_balls"] = clean_balls.slice(0, mini(clean_balls.size(), MAX_RESTORE_CONTROL_BALLS))
 			else:

@@ -79,9 +79,24 @@ static func _sanitize_control_ball_state(ball_state: Dictionary, chamber_size: V
 	pos.x = clampf(pos.x, radius, chamber_size.x - radius)
 	pos.y = clampf(pos.y, radius, chamber_size.y - radius)
 	var vel: Vector2 = SaveGameCodec.arr_to_vec2(ball_state.get("velocity", [0, 0]), Vector2.ZERO).limit_length(520.0)
+	var stay_value: float = clampf(_float_text(ball_state, "stay_time", 0.0), 0.0, ControlChamber.CONTROL_BALL_MAX_STAY_TIME)
+	if OS.get_environment("BALLWAR_T21_TRACE") == "1":
+		print("[T21P3] text=%s json=%s out_bits=%s out=%s" % [
+			str(ball_state.get("stay_time_text", "")),
+			String.num(float(ball_state.get("stay_time", 0.0)), 17),
+			SaveGameCodec.float_to_text(stay_value),
+			String.num(stay_value, 17),
+		])
 	return {
 		"radius": radius,
 		"position": pos,
 		"velocity": vel,
-		"stay_time": clampf(float(ball_state.get("stay_time", 0.0)), 0.0, ControlChamber.CONTROL_BALL_MAX_STAY_TIME),
+		"stay_time": stay_value,
 	}
+
+
+static func _float_text(state: Dictionary, key: String, fallback: float) -> float:
+	if state.has(key):
+		# 新存档的数值字段逐位精确（见 SaveGameCodec.encode_floats）；文本仅作旧档回退。
+		return float(state.get(key, fallback))
+	return SaveGameCodec.text_to_float(str(state.get(key + "_text", "")), fallback)
