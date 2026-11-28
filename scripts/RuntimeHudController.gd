@@ -7,7 +7,7 @@ static func set_performance_visible(value: bool) -> void:
 	performance_visible = value
 
 static func format_time_text(seconds: float) -> String:
-	var total_seconds: int = maxi(0, int(floor(seconds)))
+	var total_seconds: int = maxi(0, floori(seconds + 0.000001))
 	var mm: int = floori(float(total_seconds) / 60.0)
 	var ss: int = total_seconds % 60
 	return "%02d:%02d" % [mm, ss]
