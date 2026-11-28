@@ -315,12 +315,15 @@ func _set_pointer_strength(pointer: ColorRect, active: bool) -> void:
 		return
 	pointer.color = Color(1.0, 0.84, 0.18, 1.0 if active else 0.58)
 
-func _total_duration() -> float:
+static func duration_for_effect_count(count: int) -> float:
 	var total: float = DROP_DURATION + COLOR_SPIN_DURATION + COLOR_CONFIRM_DURATION
-	for duration in _effect_round_durations:
-		total += float(duration) + EFFECT_CONFIRM_DURATION
-	total += RESULT_HOLD_DURATION + LIFT_DURATION
-	return total
+	if count > 0:
+		total += EFFECT_SPIN_DURATION + EFFECT_CONFIRM_DURATION
+		total += (count - 1) * (REROLL_SPIN_DURATION + EFFECT_CONFIRM_DURATION)
+	return total + RESULT_HOLD_DURATION + LIFT_DURATION
+
+func _total_duration() -> float:
+	return duration_for_effect_count(_effect_round_durations.size())
 
 func _ease_out_back(t: float) -> float:
 	var c1: float = 1.70158

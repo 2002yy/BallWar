@@ -15,6 +15,7 @@ extends SceneTree
 # 5 user data is not isolated.
 
 const MainScene = preload("res://scripts/Main.gd")
+const IsolatedUserProfile = preload("res://scripts/IsolatedUserProfile.gd")
 
 const GRID_SIZE: int = 40
 const TRACE_FLUSH_EVERY: int = 120
@@ -97,11 +98,9 @@ func _run() -> void:
 		printerr("[Probe] BALLWAR_AUDIO must be on|off|none, got '%s'." % _audio_arm)
 		quit(2)
 		return
-	_ticks_per_second = int(ProjectSettings.get_setting("physics/common/physics_ticks_per_second", 60))
-	if _ticks_per_second <= 0:
-		_ticks_per_second = 60
+	_ticks_per_second = MatchClock.TICKS_PER_SECOND
 
-	if not _is_isolated_user_data():
+	if not IsolatedUserProfile.is_fresh("BALLWAR_PROBE_TOKEN", ".ballwar-probe"):
 		printerr("[Probe] Refusing to run outside a fresh probe profile. Use determinism_probe.sh.")
 		quit(5)
 		return
@@ -138,8 +137,6 @@ func _run() -> void:
 		return
 
 	_main._start_game(GRID_SIZE, true, false)
-	await process_frame
-	await process_frame
 
 	if _main.runtime == null or _main.runtime.battlefield == null:
 		print("[Probe] ERROR: battlefield was not created")
@@ -163,9 +160,21 @@ func _run() -> void:
 	_initial_health_total = _health_total_now()
 	_write_trace_header()
 	_record_tick()
+	var speed: int = _env_int("BALLWAR_TEST_SPEED", 1)
+	if speed != 1:
+		if _main.dev_speed == null or speed not in MatchClock.SPEEDS:
+			printerr("[Probe] Test speed requires an isolated DEV-SPEED session and a supported rate.")
+			quit(2)
+			return
+		_main.dev_speed.clock.set_speed(speed)
 
 	var max_ticks: int = int(ceil(_max_seconds * float(_ticks_per_second)))
+	var started_usec: int = Time.get_ticks_usec()
 	await _capture_loop(max_ticks)
+	var wall_seconds: float = float(Time.get_ticks_usec() - started_usec) / 1000000.0
+	print("[Probe] speed_target=%dx wall=%.3fs effective=%.3fx" % [
+		speed, wall_seconds, (_tick * MatchClock.STEP_SECONDS) / maxf(wall_seconds, 0.000001)
+	])
 	_flush_trace()
 	var footer_written: bool = _trace_file.store_line("# end\t%s\t%d\t%d" % [_end_reason, _tick, max_ticks])
 	_trace_file.flush()
@@ -595,19 +604,6 @@ func _tick_text(tick: int) -> String:
 	if tick < 0:
 		return "none"
 	return "tick %d (%.2fs)" % [tick, float(tick) / float(_ticks_per_second)]
-
-
-func _is_isolated_user_data() -> bool:
-	if OS.get_name() != "Windows":
-		return false
-	var root: String = OS.get_environment("APPDATA").replace("\\", "/").simplify_path()
-	var token: String = OS.get_environment("BALLWAR_PROBE_TOKEN")
-	var marker: String = root.path_join(".ballwar-probe")
-	var user_dir: String = OS.get_user_data_dir().replace("\\", "/").simplify_path()
-	return (root.is_absolute_path() and not token.is_empty() and root.get_file() == token
-		and user_dir.get_base_dir().nocasecmp_to(root.path_join("Godot/app_userdata")) == 0
-		and FileAccess.file_exists(marker) and FileAccess.get_file_as_string(marker) == token
-		and DirAccess.get_files_at(user_dir).is_empty())
 
 
 func _env_string(key: String, fallback: String) -> String:

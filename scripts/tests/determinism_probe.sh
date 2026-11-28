@@ -31,6 +31,12 @@ TOKEN="${OUT##*/}"
 printf '%s' "$TOKEN" > "$OUT/.ballwar-probe" || exit 2
 
 EXTRA=()
+ARGS=()
+if [[ "${BALLWAR_TEST_SPEED:-1}" != "1" ]]; then
+  printf '%s' "$TOKEN" > "$OUT/.ballwar-dev-speed" || exit 2
+  EXTRA+=("BALLWAR_DEV_TOKEN=$TOKEN")
+  ARGS+=(-- --ballwar-dev-speed)
+fi
 if [[ -n "$DFROM" ]]; then
   EXTRA+=("BALLWAR_DETAIL_FROM=$DFROM" "BALLWAR_DETAIL_TO=${DTO:-$DFROM}")
 fi
@@ -43,7 +49,7 @@ env \
   BALLWAR_TRACE_LABEL="$LABEL" \
   "${EXTRA[@]}" \
   "$GODOT_BIN" --headless --fixed-fps 60 \
-    --path "$PROJ" --script res://scripts/tests/MatchBaselineRunner.gd \
+    --path "$PROJ" --script res://scripts/tests/MatchBaselineRunner.gd "${ARGS[@]}" \
     > "$OUT/probe.log" 2>&1
 
 rc=$?
