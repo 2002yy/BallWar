@@ -17,9 +17,13 @@ func _run() -> void:
 	var starting_hash := FileAccess.get_sha256(path) if FileAccess.file_exists(path) else ""
 	main._start_game(40, true, true, false, ReserveEconomy.PricePreset.STANDARD, 0, true)
 	var state: ConstructionState = main.runtime.construction
+	var roster: TurretRoster = main.runtime.turret_roster
 	var field: Battlefield = main.runtime.battlefield
 	var chamber: ControlChamber = main.runtime.chambers[BLUE]
 	var primary: Turret = main.runtime.turrets[BLUE]
+	t.neq(primary.turret_id, primary.faction_id, "tower identity is separate from faction")
+	t.eq(roster.by_id.size(), 4, "all main towers have unique identities")
+	t.eq(roster.by_id[primary.turret_id], primary, "tower is indexed by its own identity")
 	var build_button: EnergyButton = main._ui_runtime_ref("add_ball_buttons", {})[BLUE]
 	var site := Vector2i(9, 8)
 	t.eq(main.get_node("MainBackground").mouse_filter, Control.MOUSE_FILTER_IGNORE, "decorative background leaves the board pickable")
@@ -62,21 +66,23 @@ func _run() -> void:
 	click.button_index = MOUSE_BUTTON_LEFT
 	click.pressed = true
 	main._unhandled_input(click)
-	t.eq(state.live_turret(state.auxiliary_slot(BLUE)), null, "enemy-owned site rejects confirmation")
+	t.eq(state.auxiliary_id(BLUE), 0, "enemy-owned site rejects confirmation")
 	t.eq(state.balance(BLUE), 50, "failed placement does not debit materials")
 	field.claim_cell(site, BLUE)
 	var enemy := Bullet.new()
 	var ally := Bullet.new()
-	enemy.setup(RED, Vector2.ZERO, Vector2.RIGHT, field, state.targets)
-	ally.setup(BLUE, Vector2.ZERO, Vector2.RIGHT, field, state.targets)
+	enemy.setup(RED, Vector2.ZERO, Vector2.RIGHT, field, roster.by_id)
+	ally.setup(BLUE, Vector2.ZERO, Vector2.RIGHT, field, roster.by_id)
 	var tap := InputEventScreenTouch.new()
 	tap.position = motion.position
 	tap.pressed = true
 	main._unhandled_input(tap)
 	t.eq(state.balance(BLUE), 50, "first touch only selects the cell")
 	main._unhandled_input(tap)
-	var auxiliary: Turret = state.live_turret(state.auxiliary_slot(BLUE))
+	var auxiliary: Turret = roster.live_turret(state.auxiliary_id(BLUE))
 	t.that(auxiliary != null, "second touch confirms construction")
+	t.eq(auxiliary.faction_id, primary.faction_id, "both towers belong to the same faction")
+	t.gt(auxiliary.turret_id, primary.turret_id, "auxiliary receives a distinct tower identity")
 	t.eq(main._construction_preview, null, "successful build clears the preview")
 	t.eq(field.world_to_cell(auxiliary.global_position), site, "auxiliary is placed at the chosen non-default cell")
 	t.eq(state.balance(BLUE), 0, "successful build charges exactly 50")
@@ -98,6 +104,8 @@ func _run() -> void:
 	t.eq(auxiliary.burst_remaining, 150, "auxiliary takes the first volley")
 	t.eq(primary.burst_remaining, 0, "shared volley is not duplicated")
 	t.eq(main.runtime.bullet_pool.get_tracked_queue_total(), 150, "queue tracks the active auxiliary separately")
+	t.eq(main.runtime.bullet_pool.tracked_queue_by_slot[auxiliary.turret_id], 150, "queue stores the auxiliary demand under its identity")
+	t.eq(main.runtime.bullet_pool.tracked_queue_by_slot[primary.turret_id], 0, "main tower queue stays independent")
 	auxiliary.cancel_burst()
 	chamber.pending_count = 5
 	_land(chamber, fire_lane)
@@ -111,6 +119,7 @@ func _run() -> void:
 	t.eq(chamber.locked_remaining, 7, "idle tower destruction does not overwrite active progress")
 	t.eq(main.runtime.bullet_pool.get_tracked_queue_total(), 7, "idle tower destruction does not drain the active queue")
 	t.eq(main.runtime.turrets[BLUE], auxiliary, "survivor becomes the faction representative")
+	t.eq(roster.by_id[primary.turret_id], primary, "promotion does not rewrite the destroyed tower identity")
 	auxiliary.cancel_burst()
 	chamber.pending_count = 3
 	_land(chamber, fire_lane)
@@ -123,6 +132,30 @@ func _run() -> void:
 	t.that(main.is_game_over, "game ends when one faction remains")
 	t.that(not main._save_game_progress().ok, "construction experiment cannot save to an ordinary slot")
 	t.eq(FileAccess.get_sha256(path) if FileAccess.file_exists(path) else "", starting_hash, "ordinary slot stays intact")
+
+	main._start_game(40, true, false, false, ReserveEconomy.PricePreset.STANDARD, 0, true)
+	var new_roster: TurretRoster = main.runtime.turret_roster
+	t.neq(new_roster, roster, "a fresh match has its own roster")
+	t.eq(new_roster.by_id.size(), 4, "new match keeps no old auxiliary IDs")
+	state = main.runtime.construction
+	chamber = main.runtime.chambers[BLUE]
+	primary = main.runtime.turrets[BLUE]
+	state.convert_pending(200, BLUE)
+	t.that(main._try_build_auxiliary(BLUE, site), "new match can deploy an auxiliary")
+	auxiliary = new_roster.live_turret(state.auxiliary_id(BLUE))
+	chamber.pending_count = 6
+	_land(chamber, fire_lane)
+	auxiliary.cancel_burst()
+	chamber.pending_count = 9
+	_land(chamber, fire_lane)
+	t.eq(primary.burst_remaining, 9, "main tower is firing when hit")
+	primary.take_damage(primary.health)
+	t.that(not chamber.is_locked and not chamber.is_damaged, "active tower loss unlocks the surviving faction")
+	t.eq(main.runtime.bullet_pool.get_tracked_queue_total(), 0, "undelivered shots are discarded with the destroyed tower")
+	chamber.pending_count = 4
+	_land(chamber, fire_lane)
+	t.eq(auxiliary.burst_remaining, 4, "the survivor fires a fresh volley without inheriting the old queue")
+	t.eq(new_roster.live_turret(primary.turret_id), null, "destroyed identity is excluded from live selection")
 
 	main.queue_free()
 	await process_frame
