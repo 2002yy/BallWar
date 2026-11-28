@@ -14,6 +14,7 @@ var current_layout: Dictionary = {}
 var match_config = null
 var reserve_economy: ReserveEconomy
 var construction: ConstructionState
+var turret_roster: TurretRoster
 
 func reset() -> void:
     battlefield = null
@@ -29,6 +30,7 @@ func reset() -> void:
     match_config = null
     reserve_economy = null
     construction = null
+    turret_roster = null
 
 func set_config(config: Dictionary) -> void:
     current_config = config.duplicate(true)
@@ -37,6 +39,7 @@ func set_match_config(config) -> void:
     match_config = config
     reserve_economy = ReserveEconomy.new(config.seed_value, config.reserve_price_preset) if config.reserve_economy_enabled else null
     construction = ConstructionState.new() if config.construction_enabled else null
+    turret_roster = TurretRoster.new() if config.construction_enabled else null
 
 func set_layout(layout: Dictionary) -> void:
     current_layout = layout.duplicate(true)

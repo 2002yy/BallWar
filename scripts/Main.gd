@@ -539,10 +539,10 @@ func _refresh_chassis() -> void:
 
 func _create_turrets() -> void:
 	runtime.turrets = GameSceneBuilder.create_turrets(self, board_root, runtime.battlefield, runtime.bullet_pool, _board_layout, runtime.construction != null)
-	if runtime.construction != null:
-		runtime.construction.targets = runtime.turrets.duplicate()
+	if runtime.turret_roster != null:
 		for turret in runtime.turrets.values():
-			turret.set_all_turrets(runtime.construction.targets)
+			runtime.turret_roster.register(turret)
+			turret.set_all_turrets(runtime.turret_roster.by_id)
 	for fid in runtime.turrets.keys():
 		var t = runtime.turrets[fid]
 		if t == null or not is_instance_valid(t):
@@ -559,7 +559,7 @@ func _create_turrets() -> void:
 		runtime.bullet_pool.set_tracked_turrets(_turret_targets())
 
 func _turret_targets() -> Dictionary:
-	return runtime.construction.targets if runtime.construction != null else runtime.turrets
+	return runtime.turret_roster.by_id if runtime.turret_roster != null else runtime.turrets
 
 func _create_control_chambers() -> void:
 	runtime.chambers = GameSceneBuilder.create_control_chambers(self, board_root, runtime.battlefield, runtime.turrets, _board_layout, chamber_scale, BOARD_SPACE)
@@ -701,8 +701,8 @@ func _construction_site_issue(faction_id: int, cell: Vector2i) -> String:
 	if field.owners[cell.x][cell.y] != faction_id:
 		return "非己方领土"
 	var position := _construction_position(cell)
-	for slot in runtime.construction.targets:
-		var turret: Turret = runtime.construction.live_turret(slot)
+	for turret_id in runtime.turret_roster.by_id:
+		var turret: Turret = runtime.turret_roster.live_turret(turret_id)
 		if turret != null and position.distance_to(turret.global_position) < 2.0 * GameConfig.TURRET_RADIUS:
 			return "太靠近炮塔"
 	return ""
@@ -784,10 +784,10 @@ func _refresh_construction_button(faction_id: int) -> void:
 	if button == null:
 		return
 	var state: ConstructionState = runtime.construction
-	var built: Turret = state.targets.get(state.auxiliary_slot(faction_id))
+	var built: Turret = runtime.turret_roster.by_id.get(state.auxiliary_id(faction_id))
 	var amount := state.balance(faction_id)
 	button.tooltip_text = "建材 %d/%d" % [amount, ConstructionState.COST]
-	if is_game_over or state.select_turret(faction_id) == null:
+	if is_game_over or runtime.turret_roster.next_live_turret(faction_id) == null:
 		button.set_button_status("damaged", "停建")
 	elif built != null:
 		button.set_button_status("full", "已毁" if built.is_destroyed else "已建")
@@ -801,29 +801,30 @@ func _refresh_construction_button(faction_id: int) -> void:
 
 func _can_build_auxiliary(faction_id: int) -> bool:
 	var state: ConstructionState = runtime.construction
-	if state == null or is_game_over or get_tree().paused or state.select_turret(faction_id) == null:
+	if state == null or is_game_over or get_tree().paused or runtime.turret_roster.next_live_turret(faction_id) == null:
 		return false
-	return not state.targets.has(state.auxiliary_slot(faction_id)) and state.balance(faction_id) >= ConstructionState.COST
+	return state.auxiliary_id(faction_id) == 0 and state.balance(faction_id) >= ConstructionState.COST
 
 func _try_build_auxiliary(faction_id: int, cell: Vector2i) -> bool:
 	if not _can_build_auxiliary(faction_id) or not _construction_site_issue(faction_id, cell).is_empty():
 		return false
 
 	var state: ConstructionState = runtime.construction
+	var roster: TurretRoster = runtime.turret_roster
 	var turret := Turret.new()
 	turret.name = "AuxiliaryTurret_%d" % faction_id
 	turret.setup(faction_id, _construction_position(cell), runtime.battlefield, runtime.bullet_pool)
 	turret.max_health = ceili(turret.max_health / 2.0)
 	turret.health = turret.max_health
-	turret.set_all_turrets(state.targets)
+	turret.set_all_turrets(roster.by_id)
 	turret.burst_progress.connect(_on_turret_burst_progress.bind(turret))
 	turret.burst_lock_changed.connect(_on_turret_burst_lock_changed.bind(turret))
 	turret.destroyed.connect(_on_turret_destroyed)
 	turret.destroyed.connect(_on_turret_destroyed_sfx)
 	turret.damaged.connect(_on_turret_damaged_sfx)
 	board_root.add_child(turret)
-	state.add_auxiliary(faction_id, turret)
-	runtime.bullet_pool.set_tracked_turrets(state.targets)
+	state.record_auxiliary(faction_id, roster.register(turret))
+	runtime.bullet_pool.set_tracked_turrets(roster.by_id)
 	_refresh_construction_button(faction_id)
 	return true
 
@@ -835,8 +836,9 @@ func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 
 	if runtime.turrets.has(faction_id):
 		var turret: Turret = runtime.turrets[faction_id]
-		if runtime.construction != null:
-			turret = runtime.construction.select_turret(faction_id, chamber.linked_turret)
+		if runtime.turret_roster != null:
+			var previous: Turret = chamber.linked_turret
+			turret = runtime.turret_roster.next_live_turret(faction_id, previous.turret_id if is_instance_valid(previous) else 0)
 			if turret == null:
 				chamber.set_locked(false)
 				return
@@ -877,7 +879,7 @@ func _on_turret_burst_lock_changed(faction_id, locked, source: Turret = null) ->
 func _on_turret_destroyed(faction_id: int) -> void:
 	if runtime.chambers.has(faction_id):
 		var chamber: ControlChamber = runtime.chambers[faction_id]
-		var survivor: Turret = runtime.construction.select_turret(faction_id) if runtime.construction != null else null
+		var survivor: Turret = runtime.turret_roster.next_live_turret(faction_id) if runtime.turret_roster != null else null
 		if survivor == null:
 			chamber.set_damaged()
 			if _construction_faction == faction_id:

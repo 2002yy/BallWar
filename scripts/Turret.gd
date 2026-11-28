@@ -12,6 +12,7 @@ signal burst_lock_changed(faction_id, locked)
 signal burst_progress(faction_id, remaining)
 
 var faction_id: int = GameConfig.Faction.BLUE
+var turret_id: int = 0
 var battlefield
 var bullet_container
 var all_turrets = {}
