@@ -8,7 +8,9 @@ param(
     [switch]$FortressLab,
     [switch]$FortressFixture,
     [switch]$BreachLab,
-    [switch]$BreachFixture
+    [switch]$BreachFixture,
+    [switch]$CollisionLab,
+    [switch]$CollisionFixture
 )
 $ErrorActionPreference = 'Stop'
 if ($CheckControls -and $CheckBattleTools) {
@@ -19,7 +21,11 @@ $breachMode = $BreachLab -or $BreachFixture
 if ($fortressMode -and $breachMode) {
     throw 'Select one experimental map at a time.'
 }
-if (($CheckControls -or $CheckBattleTools) -and ($fortressMode -or $breachMode)) {
+$collisionMode = $CollisionLab -or $CollisionFixture
+if ($collisionMode -and ($fortressMode -or $breachMode)) {
+    throw 'The collision experiment uses the classic map.'
+}
+if (($CheckControls -or $CheckBattleTools) -and ($fortressMode -or $breachMode -or $collisionMode)) {
     throw 'The standard control checks start from the ordinary menu.'
 }
 $engine = (Get-Item -LiteralPath $Godot).FullName
@@ -47,6 +53,12 @@ if ($breachMode) {
 }
 if ($FortressFixture -or $BreachFixture) {
     $gameArgs += '--construction-fixture'
+}
+if ($collisionMode) {
+    $gameArgs += '--collision-lab'
+}
+if ($CollisionFixture) {
+    $gameArgs += '--collision-fixture'
 }
 & $engine --path $project @flags -- @gameArgs
 exit $LASTEXITCODE

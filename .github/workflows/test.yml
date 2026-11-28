@@ -85,6 +85,7 @@ jobs:
               LuckyBlastTestRunner.gd
               ReserveLabTestRunner.gd
               ConstructionTestRunner.gd
+              ProjectileCollisionTestRunner.gd
     steps:
       - uses: actions/checkout@v4
       - name: Restore cached Godot

@@ -6,6 +6,10 @@ const BulletRendererScript = preload("res://scripts/render/BulletRenderer.gd")
 
 const MAX_RESTORE_TRAIL_POINTS: int = 3
 
+var physical_radius: float = GameConfig.BULLET_RADIUS
+var prev_position: Vector2
+var controlled_by_pool: bool = false
+
 var faction_id: int = GameConfig.Faction.BLUE
 var direction: Vector2 = Vector2.RIGHT
 var speed = GameConfig.BULLET_SPEED
@@ -40,6 +44,7 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
 		_cached_map_size = float(battlefield.grid_size) * float(battlefield.cell_size)
 	target_turrets = new_target_turrets
 	speed = GameConfig.BULLET_SPEED
+	physical_radius = GameConfig.BULLET_RADIUS
 	last_cell = Vector2i(-999, -999)
 	age = 0.0
 	if random_source == null:
@@ -71,7 +76,7 @@ func activate() -> void:
 	is_active = true
 	visible = true
 	set_process(true)
-	set_physics_process(true)
+	set_physics_process(not controlled_by_pool)
 	z_index = 30
 
 func deactivate() -> void:
@@ -145,23 +150,28 @@ func _despawn() -> void:
 		queue_free()
 
 func _physics_process(_delta: float) -> void:
-	var delta: float = MatchClock.STEP_SECONDS
-	if not is_active:
-		return
+	if is_active and not controlled_by_pool and advance_tick():
+		resolve_tick()
+
+func advance_tick() -> bool:
 	if battlefield == null:
 		_despawn()
-		return
+		return false
+
+	var delta := MatchClock.STEP_SECONDS
 
 	age += delta
 	if age >= GameConfig.BULLET_MAX_LIFETIME:
 		if pool != null and is_instance_valid(pool) and pool.has_method("notify_bullet_expired"):
 			pool.notify_bullet_expired()
 		_despawn()
-		return
+		return false
 
 	var map_size: float = _cached_map_size
 	if map_size <= 0.0 and battlefield != null:
 		map_size = float(battlefield.grid_size) * float(battlefield.cell_size)
+	if controlled_by_pool:
+		prev_position = global_position
 	var next_position = global_position + direction * speed * delta
 	var local_position = battlefield.to_local(next_position)
 	var bounced = false
@@ -170,7 +180,7 @@ func _physics_process(_delta: float) -> void:
 		if battlefield.fortress.breakable:
 			if battlefield.hit_breakable_wall(start, local_position - start, GameConfig.BULLET_DAMAGE):
 				_despawn()
-				return
+				return false
 		else:
 			var motion: Vector4 = battlefield.fortress.reflect_motion(start, local_position - start)
 			local_position = Vector2(motion.x, motion.y)
@@ -200,6 +210,10 @@ func _physics_process(_delta: float) -> void:
 		direction = _stabilize_bounce_direction(direction).normalized()
 
 	global_position = battlefield.to_global(local_position)
+	return true
+
+func resolve_tick() -> void:
+	var delta := MatchClock.STEP_SECONDS
 	_update_visual_trace(delta)
 
 	turret_hit_check_timer -= delta

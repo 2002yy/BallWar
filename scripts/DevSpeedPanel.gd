@@ -118,6 +118,9 @@ func _update_panel(now: int) -> void:
 		_main.game_elapsed_time, float(now - _started_usec) / 1000000.0,
 		0.0 if paused or finished else _actual_speed, clock.speed, Engine.get_frames_per_second()
 	]
+	var pool: BulletPool = _main.runtime.bullet_pool
+	if is_instance_valid(pool) and pool.collision_resolver != null:
+		_stats.text += "\n炮弹互撞已抵消 %d 发" % pool.collision_resolver.removed_projectiles
 	if _constructed:
 		_stats.text += "\n调试构造战况"
 	_pause.text = "继续 F9" if paused else "暂停 F9"
