@@ -303,8 +303,8 @@ func _try_hit_enemy_turret() -> bool:
 			continue
 		var hit_radius_sq: float = GameConfig.TURRET_HIT_RADIUS * GameConfig.TURRET_HIT_RADIUS
 		if global_position.distance_squared_to(turret.global_position) <= hit_radius_sq:
-			turret.take_damage(GameConfig.BULLET_DAMAGE)
-			return true
+			if turret.receive_projectile_hit(faction_id, GameConfig.BULLET_DAMAGE):
+				return true
 	return false
 
 func _visual_radius() -> float:

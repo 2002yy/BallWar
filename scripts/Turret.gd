@@ -10,6 +10,9 @@ signal destroyed(faction_id)
 signal damaged(faction_id, amount)
 signal burst_lock_changed(faction_id, locked)
 signal burst_progress(faction_id, remaining)
+signal neutral_claim_requested(turret: Turret, faction_id: int)
+
+const NEUTRAL_FACTION: int = -1
 
 var faction_id: int = GameConfig.Faction.BLUE
 var turret_id: int = 0
@@ -275,6 +278,19 @@ func _current_total_queue() -> int:
 			total += int(turret.burst_remaining)
 	return total
 
+func receive_projectile_hit(attacker: int, damage: int) -> bool:
+	if faction_id == NEUTRAL_FACTION:
+		neutral_claim_requested.emit(self, attacker)
+		return faction_id == attacker
+	take_damage(damage)
+	return true
+
+func capture_for_faction(new_faction_id: int) -> void:
+	faction_id = new_faction_id
+	center_angle = _inward_center_angle()
+	rotation = center_angle
+	queue_redraw()
+
 func take_damage(amount: int) -> void:
 	if is_destroyed:
 		return
@@ -317,3 +333,6 @@ func _draw() -> void:
 		"burst_ratio": float(burst_remaining) / float(maxi(1, burst_total)),
 		"locked": burst_locked,
 	})
+	if faction_id == NEUTRAL_FACTION and not is_destroyed:
+		draw_string_outline(ThemeDB.fallback_font, Vector2(-14, -25), "中立", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14, 3, Color.BLACK)
+		draw_string(ThemeDB.fallback_font, Vector2(-14, -25), "中立", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14, Color.WHITE)

@@ -157,6 +157,7 @@ func _run() -> void:
 	t.eq(auxiliary.burst_remaining, 4, "the survivor fires a fresh volley without inheriting the old queue")
 	t.eq(new_roster.live_turret(primary.turret_id), null, "destroyed identity is excluded from live selection")
 
+	_check_neutral_facility(main, t, site)
 	main.queue_free()
 	await process_frame
 	t.report("ConstructionTestRunner")
@@ -164,6 +165,63 @@ func _run() -> void:
 
 func _screen_cell(field: Battlefield, cell: Vector2i) -> Vector2:
 	return field.get_global_transform_with_canvas() * ((Vector2(cell) + Vector2(0.5, 0.5)) * field.cell_size)
+
+func _check_neutral_facility(main, t: TestAssert, site: Vector2i) -> void:
+	main.facility_lab_enabled = true
+	main._start_game(40, true, false, false, ReserveEconomy.PricePreset.STANDARD, 0, true)
+	var field: Battlefield = main.runtime.battlefield
+	var roster: TurretRoster = main.runtime.turret_roster
+	var state: ConstructionState = main.runtime.construction
+	var chamber: ControlChamber = main.runtime.chambers[BLUE]
+	var primary: Turret = main.runtime.turrets[BLUE]
+	var neutral := roster.next_live_turret(Turret.NEUTRAL_FACTION)
+	var neutral_id := neutral.turret_id
+	var neutral_health := neutral.health
+	t.eq(main.runtime.turrets.size(), 4, "neutral tower is not an extra faction")
+	t.eq(field.to_local(neutral.global_position), Vector2.ONE * field.grid_size * field.cell_size * 0.5, "neutral tower starts at the geometric center")
+	state.convert_pending(200, BLUE)
+	t.that(main._try_build_auxiliary(BLUE, site), "the facility match still permits regular construction")
+	var auxiliary := roster.live_turret(state.auxiliary_id(BLUE))
+	var red_turret: Turret = main.runtime.turrets[RED]
+	red_turret.take_damage(red_turret.health)
+	var stray := Bullet.new()
+	stray.setup(RED, neutral.global_position, Vector2.RIGHT, field, roster.by_id)
+	t.that(not stray._try_hit_enemy_turret(), "a projectile from an eliminated faction cannot claim the tower")
+	t.eq(neutral.faction_id, Turret.NEUTRAL_FACTION, "unclaimed tower remains neutral")
+	var claimant := Bullet.new()
+	claimant.setup(BLUE, neutral.global_position, Vector2.RIGHT, field, roster.by_id)
+	t.that(claimant._try_hit_enemy_turret(), "a live faction claims the tower through the projectile path")
+	t.eq(neutral.faction_id, BLUE, "neutral tower joins the attacking faction")
+	t.eq(neutral.turret_id, neutral_id, "capture keeps the tower identity")
+	t.eq(neutral.health, neutral_health, "the capture hit does not damage the tower")
+	var cell := field.world_to_cell(neutral.global_position)
+	t.eq(field.owners[cell.x][cell.y], BLUE, "capture marks the installation tile for the new owner")
+	t.eq(roster.next_live_turret(Turret.NEUTRAL_FACTION), null, "the neutral roster is now empty")
+	t.that(not claimant._try_hit_enemy_turret(), "friendly projectiles skip the captured tower")
+	t.that(stray._try_hit_enemy_turret(), "enemy projectiles damage a captured tower")
+	t.eq(neutral.health, neutral_health - GameConfig.BULLET_DAMAGE, "damage applies to the existing captured tower")
+	claimant.free()
+	stray.free()
+
+	var release_x := lerpf(chamber._current_x2_width(), chamber.chamber_size.x, 0.25)
+	for tower in [auxiliary, neutral, primary, auxiliary]:
+		chamber.pending_count = 19
+		_land(chamber, release_x)
+		t.eq(tower.burst_remaining, 19, "the three-tower rotation routes exactly one full volley")
+		t.eq(main.runtime.bullet_pool.get_tracked_queue_total(), 19, "three towers do not duplicate faction firepower")
+		tower.cancel_burst()
+	primary.take_damage(primary.health)
+	auxiliary.take_damage(auxiliary.health)
+	t.that(not chamber.is_damaged, "the captured tower keeps the faction alive")
+	t.eq(main.runtime.turrets[BLUE], neutral, "captured tower becomes the faction representative")
+	chamber.pending_count = 5
+	_land(chamber, release_x)
+	t.eq(neutral.burst_remaining, 5, "captured tower receives the next volley")
+	for faction in [GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+		var opponent: Turret = main.runtime.turrets[faction]
+		opponent.take_damage(opponent.health)
+	t.that(main.is_game_over and not chamber.is_damaged, "the faction can win with only the captured tower")
+	t.eq(neutral.burst_remaining, 0, "end of match stops the captured tower")
 
 func _land(chamber: ControlChamber, x: float) -> void:
 	var ball: ControlBall = chamber.balls[0]

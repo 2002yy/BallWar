@@ -154,6 +154,7 @@ var match_seed: int = -1
 var reserve_lab_enabled: bool = false
 var additive_lab_enabled: bool = false
 var construction_lab_enabled: bool = false
+var facility_lab_enabled: bool = false
 var _construction_faction: int = -1
 var _construction_preview: ConstructionPreview
 var _construction_touch_cell := Vector2i(-1, -1)
@@ -226,7 +227,8 @@ func _sync_runtime_context(grid_size: int) -> void:
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var args := OS.get_cmdline_user_args()
-	construction_lab_enabled = OS.is_debug_build() and args.has("--construction-lab")
+	facility_lab_enabled = OS.is_debug_build() and args.has("--facility-lab")
+	construction_lab_enabled = facility_lab_enabled or (OS.is_debug_build() and args.has("--construction-lab"))
 	additive_lab_enabled = not construction_lab_enabled and OS.is_debug_build() and args.has("--additive-lab")
 	reserve_lab_enabled = not construction_lab_enabled and not additive_lab_enabled and _reserve_lab_requested()
 	if match_seed >= 0:
@@ -262,8 +264,17 @@ func _ready() -> void:
 			var gate_x := chamber._reserve_gate_x(chamber._current_x2_width())
 			ball.position = Vector2(lerpf(gate_x, chamber.chamber_size.x, 0.5), chamber.chamber_size.y - ball.radius - 1.0)
 			ball.velocity = Vector2(0, 120)
-		var title := "建设实验 · 构造落门" if args.has("--construction-fixture") else "建设实验"
-		_show_center_banner(title, "50 建材可选己方地块建造", Color(0.74, 0.92, 0.22), true)
+			if facility_lab_enabled:
+				var neutral: Turret = runtime.turret_roster.next_live_turret(Turret.NEUTRAL_FACTION)
+				var field: Battlefield = runtime.battlefield
+				var offset := Vector2(field.cell_size + 1.0, minf(100.0, field.grid_size * field.cell_size * 0.4))
+				var start := neutral.global_position - offset
+				runtime.bullet_pool.spawn_bullet(GameConfig.Faction.BLUE, start, Vector2.DOWN, field, _turret_targets())
+		var title := "设施实验" if facility_lab_enabled else "建设实验"
+		if args.has("--construction-fixture"):
+			title += " · 演示"
+		var hint := "先击中中央中立炮塔即可夺取" if facility_lab_enabled else "50 建材可选己方地块建造"
+		_show_center_banner(title, hint, Color(0.74, 0.92, 0.22), true)
 	else:
 		_create_start_menu()
 	var size_cb: Callable = Callable(self, "_on_viewport_resized")
@@ -543,6 +554,8 @@ func _create_turrets() -> void:
 		for turret in runtime.turrets.values():
 			runtime.turret_roster.register(turret)
 			turret.set_all_turrets(runtime.turret_roster.by_id)
+		if facility_lab_enabled:
+			_create_neutral_turret()
 	for fid in runtime.turrets.keys():
 		var t = runtime.turrets[fid]
 		if t == null or not is_instance_valid(t):
@@ -560,6 +573,19 @@ func _create_turrets() -> void:
 
 func _turret_targets() -> Dictionary:
 	return runtime.turret_roster.by_id if runtime.turret_roster != null else runtime.turrets
+
+func _create_neutral_turret() -> void:
+	var field: Battlefield = runtime.battlefield
+	var center := field.to_global(Vector2.ONE * field.grid_size * field.cell_size * 0.5)
+	var turret := _create_extra_turret(Turret.NEUTRAL_FACTION, center, "NeutralTurret")
+	turret.neutral_claim_requested.connect(_on_neutral_claim_requested)
+
+func _on_neutral_claim_requested(turret: Turret, faction_id: int) -> void:
+	if is_game_over or not runtime.turret_roster.claim_neutral(turret, faction_id):
+		return
+	var field: Battlefield = runtime.battlefield
+	field.claim_cell(field.world_to_cell(turret.global_position), faction_id)
+	_show_center_banner("%s夺取中立炮塔" % GameConfig.faction_name(faction_id), "新炮塔加入本阵营的齐射轮转", GameConfig.faction_color(faction_id), true)
 
 func _create_control_chambers() -> void:
 	runtime.chambers = GameSceneBuilder.create_control_chambers(self, board_root, runtime.battlefield, runtime.turrets, _board_layout, chamber_scale, BOARD_SPACE)
@@ -811,9 +837,17 @@ func _try_build_auxiliary(faction_id: int, cell: Vector2i) -> bool:
 
 	var state: ConstructionState = runtime.construction
 	var roster: TurretRoster = runtime.turret_roster
+	var turret := _create_extra_turret(faction_id, _construction_position(cell), "AuxiliaryTurret_%d" % faction_id)
+	state.record_auxiliary(faction_id, turret.turret_id)
+	runtime.bullet_pool.set_tracked_turrets(roster.by_id)
+	_refresh_construction_button(faction_id)
+	return true
+
+func _create_extra_turret(faction_id: int, world_position: Vector2, turret_name: String) -> Turret:
+	var roster: TurretRoster = runtime.turret_roster
 	var turret := Turret.new()
-	turret.name = "AuxiliaryTurret_%d" % faction_id
-	turret.setup(faction_id, _construction_position(cell), runtime.battlefield, runtime.bullet_pool)
+	turret.name = turret_name
+	turret.setup(faction_id, world_position, runtime.battlefield, runtime.bullet_pool)
 	turret.max_health = ceili(turret.max_health / 2.0)
 	turret.health = turret.max_health
 	turret.set_all_turrets(roster.by_id)
@@ -823,10 +857,8 @@ func _try_build_auxiliary(faction_id: int, cell: Vector2i) -> bool:
 	turret.destroyed.connect(_on_turret_destroyed_sfx)
 	turret.damaged.connect(_on_turret_damaged_sfx)
 	board_root.add_child(turret)
-	state.record_auxiliary(faction_id, roster.register(turret))
-	runtime.bullet_pool.set_tracked_turrets(roster.by_id)
-	_refresh_construction_button(faction_id)
-	return true
+	roster.register(turret)
+	return turret
 
 func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 	if is_game_over:
