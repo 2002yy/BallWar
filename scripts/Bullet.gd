@@ -25,6 +25,41 @@ var turret_hit_check_timer: float = 0.0
 var trail_sample_timer: float = 0.0
 var last_trail_position: Vector2 = Vector2.INF
 
+# P1 弹属性（默认 = 普通弹 = 现有行为）。物理半径与渲染半径分开：
+# physical_radius 参与碰撞，_visual_radius() 只影响绘制。
+var type_id: int = 0
+var cost: int = 1
+var mass: float = 1.0
+var energy: int = 1
+var damage: int = GameConfig.BULLET_DAMAGE
+var physical_radius: float = GameConfig.BULLET_RADIUS
+var spawn_serial: int = 0
+var prev_position: Vector2 = Vector2.ZERO
+# 由 BulletPool 统一推进（互撞模式）；为 false 时每颗弹自己走 _physics_process。
+var controlled: bool = false
+
+# 一次 tick 的待结算事件：先移动，再碰撞，最后结算，避免各自完整执行。
+var _pending_despawn: bool = false
+var _pending_expired: bool = false
+var _pending_cell: Vector2i = Vector2i(-999, -999)
+var _pending_has_cell: bool = false
+var _pending_turret = null
+
+func apply_standard_profile() -> void:
+	type_id = WeaponRuleset.BulletType.STANDARD
+	cost = 1
+	speed = GameConfig.BULLET_SPEED
+	physical_radius = GameConfig.BULLET_RADIUS
+	mass = 1.0
+	energy = 1
+	damage = GameConfig.BULLET_DAMAGE
+
+func set_controlled(value: bool) -> void:
+	controlled = value
+	if is_active:
+		set_physics_process(not value)
+
+
 func get_trail_segment_count() -> int:
 	return maxi(0, trail_points.size() - 1)
 
@@ -39,7 +74,8 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
 	if battlefield != null:
 		_cached_map_size = float(battlefield.grid_size) * float(battlefield.cell_size)
 	target_turrets = new_target_turrets
-	speed = GameConfig.BULLET_SPEED
+	apply_standard_profile()
+	prev_position = new_position
 	last_cell = Vector2i(-999, -999)
 	age = 0.0
 	turret_hit_check_timer = randf_range(0.0, GameConfig.TURRET_HIT_CHECK_INTERVAL)
@@ -69,7 +105,7 @@ func activate() -> void:
 	is_active = true
 	visible = true
 	set_process(true)
-	set_physics_process(true)
+	set_physics_process(not controlled)
 	z_index = 30
 
 func deactivate() -> void:
@@ -78,6 +114,7 @@ func deactivate() -> void:
 	visible = false
 	set_process(false)
 	set_physics_process(false)
+	_reset_pending()
 	battlefield = null
 	target_turrets = {}
 	trail_points.clear()
@@ -143,17 +180,26 @@ func _despawn() -> void:
 		queue_free()
 
 func _physics_process(delta: float) -> void:
+	# 经典路径：每颗弹自己完成 移动 → 炮台/领土结算。
+	# 互撞模式由 BulletPool.step_controlled() 统一调用 advance_tick() + resolve_tick()。
+	if controlled:
+		return
+	advance_tick(delta)
+	resolve_tick()
+
+func advance_tick(delta: float) -> void:
 	if not is_active:
 		return
+	_reset_pending()
+	prev_position = global_position
+
 	if battlefield == null:
-		_despawn()
+		_pending_despawn = true
 		return
 
 	age += delta
 	if age >= GameConfig.BULLET_MAX_LIFETIME:
-		if pool != null and is_instance_valid(pool) and pool.has_method("notify_bullet_expired"):
-			pool.notify_bullet_expired()
-		_despawn()
+		_pending_expired = true
 		return
 
 	var map_size: float = _cached_map_size
@@ -190,9 +236,7 @@ func _physics_process(delta: float) -> void:
 	turret_hit_check_timer -= delta
 	if turret_hit_check_timer <= 0.0:
 		turret_hit_check_timer = GameConfig.TURRET_HIT_CHECK_INTERVAL
-		if _try_hit_enemy_turret():
-			_despawn()
-			return
+		_pending_turret = _find_hittable_turret()
 
 	var cell = battlefield.world_to_cell(global_position)
 	if not battlefield.is_inside(cell):
@@ -202,9 +246,37 @@ func _physics_process(delta: float) -> void:
 		return
 
 	last_cell = cell
-	var result = battlefield.apply_bullet(cell, faction_id)
-	if result == "HIT_ENEMY_CELL":
+	_pending_cell = cell
+	_pending_has_cell = true
+
+func resolve_tick() -> void:
+	if not is_active:
+		return
+	if _pending_despawn:
 		_despawn()
+		return
+	if _pending_expired:
+		if pool != null and is_instance_valid(pool) and pool.has_method("notify_bullet_expired"):
+			pool.notify_bullet_expired()
+		_despawn()
+		return
+	if _pending_turret != null:
+		# 炮台可能在同一 tick 内已被先结算的弹摧毁。
+		if is_instance_valid(_pending_turret) and not _pending_turret.is_destroyed:
+			_pending_turret.take_damage(damage)
+		_despawn()
+		return
+	if _pending_has_cell:
+		var result = battlefield.apply_bullet(_pending_cell, faction_id)
+		if result == "HIT_ENEMY_CELL":
+			_despawn()
+
+func _reset_pending() -> void:
+	_pending_despawn = false
+	_pending_expired = false
+	_pending_has_cell = false
+	_pending_turret = null
+
 
 func _stabilize_bounce_direction(raw_direction: Vector2) -> Vector2:
 	# v1.9.28：防止正上/正下/正左/正右方向在边界之间无限来回弹。
@@ -294,7 +366,7 @@ func _update_visual_trace(delta: float) -> void:
 	_notify_trail_segments_if_needed(previous_segments)
 	_request_trail_redraw()
 
-func _try_hit_enemy_turret() -> bool:
+func _find_hittable_turret():
 	for target_faction_id in target_turrets:
 		if target_faction_id == faction_id:
 			continue
@@ -303,16 +375,24 @@ func _try_hit_enemy_turret() -> bool:
 			continue
 		if turret.is_destroyed:
 			continue
-		var hit_radius_sq: float = GameConfig.TURRET_HIT_RADIUS * GameConfig.TURRET_HIT_RADIUS
-		if global_position.distance_squared_to(turret.global_position) <= hit_radius_sq:
-			turret.take_damage(GameConfig.BULLET_DAMAGE)
-			return true
-	return false
+		# 物理半径参与命中：普通弹半径 = BULLET_RADIUS，判定圈与原版完全一致。
+		var hit_radius: float = GameConfig.TURRET_HIT_RADIUS + (physical_radius - GameConfig.BULLET_RADIUS)
+		if global_position.distance_squared_to(turret.global_position) <= hit_radius * hit_radius:
+			return turret
+	return null
+
+func _try_hit_enemy_turret() -> bool:
+	# 旧接口：立即结算炮台伤害并返回是否命中。保留给坐标/命中探针直接调用。
+	var turret = _find_hittable_turret()
+	if turret == null:
+		return false
+	turret.take_damage(damage)
+	return true
 
 func _visual_radius() -> float:
 	if battlefield != null:
-		return minf(GameConfig.BULLET_RADIUS, float(battlefield.cell_size) * 0.42)
-	return GameConfig.BULLET_RADIUS
+		return minf(physical_radius, float(battlefield.cell_size) * 0.42)
+	return physical_radius
 
 func _draw() -> void:
 	BulletRendererScript.draw(self, {

@@ -9,6 +9,7 @@ Key entry points at `docs/` root: [`ARCHITECTURE.md`](../ARCHITECTURE.md), [`TES
 [`ROADMAP.md`](../ROADMAP.md).
 
 - `TECHNICAL_GUIDE.md` — engineering boundaries, editor workflow, validation policy / 工程边界、编辑器协作、验证规则
+- `BULLET_COLLISION_P1.md` — 弹珠互撞原型：开关、统一执行顺序、分桶性能矩阵、密火 A/B 与顺序偏差（未合并）
 - `README_TEST_MATRIX.md` — (superseded by `../TESTING.md`) superseded / 已被 `../TESTING.md` 替代
 - `AI_HANDOFF_CURRENT.md` — fast handoff card for the next AI/Codex session / AI/Codex 快速接管卡
 - `README_ANDROID_EXPORT.md` — (superseded by `../ANDROID_EXPORT.md`) superseded / 已被 `../ANDROID_EXPORT.md` 替代
