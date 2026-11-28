@@ -7,6 +7,9 @@
 #
 # 隔离：APPDATA 指向 mktemp 目录，玩家的真实存档从不被打开或覆盖。
 #       CAPTURE_MODE 用英文别名，避免中文环境变量在 MSYS 下的编码问题。
+#       阶段 [0/7] 会由 Godot 自己解析 user:// 并断言它落在该隔离目录内；
+#       Linux/macOS 不认 APPDATA，若未另行设置对应隔离变量就会安全退出，
+#       绝不会静默写进玩家真实存档。
 #
 # 五项验证：
 #   1 全空槽位         -> continue_00_empty.png（且 ISO 内无 .save）
@@ -70,6 +73,17 @@ echo "iso : $ISO_NATIVE  (throwaway APPDATA, real saves untouched)"
 
 save_count() { find "$ISO" -type f -name 'ballwar_save_slot_*.save' 2>/dev/null | wc -l; }
 
+# 用与采集进程完全相同的隔离环境启动 Godot，让它自己解析 user://。
+# headless 只影响显示驱动，不改变 user:// 的解析规则。
+run_user_dir_guard() {
+	APPDATA="$ISO_NATIVE" PWD="$ROOT_RUN" MSYS2_ARG_CONV_EXCL='*' \
+		CAPTURE_ISOLATED_ROOT="$ISO_NATIVE" \
+		"$GODOT" --headless --audio-driver Dummy --path "$ROOT_RUN" \
+		--script res://tools/capture/assert_user_dir_isolated.gd \
+		> "$LOGS/user_dir_guard.log" 2>&1
+	return $?
+}
+
 run_menu() {
 	local tag="$1" select_slot="$2"
 	APPDATA="$ISO_NATIVE" PWD="$ROOT_RUN" MSYS2_ARG_CONV_EXCL='*' \
@@ -103,6 +117,15 @@ check() {
 		fail=1
 	fi
 }
+
+echo "[0/7] assert user:// is inside the isolated APPDATA (fail-fast)"
+run_user_dir_guard
+guard_rc=$?
+grep -E "\[UserDirGuard\]" "$LOGS/user_dir_guard.log" | sed 's/^/   /'
+if [ "$guard_rc" -ne 0 ]; then
+	echo "RESULT: ABORT - user:// is not isolated; refusing to touch any save" >&2
+	exit 3
+fi
 
 echo "[1/7] empty slots screenshot"
 run_menu "continue_00_empty" "" || { echo "  menu capture FAILED"; fail=1; }
@@ -153,4 +176,4 @@ if [ "$fail" -ne 0 ]; then
 	echo "RESULT: FAIL - see logs in $LOGS" >&2
 	exit 1
 fi
-echo "RESULT: PASS - 5 checks, 4 real-save-state screenshots, isolated APPDATA only"
+echo "RESULT: PASS - 1 isolation guard + 5 checks, 4 real-save-state screenshots, isolated APPDATA only"

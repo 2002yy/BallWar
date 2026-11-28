@@ -116,6 +116,7 @@ static var _remembered_page: String = PAGE_MAIN
 @onready var version_label: Label = %VersionLabel
 
 @onready var quit_dialog: ConfirmationDialog = %QuitDialog
+@onready var overwrite_dialog: ConfirmationDialog = %OverwriteDialog
 
 var _owner
 var _menu_layout: Dictionary = {}
@@ -235,8 +236,10 @@ func setup(p_owner, view_size: Vector2, save_summaries: Array, current_layout: D
 	# 挂在 RootPanel 上而不是自己身上 —— CanvasLayer 不是 Control，没有 theme；
 	# 挂在面板根节点后，所有 Control 后代都会继承。
 	root_panel.theme = MechThemeScript.build()
-	# 退出确认框是 Window，不是 Control 后代，不会继承 RootPanel 的主题，得单独挂。
+	# 退出确认框与覆盖存档确认框都是 Window，不是 Control 后代，
+	# 不会继承 RootPanel 的主题，得单独挂。
 	quit_dialog.theme = root_panel.theme
+	overwrite_dialog.theme = root_panel.theme
 
 	_view_size = view_size
 	_apply_layout(view_size)
@@ -811,6 +814,8 @@ func _connect_signals() -> void:
 
 	if not quit_dialog.confirmed.is_connected(_on_quit_confirmed):
 		quit_dialog.confirmed.connect(_on_quit_confirmed)
+	if not overwrite_dialog.confirmed.is_connected(_on_overwrite_confirmed):
+		overwrite_dialog.confirmed.connect(_on_overwrite_confirmed)
 
 
 # ------------------------------------------------------------------ 页面导航
@@ -852,6 +857,23 @@ func _on_help_back_pressed() -> void:
 
 
 func _on_start_match_pressed() -> void:
+	# Main._start_game(clear_save=true) 会删掉当前槽的存档、备份与临时文件。
+	# 底部状态栏那行小字不足以构成确认，所以槽里已有存档时必须再确认一次；
+	# 空槽不打扰玩家，仍按原来的路径直接开局。
+	if _owner != null and _owner.has_method("_has_save_file") \
+			and bool(_owner._has_save_file(int(_owner.selected_save_slot))):
+		var slot: int = int(_owner.selected_save_slot)
+		overwrite_dialog.dialog_text = "槽 %d 已有存档。开始新对局会删除该存档、备份与临时文件，且无法恢复。" % slot
+		overwrite_dialog.popup_centered()
+		return
+	_begin_new_match()
+
+
+func _on_overwrite_confirmed() -> void:
+	_begin_new_match()
+
+
+func _begin_new_match() -> void:
 	# 真正开局仍然走 Main 的既有入口，参数也只有网格大小，和旧实现一致。
 	_owner._save_menu_preferences()
 	_remembered_page = PAGE_MAIN

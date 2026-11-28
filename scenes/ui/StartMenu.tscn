@@ -884,3 +884,12 @@ ok_button_text = "退出"
 dialog_autowrap = true
 dialog_text = "确定要退出游戏吗？进行中的对局会保存到当前槽位。"
 cancel_button_text = "取消"
+
+[node name="OverwriteDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "覆盖存档"
+size = Vector2i(420, 176)
+ok_button_text = "覆盖并开始"
+dialog_autowrap = true
+dialog_text = "当前槽位已有存档。开始新对局会删除该存档、备份与临时文件，且无法恢复。"
+cancel_button_text = "取消"

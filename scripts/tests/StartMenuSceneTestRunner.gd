@@ -393,12 +393,30 @@ func _run() -> void:
 	var start_match_button: Button = instance.get_node("%StartMatchButton")
 	t.that(start_match_button.text.length() > 0, "start match button carries copy")
 
-	# 开局必须仍然走 Main 的 _start_game(grid_size)，参数也仍然是网格大小。
+	# 覆盖存档保护：Main._start_game(clear_save=true) 会删掉当前槽的存档、
+	# 备份和临时文件。槽里已有存档时，点「开始对局」只能弹确认框，不能开局。
+	var overwrite_dialog: ConfirmationDialog = instance.get_node("%OverwriteDialog")
+	t.eq(overwrite_dialog.visible, false, "overwrite dialog is closed by default")
+	owner.selected_save_slot = 3
 	var starts_before: int = owner.start_game_calls
 	start_match_button.pressed.emit()
 	await process_frame
-	t.gt(owner.start_game_calls, starts_before, "start match routes into Main._start_game")
+	t.eq(overwrite_dialog.visible, true, "start on an occupied slot opens the overwrite dialog")
+	t.eq(owner.start_game_calls, starts_before, "start on an occupied slot does not delete the save yet")
+	t.that(overwrite_dialog.dialog_text.find("\u5220\u9664") >= 0, "overwrite dialog explains the deletion")
+	overwrite_dialog.confirmed.emit()
+	await process_frame
+	t.gt(owner.start_game_calls, starts_before, "confirmed start routes into Main._start_game")
 	t.eq(owner.last_start_grid, owner.selected_grid_size, "start match forwards the selected grid size")
+
+	# 空槽不该被确认框打扰：仍走原来的直接开局路径。
+	overwrite_dialog.hide()
+	owner.selected_save_slot = 4
+	var empty_starts: int = owner.start_game_calls
+	start_match_button.pressed.emit()
+	await process_frame
+	t.eq(overwrite_dialog.visible, false, "empty slot does not open the overwrite dialog")
+	t.gt(owner.start_game_calls, empty_starts, "empty slot starts the match directly")
 
 	# ---------------------------------------------------------------- 玩法说明与退出
 	nav_help.pressed.emit()
