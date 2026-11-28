@@ -16,6 +16,7 @@ var mode_name: String = GameConfig.GAME_MODE_BASIC
 var quality_name: String = GameConfig.QUALITY_MEDIUM
 var seed_value: int = -1
 var reserve_economy_enabled: bool = false
+var additive_gate_bonus: int = 0
 var reserve_price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD
 
 func _init() -> void:

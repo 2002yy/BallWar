@@ -41,17 +41,21 @@ const MAX_RESTORE_CONTROL_BALLS: int = 8
 var faction_id: int = GameConfig.Faction.BLUE
 var chamber_state: ChamberState = ChamberState.new()
 var reserve_conversion: Callable
+var additive_gate_bonus: int = 0
 # Classic keeps its existing pending value through the burst-lock transition.
 var _classic_pending_count: int = 1
 var pending_count: int:
 	get:
-		return chamber_state.pending_count if reserve_conversion.is_valid() else _classic_pending_count
+		return chamber_state.pending_count if _uses_chamber_pending_state() else _classic_pending_count
 	set(value):
-		if reserve_conversion.is_valid():
+		if _uses_chamber_pending_state():
 			chamber_state.pending_count = value
 		else:
 			_classic_pending_count = value
 var locked_remaining: int = 0
+
+func _uses_chamber_pending_state() -> bool:
+	return additive_gate_bonus > 0 or reserve_conversion.is_valid()
 
 func _sync_shadow_fields() -> void:
 	_classic_pending_count = chamber_state.pending_count
@@ -61,7 +65,7 @@ func _sync_shadow_fields() -> void:
 	queued_round_modifiers = chamber_state.queued_round_modifiers
 
 func _sync_state_from_shadow() -> void:
-	if not reserve_conversion.is_valid():
+	if not _uses_chamber_pending_state():
 		chamber_state.pending_count = _classic_pending_count
 	chamber_state.is_locked = is_locked
 	chamber_state.locked_remaining = locked_remaining
@@ -522,9 +526,13 @@ func _physics_process(delta: float) -> void:
 
 func _on_left_gate(ball) -> void:
 	var gate_multiplier: int = GameConfig.get_gate_multiplier()
-	pending_count = clampi(pending_count * gate_multiplier, 1, GameConfig.get_max_pending_count())
+	if additive_gate_bonus > 0:
+		chamber_state.apply_pending_bonus(additive_gate_bonus, GameConfig.get_max_pending_count())
+	else:
+		pending_count = clampi(pending_count * gate_multiplier, 1, GameConfig.get_max_pending_count())
 	_update_label()
-	gate_multiplier_applied.emit(faction_id, gate_multiplier, pending_count)
+	if additive_gate_bonus <= 0:
+		gate_multiplier_applied.emit(faction_id, gate_multiplier, pending_count)
 	_relaunch_control_ball(ball)
 
 func _on_reserve_gate(ball) -> void:
@@ -653,6 +661,7 @@ func _build_draw_snapshot() -> Dictionary:
 		"status_anim_t": status_anim_t,
 		"game_elapsed_time": game_elapsed_time,
 		"gate_multiplier": GameConfig.get_gate_multiplier(),
+		"additive_gate_bonus": additive_gate_bonus,
 		"scale_x": scale.x,
 		"gate_ramp_seconds": GATE_RAMP_SECONDS,
 		"gate_start_release_ratio": GATE_START_RELEASE_RATIO,

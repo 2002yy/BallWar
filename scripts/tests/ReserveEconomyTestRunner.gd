@@ -108,6 +108,24 @@ func _run() -> void:
 	t.eq(main.runtime.reserve_economy.balance(RED), 0, "new experiment resets the reserve ledger")
 	main._start_game(40, true, false)
 	t.eq(main.runtime.reserve_economy, null, "new classic match discards the experiment ledger")
+	main._start_game(40, true, true, false, ReserveEconomy.PricePreset.STANDARD, 2)
+	chamber = main.runtime.chambers[BLUE]
+	t.eq(chamber._build_draw_snapshot().left_gate_text, "+2", "additive gate has its own label")
+	t.that(not chamber._build_draw_snapshot().reserve_rect.has_area(), "additive lab opens only two gates")
+	_drop(chamber, chamber._current_x2_width() / 2.0)
+	t.eq(chamber.pending_count, 3, "additive landing grows 1 to 3")
+	_drop(chamber, chamber._current_x2_width() / 2.0)
+	t.eq(chamber.chamber_state.pending_count, 5, "second landing adds two to the authoritative count")
+	_land(chamber, GameConfig.get_max_pending_count() - 1, chamber._current_x2_width() / 2.0)
+	t.eq(chamber.pending_count, GameConfig.get_max_pending_count(), "additive landing respects the pending cap")
+	_land(chamber, 5, _release_lane_center(chamber))
+	turret = main.runtime.turrets[BLUE]
+	t.eq(turret.burst_remaining, 5, "release gate fires the accumulated additive volley")
+	turret.cancel_burst()
+	t.eq(chamber.pending_count, 1, "burst completion resets the additive round")
+	t.that(not main._save_game_progress().ok, "additive lab declines ordinary save")
+	t.eq(FileAccess.get_sha256(slot_path) if FileAccess.file_exists(slot_path) else "", slot_hash,
+		"additive lab does not create, erase, or overwrite the selected normal slot")
 	main.queue_free()
 	await process_frame
 	t.report("ReserveEconomyTestRunner")

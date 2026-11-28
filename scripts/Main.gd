@@ -152,6 +152,8 @@ var is_game_over: bool = false
 # A non-negative value seeds the global RNG so a match can be replayed.
 var match_seed: int = -1
 var reserve_lab_enabled: bool = false
+var additive_lab_enabled: bool = false
+const ADDITIVE_LAB_BONUS: int = 2
 
 var menu_title_label
 var menu_start_button
@@ -219,14 +221,15 @@ func _sync_runtime_context(grid_size: int) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	reserve_lab_enabled = _reserve_lab_requested()
+	additive_lab_enabled = OS.is_debug_build() and OS.get_cmdline_user_args().has("--additive-lab")
+	reserve_lab_enabled = not additive_lab_enabled and _reserve_lab_requested()
 	if match_seed >= 0:
 		seed(match_seed)
 	else:
 		randomize()
 	_view_size = _resolve_view_size()
 	is_mobile_layout = _detect_mobile_layout()
-	player_settings = PlayerSettingsStore.default_settings() if reserve_lab_enabled else PlayerSettingsStore.load_settings()
+	player_settings = PlayerSettingsStore.default_settings() if _is_lab_session() else PlayerSettingsStore.load_settings()
 	presentation_events = PresentationEventsScript.new()
 	audio_manager = AudioManagerScript.new()
 	audio_manager.name = "AudioManager"
@@ -234,11 +237,15 @@ func _ready() -> void:
 	audio_manager.bind_presentation(presentation_events)
 	_apply_audio_settings()
 	_apply_performance_setting()
-	if not reserve_lab_enabled:
+	if not _is_lab_session():
 		_load_menu_preferences()
 	_create_background()
 	if reserve_lab_enabled:
 		_start_reserve_lab_match()
+	elif additive_lab_enabled:
+		_prepare_lab_match()
+		_start_game(selected_grid_size, true, false, false, ReserveEconomy.PricePreset.STANDARD, ADDITIVE_LAB_BONUS)
+		_show_center_banner("稳产实验", "加法门每次增加 %d 发" % ADDITIVE_LAB_BONUS, Color(0.74, 0.92, 0.22), true)
 	else:
 		_create_start_menu()
 	var size_cb: Callable = Callable(self, "_on_viewport_resized")
@@ -248,11 +255,17 @@ func _ready() -> void:
 func _reserve_lab_requested() -> bool:
 	return ReserveLab.is_requested(OS.is_debug_build(), OS.get_cmdline_user_args())
 
-func _start_reserve_lab_match(price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD) -> void:
+func _is_lab_session() -> bool:
+	return reserve_lab_enabled or additive_lab_enabled
+
+func _prepare_lab_match() -> void:
 	if match_seed < 0:
 		match_seed = 7341
 	seed(match_seed)
 	selected_palette_name = "经典"
+
+func _start_reserve_lab_match(price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD) -> void:
+	_prepare_lab_match()
 	_start_game(selected_grid_size, true, false, true, price_preset)
 	var lab := ReserveLab.new()
 	lab.name = "ReserveLab"
@@ -340,7 +353,7 @@ func _detect_mobile_layout() -> bool:
 	return false
 
 func _toggle_settings_panel() -> void:
-	if reserve_lab_enabled:
+	if _is_lab_session():
 		return
 	var settings_panel = _hud_ref("settings_panel")
 	if settings_panel == null or not is_instance_valid(settings_panel):
@@ -384,13 +397,13 @@ func _create_start_menu() -> void:
 
 func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool = true,
 		reserve_economy_enabled: bool = false,
-		reserve_price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD) -> void:
+		reserve_price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD, additive_gate_bonus: int = 0) -> void:
 	grid_size = LayoutProfiles.sanitize_grid_size(grid_size)
 	selected_grid_size = grid_size
 	game_elapsed_time = 0.0
 	is_game_over = false
 
-	if clear_save and not reserve_economy_enabled and _has_save_file(selected_save_slot):
+	if clear_save and not reserve_economy_enabled and additive_gate_bonus <= 0 and _has_save_file(selected_save_slot):
 		var save_path: String = _get_save_path(selected_save_slot)
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveFlowController.get_backup_path(save_path)))
@@ -416,6 +429,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	var match_config := MatchConfig.capture_current(grid_size, match_seed)
 	match_config.reserve_economy_enabled = reserve_economy_enabled
 	match_config.reserve_price_preset = reserve_price_preset
+	match_config.additive_gate_bonus = maxi(0, additive_gate_bonus)
 	runtime.set_match_config(match_config)
 
 	game_layer = Node2D.new()
@@ -525,6 +539,7 @@ func _create_control_chambers() -> void:
 		var ch = runtime.chambers[fid]
 		if ch == null or not is_instance_valid(ch):
 			continue
+		ch.additive_gate_bonus = runtime.match_config.additive_gate_bonus
 		if runtime.reserve_economy != null:
 			ch.reserve_conversion = runtime.reserve_economy.convert_pending.bind(fid)
 		for pair in [
@@ -545,13 +560,13 @@ func _create_ui() -> void:
 	var game_hud: CanvasLayer = GameHUDScene.instantiate()
 	game_hud.name = "UICanvas"
 	game_hud.layer = 3
-	game_hud.settings_panel_enabled = not reserve_lab_enabled
+	game_hud.settings_panel_enabled = not _is_lab_session()
 	game_layer.add_child(game_hud)
 	game_hud.setup_static(self, _view_size, runtime.current_layout, is_mobile_layout)
 	var hud_nodes: Dictionary = game_hud.get_static_parts()
 
 	runtime.set_hud_parts(hud_nodes)
-	if reserve_lab_enabled:
+	if _is_lab_session():
 		game_hud.exit_button.text = "退出"
 		game_hud.save_exit_button.text = "退出实验"
 		game_hud.pause_panel.get_node("PauseHintLabel").text = "实验局不保存进度。"
@@ -754,7 +769,7 @@ func _toggle_pause() -> void:
 		get_tree(),
 		_hud_ref("pause_overlay"),
 		_hud_ref("pause_button"),
-		Callable() if reserve_lab_enabled else Callable(self, "_save_game_progress")
+		Callable() if _is_lab_session() else Callable(self, "_save_game_progress")
 	)
 	# Pausing must not leave battle sounds ringing, and resuming must not replay
 	# a backlog: events are played immediately, so stopping is the whole story.
@@ -883,7 +898,7 @@ func reset_menu_preferences() -> void:
 	_create_start_menu()
 
 func _save_and_exit_to_menu() -> void:
-	if reserve_lab_enabled:
+	if _is_lab_session():
 		get_tree().quit()
 		return
 	if runtime.battlefield != null:
@@ -971,6 +986,8 @@ func _process_pending_bullet_restore() -> void:
 			runtime.bullet_pool.add_child(bullet)
 
 func _save_game_progress() -> Dictionary:
+	if runtime.match_config != null and runtime.match_config.additive_gate_bonus > 0:
+		return {"ok": false, "error_message": "稳产实验未写入普通存档。"}
 	if runtime.reserve_economy != null:
 		pending_menu_status_message = "储备实验未写入普通存档。"
 		return {"ok": false, "error_message": pending_menu_status_message}
