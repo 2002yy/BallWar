@@ -6,7 +6,9 @@ const GATE_RESULT_LEFT: String = "left"
 const GATE_RESULT_RIGHT: String = "right"
 const GATE_RESULT_JAMMED_FLOOR: String = "jammed_floor"
 
-static func step_ball(ball, delta: float, physics_input: Dictionary, stuck_state: Dictionary, stay_time: float) -> Dictionary:
+static func step_ball(ball, delta: float, physics_input: Dictionary, stuck_state: Dictionary, stay_time: float, random_source: RandomNumberGenerator = null) -> Dictionary:
+	if random_source == null:
+		random_source = RandomNumberGenerator.new()
 	var chamber_size: Vector2 = physics_input.get("chamber_size", Vector2.ZERO)
 	var pegs: Array = physics_input.get("pegs", [])
 	var peg_collision_radii: Array = physics_input.get("peg_collision_radii", [])
@@ -29,7 +31,7 @@ static func step_ball(ball, delta: float, physics_input: Dictionary, stuck_state
 	for peg_index in range(pegs.size()):
 		var peg: Vector2 = pegs[peg_index]
 		var peg_collision_radius: float = float(peg_collision_radii[peg_index]) if peg_index < peg_collision_radii.size() else 0.0
-		var collision: Dictionary = _resolve_peg_collision(next_position, next_velocity, ball.radius, peg, peg_collision_radius)
+		var collision: Dictionary = _resolve_peg_collision(next_position, next_velocity, ball.radius, peg, peg_collision_radius, random_source)
 		next_position = collision["position"]
 		next_velocity = collision["velocity"]
 
@@ -54,7 +56,7 @@ static func step_ball(ball, delta: float, physics_input: Dictionary, stuck_state
 	next_position = clamped["position"]
 	next_velocity = clamped["velocity"]
 
-	var updated_stuck_state: Dictionary = _update_stuck_state(next_position, next_velocity, ball.radius, chamber_size, stuck_state, delta, physics_input)
+	var updated_stuck_state: Dictionary = _update_stuck_state(next_position, next_velocity, ball.radius, chamber_size, stuck_state, delta, physics_input, random_source)
 	next_position = updated_stuck_state["position"]
 	next_velocity = updated_stuck_state["velocity"]
 
@@ -64,7 +66,7 @@ static func step_ball(ball, delta: float, physics_input: Dictionary, stuck_state
 
 	if not relaunch_request and next_position.y >= chamber_size.y - ball.radius:
 		if jammed:
-			var jammed_floor: Dictionary = _on_jammed_floor(next_position, next_velocity, ball.radius, chamber_size)
+			var jammed_floor: Dictionary = _on_jammed_floor(next_position, next_velocity, ball.radius, chamber_size, random_source)
 			next_position = jammed_floor["position"]
 			next_velocity = jammed_floor["velocity"]
 			gate_result = GATE_RESULT_JAMMED_FLOOR
@@ -104,7 +106,7 @@ static func _clamp_ball_to_walls(position: Vector2, velocity: Vector2, radius: f
 		"velocity": next_velocity,
 	}
 
-static func _resolve_peg_collision(position: Vector2, velocity: Vector2, radius: float, peg: Vector2, peg_collision_radius: float) -> Dictionary:
+static func _resolve_peg_collision(position: Vector2, velocity: Vector2, radius: float, peg: Vector2, peg_collision_radius: float, random_source: RandomNumberGenerator) -> Dictionary:
 	var next_position: Vector2 = position
 	var next_velocity: Vector2 = velocity
 	var min_dist: float = peg_collision_radius + radius
@@ -122,7 +124,7 @@ static func _resolve_peg_collision(position: Vector2, velocity: Vector2, radius:
 		var normal: Vector2 = offset / dist
 		next_position = peg + normal * min_dist
 		next_velocity = next_velocity.bounce(normal) * 0.86
-		next_velocity += Vector2(randf_range(-22.0, 22.0), randf_range(-10.0, 10.0))
+		next_velocity += Vector2(random_source.randf_range(-22.0, 22.0), random_source.randf_range(-10.0, 10.0))
 
 	return {
 		"position": next_position,
@@ -156,7 +158,7 @@ static func _handle_gate_divider_collision(position: Vector2, velocity: Vector2,
 		"velocity": next_velocity,
 	}
 
-static func _update_stuck_state(position: Vector2, velocity: Vector2, radius: float, chamber_size: Vector2, stuck_state: Dictionary, delta: float, physics_input: Dictionary) -> Dictionary:
+static func _update_stuck_state(position: Vector2, velocity: Vector2, radius: float, chamber_size: Vector2, stuck_state: Dictionary, delta: float, physics_input: Dictionary, random_source: RandomNumberGenerator) -> Dictionary:
 	var state: Dictionary = stuck_state.duplicate(true)
 	if state.is_empty():
 		state = {
@@ -185,8 +187,8 @@ static func _update_stuck_state(position: Vector2, velocity: Vector2, radius: fl
 		last_y = next_position.y
 
 	if stuck_time >= float(physics_input.get("stuck_time_limit", 0.0)):
-		next_position.x = clampf(next_position.x + randf_range(-7.0, 7.0), radius, chamber_size.x - radius)
-		next_velocity = Vector2(randf_range(-105.0, 105.0), randf_range(-80.0, -18.0))
+		next_position.x = clampf(next_position.x + random_source.randf_range(-7.0, 7.0), radius, chamber_size.x - radius)
+		next_velocity = Vector2(random_source.randf_range(-105.0, 105.0), random_source.randf_range(-80.0, -18.0))
 		stuck_time = 0.0
 		last_pos = next_position
 		last_y = next_position.y
@@ -200,12 +202,12 @@ static func _update_stuck_state(position: Vector2, velocity: Vector2, radius: fl
 		"state": state,
 	}
 
-static func _on_jammed_floor(position: Vector2, velocity: Vector2, radius: float, chamber_size: Vector2) -> Dictionary:
+static func _on_jammed_floor(position: Vector2, velocity: Vector2, radius: float, chamber_size: Vector2, random_source: RandomNumberGenerator) -> Dictionary:
 	var next_position: Vector2 = position
 	var next_velocity: Vector2 = velocity
 	next_position.y = chamber_size.y - radius - 2.0
 	next_velocity.y = -abs(next_velocity.y) * 0.78 - 36.0
-	next_velocity.x += randf_range(-36.0, 36.0)
+	next_velocity.x += random_source.randf_range(-36.0, 36.0)
 	return {
 		"position": next_position,
 		"velocity": next_velocity,

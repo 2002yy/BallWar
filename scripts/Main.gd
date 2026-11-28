@@ -153,7 +153,7 @@ var game_elapsed_time: float = 0.0
 var is_game_over: bool = false
 
 # Negative keeps the historical behavior (time-based randomization).
-# A non-negative value seeds the global RNG so a match can be replayed.
+# A non-negative value starts each new match with the same random streams.
 var match_seed: int = -1
 
 var menu_title_label
@@ -233,10 +233,6 @@ func _ready() -> void:
 		add_child(dev_speed)
 		dev_speed.setup(self)
 		dev_speed.clock.step_completed.connect(_flush_battle_view)
-	if match_seed >= 0:
-		seed(match_seed)
-	else:
-		randomize()
 	_view_size = _resolve_view_size()
 	is_mobile_layout = _detect_mobile_layout()
 	player_settings = PlayerSettingsStore.load_settings()
@@ -404,13 +400,15 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	GameConfig.set_game_mode_by_name(selected_game_mode_name)
 	GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
 
+	var match_random := MatchRandom.new(match_seed)
 	if selected_palette_name == "默认随机":
-		GameConfig.set_random_palette()
+		GameConfig.set_random_palette(match_random.get_stream(MatchRandom.Stream.PALETTE))
 	else:
 		GameConfig.set_palette_by_name(selected_palette_name)
 
 	_cleanup_menu()
 	_cleanup_game_layer()
+	runtime.match_random = match_random
 	get_tree().paused = false
 	_sync_runtime_context(grid_size)
 	# 对局配置只在开局时快照一次：窗口缩放、UI 重建都不应该重新解释地图与武器规则。
@@ -457,6 +455,8 @@ func _create_battlefield(grid_size: int) -> void:
 	var scene_nodes: Dictionary = GameSceneBuilder.create_battlefield(self, board_root, grid_size, _board_layout, BOARD_SPACE)
 	runtime.battlefield = scene_nodes.get("battlefield", null)
 	runtime.bullet_pool = scene_nodes.get("bullet_container", null)
+	if is_instance_valid(runtime.bullet_pool):
+		runtime.bullet_pool.match_random = runtime.match_random
 	chamber_scale = float(scene_nodes.get("chamber_scale", 0.80))
 
 func _on_release_sfx(faction_id = null, count = null, _chamber = null) -> void:
@@ -503,7 +503,7 @@ func _refresh_chassis() -> void:
 
 
 func _create_turrets() -> void:
-	runtime.turrets = GameSceneBuilder.create_turrets(self, board_root, runtime.battlefield, runtime.bullet_pool, _board_layout)
+	runtime.turrets = GameSceneBuilder.create_turrets(self, board_root, runtime.battlefield, runtime.bullet_pool, _board_layout, runtime.match_random)
 	for fid in runtime.turrets.keys():
 		var t = runtime.turrets[fid]
 		if t == null or not is_instance_valid(t):
@@ -520,7 +520,7 @@ func _create_turrets() -> void:
 		runtime.bullet_pool.set_tracked_turrets(runtime.turrets)
 
 func _create_control_chambers() -> void:
-	runtime.chambers = GameSceneBuilder.create_control_chambers(self, board_root, runtime.battlefield, runtime.turrets, _board_layout, chamber_scale, BOARD_SPACE)
+	runtime.chambers = GameSceneBuilder.create_control_chambers(self, board_root, runtime.battlefield, runtime.turrets, _board_layout, chamber_scale, BOARD_SPACE, runtime.match_random)
 	for fid in runtime.chambers.keys():
 		var ch = runtime.chambers[fid]
 		if ch == null or not is_instance_valid(ch):
@@ -575,6 +575,7 @@ func _create_event_roulette_system() -> void:
 
 	var event_controller_script = load("res://scripts/EventRouletteController.gd")
 	runtime.event_controller = event_controller_script.new()
+	runtime.event_controller.random_source = runtime.match_random.get_stream(MatchRandom.Stream.EVENT)
 	runtime.event_controller.name = "EventRouletteController"
 	game_layer.add_child(runtime.event_controller)
 	runtime.event_controller.setup(self, runtime.battlefield, runtime.chambers, runtime.turrets, _hud_ref("event_label"), runtime.event_view)

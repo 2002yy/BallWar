@@ -91,6 +91,7 @@ var event_log_visible: bool = true
 var event_label_update_timer: float = 0.0
 var event_label_dirty: bool = true
 
+var random_source := RandomNumberGenerator.new()
 var _pending_payload: Dictionary = {}
 var _presentation_time_left: float = 0.0
 
@@ -347,7 +348,7 @@ func _compute_current_interval() -> float:
 			return 30.0
 		return 45.0
 	if mode_name == GameConfig.GAME_MODE_WILD:
-		return randf_range(20.0, 30.0)
+		return random_source.randf_range(20.0, 30.0)
 	return 45.0
 
 func _choose_faction_for_effect(effect_name: String) -> int:
@@ -378,7 +379,7 @@ func _choose_faction_for_effect(effect_name: String) -> int:
 	if total_weight <= 0.0:
 		return int(candidate_factions[0])
 
-	var roll: float = randf() * total_weight
+	var roll: float = random_source.randf() * total_weight
 	for i in range(candidate_factions.size()):
 		roll -= float(weights[i])
 		if roll <= 0.0:
@@ -488,7 +489,7 @@ func _random_effect() -> String:
 		EFFECT_ADD_BALL,
 		EFFECT_JAM,
 	]
-	return str(effects[randi() % effects.size()])
+	return str(effects[random_source.randi() % effects.size()])
 
 func _elapsed_time() -> float:
 	if main_ref == null:
