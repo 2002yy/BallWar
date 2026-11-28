@@ -64,3 +64,5 @@ GODOT_BIN=/path/to/godot bash scripts/tests/ProductionDecouplingTestRunner.gd
 ```
 
 测试覆盖：经典锁定不释放、B 保留下一轮 pending、C 只缓存一批、二次过门计 overflow、解锁补发、缓存批次重新锁定。
+
+真实运行录像（非强制齐射、非单帧）：`docs/art/p3/natural_f7_accumulate_25s.mp4`。F7 生产参数 + `accumulate`，1120×720、60 FPS、25 秒，Godot Movie Maker 直接录制。
