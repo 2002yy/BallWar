@@ -29,6 +29,9 @@ func _run() -> void:
 	_test_locked_baseline(chamber)
 	_test_accumulate(chamber)
 	_test_extra_batch(chamber)
+	_test_lock_preserves_queue(chamber)
+	_test_release_ball_is_frozen(chamber)
+	_test_mode_roundtrip(chamber)
 
 	print("[ProductionDecoupling] PASS (%d checks)" % _checks)
 	quit(0)
@@ -102,3 +105,45 @@ func _test_extra_batch(chamber) -> void:
 	chamber.queued_volley = 0
 	chamber.queued_ball = null
 	chamber.set_locked(false)
+
+
+func _test_lock_preserves_queue(chamber) -> void:
+	_reset(chamber, "extra_batch", 4)
+	chamber._on_right_gate(chamber.balls[0])
+	if not _check(chamber.queued_volley == 4, "lock: queue exists before set_locked(true)"):
+		return
+	chamber.set_locked(true)
+	if not _check(chamber.queued_volley == 4, "lock: set_locked(true) keeps the queue"):
+		return
+	chamber.clear_queued_volley()
+	chamber.set_locked(false)
+
+
+func _test_release_ball_is_frozen(chamber) -> void:
+	_reset(chamber, "accumulate", 3)
+	var ball = chamber.balls[0]
+	chamber.release_ball = ball
+	ball.position = Vector2(10, 10)
+	ball.velocity = Vector2(30, 40)
+	chamber._physics_process(1.0 / 60.0)
+	if not _check(ball.position == Vector2(10, 10), "accumulate: released ball is frozen during firing"):
+		return
+	chamber.release_ball = null
+	chamber.set_locked(false)
+
+
+func _test_mode_roundtrip(chamber) -> void:
+	chamber.production_mode = "extra_batch"
+	var state: Dictionary = ChamberSaveAdapter.collect_state(chamber)
+	chamber.production_mode = "locked"
+	var restored: Dictionary = ChamberSaveAdapter.restore_state(state, {
+		"chamber_size": chamber.chamber_size,
+		"default_ball_radius": ControlChamber.CONTROL_BALL_RADIUS,
+		"max_restore_control_balls": 8,
+		"max_control_balls": GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER,
+		"max_pending_count": GameConfig.get_max_pending_count(),
+	})
+	chamber.production_mode = str(restored.get("chamber_production_mode", "locked"))
+	if not _check(chamber.production_mode == "extra_batch", "save: production mode survives restore"):
+		return
+	chamber.production_mode = "locked"

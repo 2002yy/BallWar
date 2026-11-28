@@ -530,6 +530,9 @@ func restore_from_state(state: Dictionary) -> void:
 		release_ball = balls[release_index]
 
 	chamber_state.is_locked = bool(restored_state.get("chamber_is_locked", false))
+	var saved_mode: String = str(restored_state.get("chamber_production_mode", production_mode))
+	if saved_mode in [PRODUCTION_LOCKED, PRODUCTION_ACCUMULATE, PRODUCTION_EXTRA_BATCH]:
+		production_mode = saved_mode
 	queued_volley = int(restored_state.get("chamber_queued_volley", 0))
 	queue_overflow_events = int(restored_state.get("chamber_queue_overflow", 0))
 	var queue_index: int = int(restored_state.get("chamber_queue_ball_index", -1))
@@ -573,6 +576,11 @@ func _physics_process(_delta: float) -> void:
 
 	for ball in balls:
 		if ball == null:
+			continue
+		# 发射中的球和等待下一批的球不参与本轮生产物理；
+		# 否则会在锁定期间重复过门，破坏释放/排队语义。
+		if is_locked and production_mode != PRODUCTION_LOCKED \
+			and (ball == release_ball or ball == queued_ball):
 			continue
 		var ball_id: int = ball.get_instance_id()
 		var step_result: Dictionary = ChamberBallPhysicsScript.step_ball(
@@ -662,10 +670,13 @@ func set_locked(locked: bool) -> void:
 	if is_damaged:
 		return
 
-	var queued: int = queued_volley
-	var qball = queued_ball
-	queued_volley = 0
-	queued_ball = null
+	var queued: int = 0
+	var qball = null
+	if not locked:
+		queued = queued_volley
+		qball = queued_ball
+		queued_volley = 0
+		queued_ball = null
 
 	if locked:
 		chamber_state.is_locked = true
@@ -686,7 +697,7 @@ func set_locked(locked: bool) -> void:
 		release_ball = null
 
 	if not locked and queued > 0 and production_mode == PRODUCTION_EXTRA_BATCH and not is_damaged:
-		release_ball = qball
+		release_ball = qball if qball != null and is_instance_valid(qball) else null
 		locked_remaining = queued
 		chamber_state.locked_remaining = queued
 		is_locked = true
