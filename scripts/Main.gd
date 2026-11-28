@@ -630,6 +630,7 @@ func _refresh_add_ball_button(faction_id: int) -> void:
 
 func _on_chamber_release_requested(faction_id, bullet_count, chamber) -> void:
 	if is_game_over:
+		chamber.clear_queued_volley()
 		chamber.set_locked(false)
 		_refresh_add_ball_button(faction_id)
 		return
@@ -728,6 +729,9 @@ func _finish_as_draw(sub_text: String) -> void:
 	GameStateCoordinator.finish_as_draw(self, _hud_ref("winner_label"), sub_text)
 
 func _stop_all_actions_for_game_over() -> void:
+	for chamber in runtime.chambers.values():
+		if chamber != null and is_instance_valid(chamber) and chamber.has_method("clear_queued_volley"):
+			chamber.clear_queued_volley()
 	if dev_speed != null:
 		dev_speed.finish_match()
 	GameStateCoordinator.stop_actions_for_game_over(

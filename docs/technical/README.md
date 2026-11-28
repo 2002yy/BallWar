@@ -12,6 +12,7 @@ Key entry points at `docs/` root: [`ARCHITECTURE.md`](../ARCHITECTURE.md), [`TES
 - `BULLET_COLLISION_P1.md` — 弹珠互撞原型：开关、统一执行顺序、分桶性能矩阵、密火 A/B 与顺序偏差（未合并）
 - `SPECIAL_BULLETS_P2.md` — 穿透弹 / 爆炸弹 + 跨 burst 火力记账 + 自然火力生产链：参数、语义、矩阵、多种子与性能（未合并）
 - `SIMULATION_BASELINE_P26.md` — 统一时钟 / 随机流 / 互撞 / 特殊弹集成，新确定性基线，RNG 存档，出生点与流向归因（P2.6）
+- `PRODUCTION_DECOUPLING_P3.md` — 生产与发射部分解耦：A/B/C 机制、300 秒矩阵与裁定（P3.1）
 - `README_TEST_MATRIX.md` — (superseded by `../TESTING.md`) superseded / 已被 `../TESTING.md` 替代
 - `AI_HANDOFF_CURRENT.md` — fast handoff card for the next AI/Codex session / AI/Codex 快速接管卡
 - `README_ANDROID_EXPORT.md` — (superseded by `../ANDROID_EXPORT.md`) superseded / 已被 `../ANDROID_EXPORT.md` 替代

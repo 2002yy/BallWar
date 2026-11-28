@@ -78,6 +78,12 @@ func unlock(next_pending: int) -> void:
 	locked_remaining = 0
 
 
+func unlock_preserving_pending() -> void:
+	is_locked = false
+	pending_count = maxi(1, pending_count)
+	locked_remaining = 0
+
+
 func export_save_state() -> Dictionary:
 	return {
 		"pending_count": pending_count,

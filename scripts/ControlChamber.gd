@@ -76,6 +76,18 @@ var ball_stay_times: Dictionary = {}
 var jammed_time_left: float = 0.0
 var queued_round_modifiers: Array = []
 
+# P3 生产/发射解耦。默认 locked = 经典行为。
+const PRODUCTION_LOCKED: String = "locked"
+const PRODUCTION_ACCUMULATE: String = "accumulate"
+const PRODUCTION_EXTRA_BATCH: String = "extra_batch"
+var production_mode: String = PRODUCTION_LOCKED
+var queued_volley: int = 0
+var queued_ball = null
+var queue_overflow_events: int = 0
+var queued_fire_total: int = 0
+var accumulated_fire_total: int = 0
+var pending_peak: int = 1
+
 var name_label
 var count_label
 var ball_label
@@ -112,6 +124,7 @@ func set_linked_turret(turret) -> void:
 	linked_turret = turret
 
 func _ready() -> void:
+	production_mode = _resolve_production_mode(OS.get_environment("BALLWAR_PRODUCTION_MODE"))
 	_stay_seconds_override = maxf(1.0, _env_float("BALLWAR_STAY_SECONDS", CONTROL_BALL_MAX_STAY_TIME))
 	_gate_multiplier_override = maxi(0, _env_int("BALLWAR_GATE_MULTIPLIER", 0))
 	var initial_balls: int = clampi(_env_int("BALLWAR_INITIAL_BALLS", 1), 1, GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER)
@@ -126,8 +139,25 @@ func _ready() -> void:
 	_update_label()
 	_force_visual_redraw()
 
+func _resolve_production_mode(raw: String) -> String:
+	var value: String = raw.strip_edges().to_lower()
+	match value:
+		"accumulate", "p3b", "b":
+			return PRODUCTION_ACCUMULATE
+		"extra_batch", "p3c", "c":
+			return PRODUCTION_EXTRA_BATCH
+		_:
+			return PRODUCTION_LOCKED
+
+
 func get_production_stats() -> Dictionary:
 	var stats: Dictionary = production_stats.duplicate()
+	stats["mode"] = production_mode
+	stats["pending_peak"] = pending_peak
+	stats["queued"] = queued_volley
+	stats["queue_overflow"] = queue_overflow_events
+	stats["queued_fire"] = queued_fire_total
+	stats["accumulated_fire"] = accumulated_fire_total
 	stats["pending"] = pending_count
 	stats["balls"] = get_ball_count()
 	stats["locked"] = is_locked
@@ -500,6 +530,10 @@ func restore_from_state(state: Dictionary) -> void:
 		release_ball = balls[release_index]
 
 	chamber_state.is_locked = bool(restored_state.get("chamber_is_locked", false))
+	queued_volley = int(restored_state.get("chamber_queued_volley", 0))
+	queue_overflow_events = int(restored_state.get("chamber_queue_overflow", 0))
+	var queue_index: int = int(restored_state.get("chamber_queue_ball_index", -1))
+	queued_ball = balls[queue_index] if queue_index >= 0 and queue_index < balls.size() else null
 	_sync_shadow_fields()
 	ball_count_changed.emit(faction_id, balls.size())
 	_update_label()
@@ -513,7 +547,9 @@ func _physics_process(_delta: float) -> void:
 			_update_label()
 			_force_visual_redraw()
 
-	if is_damaged or is_locked:
+	if is_damaged:
+		return
+	if is_locked and production_mode == PRODUCTION_LOCKED:
 		return
 
 	var x2_width: float = _current_x2_width()
@@ -571,25 +607,45 @@ func _on_left_gate(ball) -> void:
 	var gate_multiplier: int = GameConfig.get_gate_multiplier()
 	if _gate_multiplier_override > 0:
 		gate_multiplier = maxi(gate_multiplier, _gate_multiplier_override)
+	var before: int = pending_count
 	pending_count = clampi(pending_count * gate_multiplier, 1, GameConfig.get_max_pending_count())
+	chamber_state.pending_count = pending_count
+	if is_locked and production_mode != PRODUCTION_LOCKED:
+		accumulated_fire_total += maxi(0, pending_count - before)
+	pending_peak = maxi(pending_peak, pending_count)
 	production_stats["gate_multiplier_hits"] = int(production_stats["gate_multiplier_hits"]) + 1
 	_update_label()
 	gate_multiplier_applied.emit(faction_id, gate_multiplier, pending_count)
 	_relaunch_control_ball(ball)
 
 func _on_right_gate(ball) -> void:
-	if is_locked or jammed_time_left > 0.0:
+	if jammed_time_left > 0.0:
+		return
+	if is_locked:
+		if production_mode == PRODUCTION_EXTRA_BATCH and queued_volley <= 0:
+			queued_volley = clampi(pending_count, 1, GameConfig.get_max_pending_count())
+			queued_ball = ball
+			pending_count = 1
+			chamber_state.pending_count = 1
+			_update_label()
+			_force_visual_redraw()
+		elif production_mode == PRODUCTION_EXTRA_BATCH:
+			queue_overflow_events += 1
 		return
 
+	var fire_count: int = pending_count
 	production_stats["releases"] = int(production_stats["releases"]) + 1
-	production_stats["fire_released"] = int(production_stats["fire_released"]) + pending_count
-	production_stats["max_release"] = maxi(int(production_stats["max_release"]), pending_count)
+	production_stats["fire_released"] = int(production_stats["fire_released"]) + fire_count
+	production_stats["max_release"] = maxi(int(production_stats["max_release"]), fire_count)
 	release_ball = ball
-	locked_remaining = pending_count
+	locked_remaining = fire_count
 	is_locked = true
+	if production_mode != PRODUCTION_LOCKED:
+		pending_count = 1
+		chamber_state.pending_count = 1
 	_update_label()
 	_force_visual_redraw()
-	release_requested.emit(faction_id, pending_count, self)
+	release_requested.emit(faction_id, fire_count, self)
 
 func start_locked(count: int) -> void:
 	locked_remaining = maxi(0, count)
@@ -606,10 +662,18 @@ func set_locked(locked: bool) -> void:
 	if is_damaged:
 		return
 
+	var queued: int = queued_volley
+	var qball = queued_ball
+	queued_volley = 0
+	queued_ball = null
+
 	if locked:
 		chamber_state.is_locked = true
 	else:
-		chamber_state.unlock(1)
+		if production_mode == PRODUCTION_LOCKED:
+			chamber_state.unlock(1)
+		else:
+			chamber_state.unlock_preserving_pending()
 		chamber_state.apply_queued_modifiers(GameConfig.get_max_pending_count())
 
 	is_locked = chamber_state.is_locked
@@ -621,13 +685,31 @@ func set_locked(locked: bool) -> void:
 			_relaunch_control_ball(release_ball)
 		release_ball = null
 
+	if not locked and queued > 0 and production_mode == PRODUCTION_EXTRA_BATCH and not is_damaged:
+		release_ball = qball
+		locked_remaining = queued
+		chamber_state.locked_remaining = queued
+		is_locked = true
+		chamber_state.is_locked = true
+		queued_fire_total += queued
+		production_stats["releases"] = int(production_stats["releases"]) + 1
+		production_stats["fire_released"] = int(production_stats["fire_released"]) + queued
+		production_stats["max_release"] = maxi(int(production_stats["max_release"]), queued)
+		release_requested.emit(faction_id, queued, self)
+
 	_update_label()
 	_force_visual_redraw()
+
+
+func clear_queued_volley() -> void:
+	queued_volley = 0
+	queued_ball = null
 
 func set_damaged() -> void:
 	if is_damaged:
 		return
 	is_damaged = true
+	clear_queued_volley()
 	chamber_state.reset(0)
 	_sync_shadow_fields()
 	release_ball = null

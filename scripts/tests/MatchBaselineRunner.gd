@@ -47,6 +47,16 @@ var _max_reversal: float = 0.0
 var _min_share_seen: Dictionary = {0: 1.0, 1: 1.0, 2: 1.0, 3: 1.0}
 var _empty_ticks: int = 0
 var _low_ticks: int = 0
+var _low30_ticks: int = 0
+var _low50_ticks: int = 0
+var _cur_empty: int = 0
+var _cur_low10: int = 0
+var _cur_low30: int = 0
+var _cur_low50: int = 0
+var _longest_empty: int = 0
+var _longest_low10: int = 0
+var _longest_low30: int = 0
+var _longest_low50: int = 0
 var _metric_ticks: int = 0
 var _growth: Array = []
 
@@ -743,8 +753,8 @@ func _print_production_summary() -> void:
 		if chamber == null or not is_instance_valid(chamber):
 			continue
 		var stats: Dictionary = chamber.get_production_stats()
-		print("  f%d balls=%d releases=%d fire=%d max=%d gates=%d relaunch=%d locks=%d locked=%.1fs" % [
-			int(faction_id),
+		print("  f%d mode=%s balls=%d releases=%d fire=%d max=%d gates=%d relaunch=%d locks=%d locked=%.1fs pending=%d peak=%d queue=%d overflow=%d queued_fire=%d accumulated=%d" % [
+			int(faction_id), str(stats.get("mode", "locked")),
 			int(stats.get("balls", 0)),
 			int(stats.get("releases", 0)),
 			int(stats.get("fire_released", 0)),
@@ -753,6 +763,9 @@ func _print_production_summary() -> void:
 			int(stats.get("relaunches", 0)),
 			int(stats.get("lock_count", 0)),
 			float(stats.get("locked_seconds", 0.0)),
+			int(stats.get("pending", 0)), int(stats.get("pending_peak", 0)),
+			int(stats.get("queued", 0)), int(stats.get("queue_overflow", 0)),
+			int(stats.get("queued_fire", 0)), int(stats.get("accumulated_fire", 0)),
 		])
 		print("     ledger[%s] balanced=%s error=%s" % [
 			str(stats.get("ledger", "")),
@@ -782,8 +795,28 @@ func _sample_metrics() -> void:
 	_active_samples.append(float(active))
 	if active <= 0:
 		_empty_ticks += 1
+		_cur_empty += 1
+		_longest_empty = maxi(_longest_empty, _cur_empty)
+	else:
+		_cur_empty = 0
 	if active < 10:
 		_low_ticks += 1
+		_cur_low10 += 1
+		_longest_low10 = maxi(_longest_low10, _cur_low10)
+	else:
+		_cur_low10 = 0
+	if active < 30:
+		_low30_ticks += 1
+		_cur_low30 += 1
+		_longest_low30 = maxi(_longest_low30, _cur_low30)
+	else:
+		_cur_low30 = 0
+	if active < 50:
+		_low50_ticks += 1
+		_cur_low50 += 1
+		_longest_low50 = maxi(_longest_low50, _cur_low50)
+	else:
+		_cur_low50 = 0
 	_metric_ticks += 1
 
 	var battlefield = _main.runtime.battlefield
@@ -816,10 +849,15 @@ func _print_load_summary() -> void:
 		_max_share * 100.0,
 		_max_reversal * 100.0,
 	])
-	print("  activity         = empty_ticks=%.1f%% low10_ticks=%.1f%%" % [
+	print("  activity         = empty_ticks=%.1f%% low10_ticks=%.1f%% low30_ticks=%.1f%% low50_ticks=%.1f%%" % [
 		100.0 * float(_empty_ticks) / maxf(1.0, float(_metric_ticks)),
 		100.0 * float(_low_ticks) / maxf(1.0, float(_metric_ticks)),
+		100.0 * float(_low30_ticks) / maxf(1.0, float(_metric_ticks)),
+		100.0 * float(_low50_ticks) / maxf(1.0, float(_metric_ticks)),
 	])
+	print("  longest          = empty=%.2fs low10=%.2fs low30=%.2fs low50=%.2fs" % [
+		float(_longest_empty) / float(_ticks_per_second), float(_longest_low10) / float(_ticks_per_second),
+		float(_longest_low30) / float(_ticks_per_second), float(_longest_low50) / float(_ticks_per_second)])
 	var curve: Array[String] = []
 	for sample in _growth:
 		curve.append("%ds:%d/%d/%d/%d" % [int(sample[0]), int(sample[1]), int(sample[2]), int(sample[3]), int(sample[4])])
