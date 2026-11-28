@@ -112,8 +112,19 @@ func restore_states(entries) -> bool:
 		if channel < Stream.CHAMBER or channel >= Stream.PALETTE:
 			return false
 		parsed.append([channel, faction, int(str(entry[2]))])
-	_streams.clear()
+	# 不能清空字典：控制仓/炮台/事件控制器持有的是 RNG 对象引用。
+	# 先把所有已存在的模拟流恢复到“刚派生”的状态，再套用存档状态。
+	var saved: Dictionary = {}
 	for item in parsed:
-		var stream := get_stream(item[0], item[1])
-		stream.state = item[2]
+		saved[Vector2i(item[0], item[1])] = item[2]
+	for key in _streams.keys():
+		if key.x == Stream.PALETTE:
+			continue
+		var bytes := ("%d:%d:%d" % [root_seed, key.x, key.y]).sha256_buffer()
+		var fresh := RandomNumberGenerator.new()
+		fresh.seed = bytes.decode_s64(0)
+		_streams[key].state = fresh.state
+	for key in saved.keys():
+		var stream := get_stream(key.x, key.y)
+		stream.state = saved[key]
 	return true

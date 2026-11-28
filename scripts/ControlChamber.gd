@@ -486,6 +486,9 @@ func restore_from_state(state: Dictionary) -> void:
 			add_child(ball)
 			balls.append(ball)
 			_reset_stuck_state(ball)
+			var restored_stuck = ball_state.get("stuck_state", {})
+			if restored_stuck is Dictionary:
+				stuck_states[ball.get_instance_id()] = (restored_stuck as Dictionary).duplicate(true)
 			set_ball_stay_time(ball, float(ball_state.get("stay_time", 0.0)))
 	else:
 		var ball_count: int = int(restored_state.get("chamber_ball_count", 0))

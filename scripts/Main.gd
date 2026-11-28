@@ -1021,7 +1021,8 @@ func _save_game_progress() -> Dictionary:
 		is_game_over,
 		_hud_ref("winner_label"),
 		runtime.match_config,
-		runtime.match_random
+		runtime.match_random,
+		win_check_timer
 	)
 	if not bool(result.get("ok", false)):
 		pending_menu_status_message = str(result.get("error_message", "保存失败"))
@@ -1084,6 +1085,11 @@ func _apply_saved_state(restore_input) -> void:
 	var restore_plan: RestorePlan = restore_input if restore_input is RestorePlan else RestorePlan.build_from_clean_data(restore_input if restore_input is Dictionary else {})
 	var restore_data: Dictionary = restore_plan.to_restore_dictionary()
 
+	var win_timer_text: String = str(restore_data.get("win_check_timer_text", ""))
+	if win_timer_text.is_valid_float():
+		win_check_timer = win_timer_text.to_float()
+	else:
+		win_check_timer = float(restore_data.get("win_check_timer", win_check_timer))
 	SaveStateApplier.apply_owners(runtime.battlefield, restore_data, Callable(self, "_on_scores_changed"))
 	SaveStateApplier.apply_factions(
 		runtime.chambers,

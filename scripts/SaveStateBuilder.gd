@@ -27,12 +27,13 @@ static func build_faction_states(chambers: Dictionary, turrets: Dictionary) -> A
 		faction_state["turret_burst_index"] = turret.burst_index if turret != null else 0
 		faction_state["turret_burst_timer"] = turret.burst_timer if turret != null else 0.0
 		faction_state["turret_burst_locked"] = turret.burst_locked if turret != null else false
+		faction_state["turret_burst_origin_angle"] = turret.burst_origin_angle if turret != null else 0.0
 		faction_state["turret_burst_types"] = turret.burst_types.duplicate() if turret != null else []
 		faction_state["turret_burst_type_cursor"] = turret.burst_type_cursor if turret != null else 0
 		factions.append(faction_state)
 	return factions
 
-static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battlefield, bullet_container, event_roulette_controller, game_elapsed_time: float, is_game_over: bool, selected_save_slot: int, winner_label, match_config = null, match_random = null) -> Dictionary:
+static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battlefield, bullet_container, event_roulette_controller, game_elapsed_time: float, is_game_over: bool, selected_save_slot: int, winner_label, match_config = null, match_random = null, win_check_timer: float = 0.0) -> Dictionary:
 	var core_payload: Dictionary = {
 		"save_version": SaveGameCodec.get_current_save_version(),
 		"save_slot": selected_save_slot,
@@ -43,6 +44,10 @@ static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battle
 		"time_limit_minutes": GameConfig.get_time_limit_minutes(),
 		"owners": battlefield.owners,
 		"game_elapsed_time": game_elapsed_time,
+		# JSON 数字会丢最后几位；时钟用 var_to_str 保存，续局才能逐 tick 对齐。
+		"game_elapsed_time_text": var_to_str(game_elapsed_time),
+		"win_check_timer": float(win_check_timer),
+		"win_check_timer_text": var_to_str(float(win_check_timer)),
 		"is_game_over": is_game_over,
 		"match_finished": is_game_over || winner_label != null and is_instance_valid(winner_label) and winner_label.text != "",
 		"factions": build_faction_states(chambers, turrets),

@@ -175,10 +175,10 @@ func replace_trail_points(points: Array) -> void:
 
 func restore_from_state(state: Dictionary, new_battlefield, new_target_turrets = {}) -> void:
 	var restored_faction_id: int = clampi(int(state.get("faction_id", 0)), 0, 3)
-	var stored_position: Vector2 = SaveGameCodec.arr_to_vec2(state.get("position", [0, 0]), Vector2.ZERO)
+	var stored_position: Vector2 = SaveGameCodec.read_vec2_text(state, "position", Vector2.ZERO)
 	var has_battlefield_space: bool = is_instance_valid(new_battlefield) and state.get("position_space") == SaveGameCodec.BULLET_BATTLEFIELD_SPACE
 	var restored_position: Vector2 = new_battlefield.to_global(stored_position) if has_battlefield_space else stored_position
-	var restored_direction: Vector2 = SaveGameCodec.arr_to_vec2(state.get("direction", [1, 0]), Vector2.RIGHT).normalized()
+	var restored_direction: Vector2 = SaveGameCodec.read_vec2_text(state, "direction", Vector2.RIGHT).normalized()
 	if restored_direction.length() <= 0.001:
 		restored_direction = Vector2.RIGHT
 
@@ -188,7 +188,7 @@ func restore_from_state(state: Dictionary, new_battlefield, new_target_turrets =
 	var blast_radius: int = int(pool.explosion_radius) if pool != null and is_instance_valid(pool) else 0
 	apply_type_profile(restored_type, pierce_captures, blast_radius)
 	enemy_captures_done = maxi(0, int(state.get("enemy_captures_done", 0)))
-	age = clampf(float(state.get("age", 0.0)), 0.0, GameConfig.BULLET_MAX_LIFETIME)
+	age = clampf(SaveGameCodec.read_float_text(state, "age", 0.0), 0.0, GameConfig.BULLET_MAX_LIFETIME)
 	last_cell = SaveGameCodec.arr_to_vec2i(state.get("last_cell", [-999, -999]))
 
 	var restored_trail_points: Array = []

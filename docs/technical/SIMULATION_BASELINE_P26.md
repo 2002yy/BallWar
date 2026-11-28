@@ -38,6 +38,8 @@ Integration: `feat/p26-integration`
 | 反向结算顺序，同种子两次 | 一致 |
 | 显式 `BALLWAR_RNG_STREAM_MAP=identity` vs 不设置 | 一致 |
 | 旋转 1：随机流跟阵营 vs 跟角落 | tick 0 即分叉（映射生效） |
+| 保存→继续：存档 tick 的状态 | RNG 流、时钟、领土、炮台、控制仓字段一致（20s/30s/45s 三种切点） |
+| 保存→继续：之后 60 秒逐 tick | **部分通过**：20s 切点首个分歧在 1343（+2.4s），45s 在 2848（+0.7s）；分歧点是控制仓 pending/burst 生命周期，不是 RNG |
 
 现役 runner：15 个常规 + 2 个 DEV-SPEED 专项全部通过；`IntegrationTestRunner` 240 checks，`EndToEndContinueMainTestRunner` 62 checks，`MatchRandomTestRunner` 17 checks。
 
@@ -47,8 +49,13 @@ Integration: `feat/p26-integration`
 
 - `MatchRandom` 的五个流（控制仓/炮台/炮弹/事件/配色）继续按 `root_seed:channel:faction` 固定派生；每个流独立于创建顺序与其它流的抽取次数。
 - 新增 `serialize_states()` / `restore_states()`：状态用十进制字符串保存，避免 JSON 浮点截断 64 位整数；恢复前先完整校验，坏存档不会清空当前随机流；配色流明确拒绝恢复为模拟流。
-- 存档新增 `match_seed`、`match_random_states`、`spawn_rotation`。续局在建局、应用存档状态之后再恢复随机流，确保“保存→继续”后的第一次抽取与不中断运行一致。
+- 存档新增 `match_seed`、`match_random_states`、`spawn_rotation`。续局在建局、应用存档状态之后再恢复随机流，且恢复时**原地改写已有 RNG 对象**——控制仓/炮台/事件控制器持有的是对象引用，清空字典会让它们继续用旧对象。
+- 时钟与关键浮点用 `String.num(value, 17)` / `var_to_str` 存文本，读取用 `String.to_float()`（`str_to_var()` 只保留约 14 位，会丢最后几位）。
+- 额外补存的模拟字段：炮台 `burst_origin_angle`、`win_check_timer`、控制球 `stay_time`/`stuck_state`，以及控制球与炮弹的位置/速度/年龄文本。
+- 修复了一个续局边界：存档落在“burst 刚打完、炮台尚未发出解锁信号”的 tick 时，控制仓会保持锁定；恢复时若 `turret.burst_remaining <= 0` 且控制仓仍锁着，补一次解锁。
 - 旧存档缺少这些字段时按原格式继续：`match_seed=-1`、不恢复随机流，不阻塞读取。
+
+**残留**：即使存档 tick 的字段一致，续局后 1–2 秒内仍可能出现控制仓 pending 差 1。根因是 `stuck_state`/球体累积浮点在 JSON 往返后最后几位不同，导致下一次 gate/relock 的 tick 偏移。要完全逐 tick 一致，需要把物理浮点量化到固定网格或改用二进制存档；本轮未做，作为 P3 的存档硬化项。复现开关：`BALLWAR_SAVE_RESUME_AT=<秒>`（探针专用）。
 
 ## 4. 公平性归因（P2.6-A）
 
@@ -196,3 +203,4 @@ GODOT_BIN=/path/to/godot RUN_WIN=/path/to/run-iso.sh JOBS=10   bash scripts/test
 - 40 种子只覆盖 40 条主种子，不足以给 25% 做严格置信区间；目前只能说不存在明显、稳定的阵营偏向。
 - 随机流映射是实验开关，默认 `identity`；不作为正式玩法。
 - 续局恢复的是模拟流；表现层随机（配色等）不保存，也不应影响模拟。
+- 续局不是逐 tick 位级一致：存档 tick 的可见状态与 RNG 一致，但控制仓/球的浮点历史会让 1–2 秒后的 pending 或 burst 边界偏移。正式发布前若要承诺“存档续局完全可复现”，需要二进制浮点存档或统一量化。

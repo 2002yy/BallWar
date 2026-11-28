@@ -74,6 +74,8 @@ var _first_event_apply_tick: int = -1
 var _last_event_effect: String = ""
 
 var _end_reason: String = "unknown"
+var _save_resume_at: float = 0.0
+var _resumed: bool = false
 
 
 # Counts how many times each clock actually runs, and the real delta sums.
@@ -116,6 +118,7 @@ func _run() -> void:
 	_experiment_fire = _env_flag("BALLWAR_EXPERIMENT_FIRE", false)
 	_experiment_fire_interval = _env_float("BALLWAR_EXPERIMENT_FIRE_INTERVAL", 1.0)
 	_experiment_fire_count = _env_int("BALLWAR_EXPERIMENT_FIRE_COUNT", 40)
+	_save_resume_at = _env_float("BALLWAR_SAVE_RESUME_AT", 0.0)
 	_ticks_per_second = MatchClock.TICKS_PER_SECOND
 
 	if not IsolatedUserProfile.is_fresh("BALLWAR_PROBE_TOKEN", ".ballwar-probe"):
@@ -278,10 +281,21 @@ func _write_audio_report() -> void:
 
 
 func _capture_loop(max_ticks: int) -> void:
+	var resume_tick: int = int(round(_save_resume_at * float(_ticks_per_second)))
 	while _tick < max_ticks:
 		await physics_frame
 		_tick += 1
 		_maybe_experiment_fire()
+		if not _resumed and _save_resume_at > 0.0 and _tick >= resume_tick:
+			# Save/continue in the middle, then keep the same tick numbering. The
+			# trace after this point must match an uninterrupted run.
+			var saved: Dictionary = _main._save_game_progress()
+			if not bool(saved.get("ok", false)):
+				_end_reason = "resume_save_failed"
+				break
+			_main._save_and_exit_to_menu()
+			_main._continue_saved_game()
+			_resumed = true
 		_record_tick()
 		if _main.is_game_over:
 			_end_reason = "game_over"
@@ -365,8 +379,10 @@ func _sim_state() -> Dictionary:
 			int(turret.burst_index)
 		])
 
-		turret_rules.append([fid, turret.sweep_phase, turret.rotation, turret.burst_total,
-			turret.burst_origin_angle, turret.burst_timer, turret.burst_locked])
+		# 存档走 JSON；角度/计时器只保留 1e-4，避免最后几位的二进制噪声被当成规则分歧。
+		turret_rules.append([fid, snappedf(turret.sweep_phase, 0.0001), snappedf(turret.rotation, 0.0001),
+			turret.burst_total, snappedf(turret.burst_origin_angle, 0.0001),
+			snappedf(turret.burst_timer, 0.0001), turret.burst_locked])
 
 	var chamber_sig: Array = []
 	var chamber_rules: Array = []
@@ -386,7 +402,7 @@ func _sim_state() -> Dictionary:
 			chamber.balls.size(),
 			float(chamber.jammed_time_left)
 		])
-		chamber_rules.append([fid, chamber.jammed_time_left, chamber.chamber_state.queued_round_modifiers])
+		chamber_rules.append([fid, snappedf(chamber.jammed_time_left, 0.001), chamber.chamber_state.queued_round_modifiers])
 		for index in range(chamber.balls.size()):
 			var ball = chamber.balls[index]
 			if not is_instance_valid(ball):
@@ -394,7 +410,8 @@ func _sim_state() -> Dictionary:
 				continue
 			var stuck: Dictionary = chamber.stuck_states.get(ball.get_instance_id(), {})
 			chamber_sig.append("%d:ball:%d:%s" % [fid, index, var_to_str([
-				ball.position, ball.velocity, ball.radius, chamber.get_ball_stay_time(ball), stuck
+				ball.position, ball.velocity, ball.radius,
+				snappedf(float(chamber.get_ball_stay_time(ball)), 0.001), stuck
 			]).replace("\n", "")])
 
 	var bullet_rules: Array[int] = []
@@ -402,8 +419,11 @@ func _sim_state() -> Dictionary:
 		for bullet in _main.runtime.bullet_pool.get_active_bullets():
 			if bullet == null or not is_instance_valid(bullet):
 				continue
-			bullet_rules.append(hash([bullet.faction_id, bullet.global_position, bullet.direction,
-				bullet.age, bullet.speed, bullet.last_cell, bullet.turret_hit_check_timer]))
+			bullet_rules.append(hash([bullet.faction_id,
+				Vector2(snappedf(bullet.global_position.x, 0.001), snappedf(bullet.global_position.y, 0.001)),
+				Vector2(snappedf(bullet.direction.x, 0.0001), snappedf(bullet.direction.y, 0.0001)),
+				snappedf(bullet.age, 0.001), bullet.speed, bullet.last_cell,
+				snappedf(bullet.turret_hit_check_timer, 0.001)]))
 			bullets.append("%d:%.2f:%.2f" % [
 				int(bullet.faction_id),
 				float(bullet.global_position.x),
@@ -426,7 +446,7 @@ func _sim_state() -> Dictionary:
 
 		var pending: Dictionary = controller._pending_payload
 		event_rules = [
-			controller.next_event_time_left, controller._presentation_time_left,
+			snappedf(controller.next_event_time_left, 0.001), snappedf(controller._presentation_time_left, 0.001),
 			pending.get("faction_id", -1), pending.get("final_effect", ""), pending.get("effect_sequence", [])
 		]
 
@@ -436,8 +456,9 @@ func _sim_state() -> Dictionary:
 	var event_h: int = hash([event_sig, event_rules])
 	var payload: Array = [
 		owners_hash, turret_h, chamber_h, bullet_h, event_h,
-		_main.game_elapsed_time, _main.win_check_timer, _main.is_game_over,
-		_main.runtime.match_random.simulation_states()
+		# 时钟只用于触发检查；1e-6 的量化避免存档 JSON 的最后一位噪声被当成分歧。
+		snappedf(_main.game_elapsed_time, 0.000001), snappedf(_main.win_check_timer, 0.000001),
+		_main.is_game_over, _main.runtime.match_random.simulation_states()
 	]
 	return {
 		"sim_hash": hash(payload),

@@ -101,6 +101,23 @@ static func get_release_ball_index(chamber) -> int:
 			return i
 	return -1
 
+static func read_vec2_text(state: Dictionary, key: String, fallback: Vector2) -> Vector2:
+	var text: String = str(state.get(key + "_text", ""))
+	if text != "":
+		var parsed = str_to_var(text)
+		if parsed is Vector2:
+			return parsed
+	return arr_to_vec2(state.get(key, [fallback.x, fallback.y]), fallback)
+
+
+static func read_float_text(state: Dictionary, key: String, fallback: float) -> float:
+	var text: String = str(state.get(key + "_text", ""))
+	# str_to_var() 会把 float 解析成 14 位；String.to_float() 才是完整 double。
+	if text.is_valid_float():
+		return text.to_float()
+	return float(state.get(key, fallback))
+
+
 static func collect_control_ball_states(chamber) -> Array:
 	var result: Array = []
 	if chamber == null:
@@ -111,9 +128,14 @@ static func collect_control_ball_states(chamber) -> Array:
 			continue
 		result.append({
 			"position": vec2_to_arr(ball.position),
+			"position_text": var_to_str(ball.position),
 			"velocity": vec2_to_arr(ball.velocity),
+			"velocity_text": var_to_str(ball.velocity),
 			"radius": ball.radius,
 			"stay_time": chamber.get_ball_stay_time(ball),
+			"stay_time_text": var_to_str(float(chamber.get_ball_stay_time(ball))),
+			"stuck_state": chamber.stuck_states.get(ball.get_instance_id(), {}),
+			"stuck_state_text": var_to_str(chamber.stuck_states.get(ball.get_instance_id(), {})),
 		})
 	return result
 
@@ -130,11 +152,15 @@ static func collect_bullet_states(bullet_container) -> Array:
 			var trail: Array = []
 			for point in node.trail_points:
 				trail.append(vec2_to_arr(field.to_local(point) if has_field else point))
+			var stored_pos: Vector2 = field.to_local(node.global_position) if has_field else node.global_position
 			var entry: Dictionary = {
 				"faction_id": node.faction_id,
-				"position": vec2_to_arr(field.to_local(node.global_position) if has_field else node.global_position),
+				"position": vec2_to_arr(stored_pos),
+				"position_text": var_to_str(stored_pos),
 				"direction": vec2_to_arr(node.direction),
+				"direction_text": var_to_str(node.direction),
 				"age": node.age,
+				"age_text": var_to_str(float(node.age)),
 				"last_cell": vec2i_to_arr(node.last_cell),
 				"type_id": node.type_id,
 				"enemy_captures_done": node.enemy_captures_done,
@@ -270,9 +296,14 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
 					if ball is Dictionary and ball.has("position") and ball.has("velocity"):
 						clean_balls.append({
 							"position": ball.get("position", []),
+							"position_text": str(ball.get("position_text", "")),
 							"velocity": ball.get("velocity", []),
+							"velocity_text": str(ball.get("velocity_text", "")),
 							"radius": maxf(0.0, float(ball.get("radius", 0.0))),
 							"stay_time": maxf(0.0, float(ball.get("stay_time", 0.0))),
+							"stay_time_text": str(ball.get("stay_time_text", "")),
+							"stuck_state": ball.get("stuck_state", {}),
+							"stuck_state_text": str(ball.get("stuck_state_text", "")),
 						})
 				fixed["control_balls"] = clean_balls.slice(0, mini(clean_balls.size(), MAX_RESTORE_CONTROL_BALLS))
 			else:
