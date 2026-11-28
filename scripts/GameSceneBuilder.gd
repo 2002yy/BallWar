@@ -55,7 +55,7 @@ static func create_turrets(owner, game_layer: Node, battlefield, bullet_containe
             GameConfig.Faction.YELLOW: origin + Vector2(size - margin, size - margin),
         }
 
-    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+    for faction_id in GameConfig.experiment_faction_order():
         var slot: int = GameConfig.spawn_slot(faction_id)
         var turret_position: Vector2 = positions.get(slot, positions.get(faction_id, Vector2.ZERO))
         var turret = Turret.new()
@@ -124,7 +124,7 @@ static func create_control_chambers(owner, game_layer: Node, battlefield, turret
             GameConfig.Faction.YELLOW: Vector2(right_x, bottom_y),
         }
 
-    for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
+    for faction_id in GameConfig.experiment_faction_order():
         var slot: int = GameConfig.spawn_slot(faction_id)
         var chamber_position: Vector2 = chamber_positions.get(slot, chamber_positions.get(faction_id, Vector2.ZERO))
         var chamber = ControlChamber.new()

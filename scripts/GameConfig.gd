@@ -60,6 +60,13 @@ static func get_spawn_rotation() -> int:
 static func spawn_slot(faction_id: int) -> int:
 	return posmod(faction_id + _spawn_rotation, 4)
 
+static func experiment_faction_order() -> Array:
+	# 默认 BLUE/RED/GREEN/YELLOW；只用于结算顺序偏差实验。
+	var order: Array = [Faction.BLUE, Faction.RED, Faction.GREEN, Faction.YELLOW]
+	if OS.get_environment("BALLWAR_FACTION_ORDER").strip_edges().to_lower() == "reverse":
+		order.reverse()
+	return order
+
 static func get_turret_max_health(grid_size: int) -> int:
 	match grid_size:
 		10:

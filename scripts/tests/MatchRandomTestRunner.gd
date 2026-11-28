@@ -27,6 +27,20 @@ func _run() -> void:
 		a.get_stream(Stream.TURRET, 0).randi()
 
 
+	if not _check(MatchRandom.parse_faction_stream_map("identity") == [], "identity map keeps streams per faction"):
+		return
+	if not _check(MatchRandom.parse_faction_stream_map("slot", 1) == [1, 2, 3, 0], "slot map follows the current rotation"):
+		return
+	if not _check(MatchRandom.parse_faction_stream_map("reverse") == [3, 2, 1, 0], "reverse map is a permutation"):
+		return
+	if not _check(MatchRandom.parse_faction_stream_map("1,1,2,3") == [], "duplicate mapping is rejected"):
+		return
+	var swapped := MatchRandom.new(12345, [1, 0, 2, 3])
+	var plain := MatchRandom.new(12345)
+	if not _check(swapped.get_stream(Stream.CHAMBER, 0).randi() == plain.get_stream(Stream.CHAMBER, 1).randi(),
+		"faction stream map separates identity from stream"):
+		return
+
 	var serialized := a.serialize_states()
 	var restored := MatchRandom.new(999)
 	if not _check(restored.restore_states(serialized), "serialized simulation state restores"):

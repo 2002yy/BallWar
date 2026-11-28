@@ -412,7 +412,10 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	var effective_seed: int = match_seed
 	if _continue_match_seed >= 0:
 		effective_seed = _continue_match_seed
-	var match_random := MatchRandom.new(effective_seed)
+	var stream_map: Array = MatchRandom.parse_faction_stream_map(
+		OS.get_environment("BALLWAR_RNG_STREAM_MAP"),
+		GameConfig.get_spawn_rotation())
+	var match_random := MatchRandom.new(effective_seed, stream_map)
 	if selected_palette_name == "默认随机":
 		GameConfig.set_random_palette(match_random.get_stream(MatchRandom.Stream.PALETTE))
 	else:
