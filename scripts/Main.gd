@@ -1045,10 +1045,11 @@ func _apply_saved_state(restore_input) -> void:
 	var restore_data: Dictionary = restore_plan.to_restore_dictionary()
 
 	var win_timer_text: String = str(restore_data.get("win_check_timer_text", ""))
-	if win_timer_text.is_valid_float():
-		win_check_timer = win_timer_text.to_float()
-	else:
+	if restore_data.has("win_check_timer"):
+		# 新存档的数值字段逐位精确；旧存档只有文本，才回退到文本。
 		win_check_timer = float(restore_data.get("win_check_timer", win_check_timer))
+	elif not win_timer_text.is_empty():
+		win_check_timer = SaveGameCodec.text_to_float(win_timer_text, win_check_timer)
 	SaveStateApplier.apply_owners(runtime.battlefield, restore_data, Callable(self, "_on_scores_changed"))
 	SaveStateApplier.apply_factions(
 		runtime.chambers,

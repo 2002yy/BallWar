@@ -7,6 +7,7 @@ const BULLET_BATTLEFIELD_SPACE: String = "battlefield"
 const CURRENT_SAVE_VERSION: String = SAVE_SCHEMA_VERSION
 const MAX_RESTORE_CONTROL_BALLS: int = 8
 const PAYLOAD_HASH_KEY: String = "payload_hash"
+const FLOAT_MARKER_KEY: String = "__f64"
 const INTEGRITY_STATUS_MISSING: String = "missing"
 const INTEGRITY_STATUS_VALID: String = "valid"
 const INTEGRITY_STATUS_MISMATCH: String = "mismatch"
@@ -106,7 +107,44 @@ static func float_to_text(value: float) -> String:
 	return var_to_bytes(value).hex_encode()
 
 
-static func text_to_float(text: String, fallback: float) -> float:
+# Godot 的 JSON 写出/解析不能保证 float64 逐位往返：1/60 这类值会偏 1 ULP
+# （full_precision 也一样）。模拟状态必须逐位一致，所以 float 在文件边界
+# 通过 var_to_bytes() 的十六进制文本承载。
+static func encode_floats(value):
+	if value is float:
+		return {FLOAT_MARKER_KEY: var_to_bytes(value).hex_encode()}
+	if value is Dictionary:
+		var encoded: Dictionary = {}
+		for key in value.keys():
+			encoded[key] = encode_floats(value[key])
+		return encoded
+	if value is Array:
+		var encoded_array: Array = []
+		encoded_array.resize(value.size())
+		for i in range(value.size()):
+			encoded_array[i] = encode_floats(value[i])
+		return encoded_array
+	return value
+
+
+static func decode_floats(value):
+	if value is Dictionary:
+		if value.size() == 1 and value.has(FLOAT_MARKER_KEY):
+			return hex_to_float(str(value[FLOAT_MARKER_KEY]))
+		var decoded: Dictionary = {}
+		for key in value.keys():
+			decoded[key] = decode_floats(value[key])
+		return decoded
+	if value is Array:
+		var decoded_array: Array = []
+		decoded_array.resize(value.size())
+		for i in range(value.size()):
+			decoded_array[i] = decode_floats(value[i])
+		return decoded_array
+	return value
+
+
+static func hex_to_float(text: String, fallback: float = 0.0) -> float:
 	if text.is_empty():
 		return fallback
 	var bytes: PackedByteArray = text.hex_decode()
@@ -114,6 +152,12 @@ static func text_to_float(text: String, fallback: float) -> float:
 		return fallback
 	var value = bytes_to_var(bytes)
 	return float(value) if value is float else fallback
+
+
+static func text_to_float(text: String, fallback: float) -> float:
+	if text.is_empty():
+		return fallback
+	return hex_to_float(text, fallback)
 
 
 static func collect_control_ball_states(chamber) -> Array:
@@ -131,6 +175,12 @@ static func collect_control_ball_states(chamber) -> Array:
 			"stay_time": chamber.get_ball_stay_time(ball),
 			"stay_time_text": float_to_text(float(chamber.get_ball_stay_time(ball))),
 		})
+		if OS.get_environment("BALLWAR_T21_TRACE") == "1":
+			print("[T21P1] ball=%d bits=%s value=%s" % [
+				result.size() - 1,
+				float_to_text(float(chamber.get_ball_stay_time(ball))),
+				String.num(float(chamber.get_ball_stay_time(ball)), 17),
+			])
 	return result
 
 static func collect_bullet_states(bullet_container) -> Array:

@@ -554,12 +554,44 @@ func _write_detail(state: Dictionary) -> void:
 		return
 	for sig in state["turret_sig"]:
 		_detail_file.store_line("%d\tturret\t%s" % [_tick, str(sig)])
+	if OS.get_environment("BALLWAR_T21_TRACE") == "1":
+		for fid in _main.runtime.turrets.keys():
+			var turret = _main.runtime.turrets[fid]
+			if turret == null or not is_instance_valid(turret):
+				continue
+			print("[T21T] tick=%d fid=%d timer=%s sweep=%s rot=%s origin=%s" % [
+				_tick, int(fid),
+				var_to_bytes(float(turret.burst_timer)).hex_encode(),
+				var_to_bytes(float(turret.sweep_phase)).hex_encode(),
+				var_to_bytes(float(turret.rotation)).hex_encode(),
+				var_to_bytes(float(turret.burst_origin_angle)).hex_encode(),
+			])
 	for sig in state["chamber_sig"]:
 		_detail_file.store_line("%d\tchamber\t%s" % [_tick, str(sig)])
+	if OS.get_environment("BALLWAR_T21_TRACE") == "1":
+		for fid in _main.runtime.chambers.keys():
+			var chamber = _main.runtime.chambers[fid]
+			if chamber == null or not is_instance_valid(chamber):
+				continue
+			for index in range(chamber.balls.size()):
+				var ball = chamber.balls[index]
+				if not is_instance_valid(ball):
+					continue
+				print("[T21C] tick=%d fid=%d ball=%d bits=%s" % [
+					_tick, int(fid), index,
+					var_to_bytes(float(chamber.get_ball_stay_time(ball))).hex_encode(),
+				])
 	for sig in state["bullet_sig"]:
 		_detail_file.store_line("%d\tbullet\t%s" % [_tick, str(sig)])
 	_detail_file.store_line("%d\tevent\t%s" % [_tick, _event_sig_now()])
 	_detail_file.store_line("%d\tqueue\t%d" % [_tick, _total_burst_queue()])
+	if OS.get_environment("BALLWAR_T21_TRACE") == "1":
+		print("[T21S] tick=%d elapsed=%s win=%s rng=%s" % [
+			_tick,
+			var_to_bytes(float(_main.game_elapsed_time)).hex_encode(),
+			var_to_bytes(float(_main.win_check_timer)).hex_encode(),
+			str(_main.runtime.match_random.simulation_states()),
+		])
 
 
 # Sum of burst_remaining across all turrets. This is the value Turret reads via

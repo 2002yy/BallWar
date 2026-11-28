@@ -74,6 +74,7 @@ jobs:
             scripts: |
               GameStateCoordinatorTestRunner.gd
               SaveFlowControllerTestRunner.gd
+              SaveBitExactnessTestRunner.gd
               RestorePlanTestRunner.gd
               IntegrationTestRunner.gd
               LayoutSanityTestRunner.gd
