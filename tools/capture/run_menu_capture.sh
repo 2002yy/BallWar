@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# 主菜单三档截图：1120×720、1920×1080 实机窗口，3840×2160 离屏。
+# 主菜单截图：三档产品画面 + 一档开发压力测试。
 #
-# 为什么要三档：
+# 为什么要这几档：
 #   1120×720 是设计画布，也是 project.godot 的基准分辨率；
 #   1920×1080 走 canvas_items + expand，逻辑画布其实是 1280×720 再放大 1.5 倍，
 #     这是玩家真会看到的画面，所以必须拍窗口而不是拍离屏；
-#   3840×2160 用 SubViewport 离屏渲染，布局按真 4K 重算，
-#     顺便不需要一块 4K 显示器。
+#   3840×2160 用 SubViewport 离屏渲染，并以 size_2d_override 复现 canvas_items
+#     缩放后的逻辑画布（1280×720），不需要一块 4K 显示器也能拍到真机画面。
+#   3840×2160 native 只关掉逻辑画布压缩，是开发压力测试，不是产品画面。
 #
 # 用法：
 #   tools/capture/run_menu_capture.sh
@@ -84,7 +85,9 @@ run_capture "1920x1080" "" "" "$ALL_PAGES" --resolution 1920x1080 || fail=1
 echo "[3/4] 3840x2160 offscreen, real display path (canvas_items 3x)"
 run_capture "3840x2160" "3840x2160" "" "$ALL_PAGES" --resolution 800x600 || fail=1
 
-echo "[4/4] 3840x2160 offscreen, native canvas stress (main page only)"
+# [4/4] 仅开发压力测试：native 逻辑画布不属于产品布局要求，只验证不崩溃/不溢出。
+# 结果图不用于美术验收；正式 4K 产品画面是 [3/4] 的 canvas_items 缩放路径。
+echo "[4/4] 3840x2160 offscreen, native canvas stress (DEV ONLY, not a product layout)"
 run_capture "3840x2160_native" "3840x2160" "native" "main" --resolution 800x600 || fail=1
 
 echo "----"

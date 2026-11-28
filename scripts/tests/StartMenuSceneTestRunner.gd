@@ -183,6 +183,68 @@ func _run() -> void:
 			var board_px: float = float(board_node.get("board_size")) * chamber_preview.scale.x
 			t.between(board_px, 320.0, 350.0, "central board renders at 320-350 px")
 
+	# ------------------------------------------- 阵营数据一致性（M01-I2 收口）
+	# 预览与正式战斗共享「阵营 ID / 四角映射 / 调色板」同一份数据定义。
+	# 旧版把四种颜色硬编码在 .tscn，预览四角 = 红/黄/绿/蓝，战斗四角 =
+	# 蓝/红/绿/黄，只有左下绿一致。这里把映射、坐标和取色来源都钉住。
+	var expected_corners := LayoutCoordinator.corner_factions()
+	t.eq(int(expected_corners["top_left"]), int(GameConfig.Faction.BLUE), "shared corner map: top-left is BLUE")
+	t.eq(int(expected_corners["top_right"]), int(GameConfig.Faction.RED), "shared corner map: top-right is RED")
+	t.eq(int(expected_corners["bottom_left"]), int(GameConfig.Faction.GREEN), "shared corner map: bottom-left is GREEN")
+	t.eq(int(expected_corners["bottom_right"]), int(GameConfig.Faction.YELLOW), "shared corner map: bottom-right is YELLOW")
+
+	var battle_layout := LayoutCoordinator.calculate_layout(40, Vector2(1280, 720), false)
+	var turret_pos: Dictionary = battle_layout["turret_positions"]
+	var pos_tl: Vector2 = turret_pos[int(expected_corners["top_left"])]
+	var pos_tr: Vector2 = turret_pos[int(expected_corners["top_right"])]
+	var pos_bl: Vector2 = turret_pos[int(expected_corners["bottom_left"])]
+	var pos_br: Vector2 = turret_pos[int(expected_corners["bottom_right"])]
+	t.that(pos_tl.x < pos_tr.x and pos_tl.y < pos_bl.y and pos_tr.y < pos_br.y and pos_bl.x < pos_br.x,
+		"battle turret coordinates are generated from the shared corner map")
+
+	if preview_scene != null:
+		var corner_nodes := {
+			"top_left": ["ChamberTopLeft", "TurretTopLeft"],
+			"top_right": ["ChamberTopRight", "TurretTopRight"],
+			"bottom_left": ["ChamberBottomLeft", "TurretBottomLeft"],
+			"bottom_right": ["ChamberBottomRight", "TurretBottomRight"],
+		}
+		for corner_key in LayoutCoordinator.CORNER_KEYS:
+			var expected_id: int = int(expected_corners[corner_key])
+			for corner_part_name in corner_nodes[corner_key]:
+				var corner_part: Node = preview_scene.get_node_or_null(corner_part_name)
+				if corner_part != null:
+					t.eq(int(corner_part.get("faction_id")), expected_id,
+						"%s uses shared faction id for %s" % [corner_part_name, corner_key])
+		var expected_order := LayoutCoordinator.corner_faction_order()
+		for order_part_name in ["Board", "Chassis"]:
+			var order_part: Node = preview_scene.get_node_or_null(order_part_name)
+			if order_part != null:
+				t.eq(order_part.get("corner_faction_ids"), expected_order,
+					"%s uses shared corner faction order" % order_part_name)
+
+		# 实际调色板数量以 GameConfig.get_palette_names() 为准（当前 5 套）。
+		# 颜色必须在绘制时实时取 GameConfig.faction_color()，不能有本地缓存。
+		var board_colors_node: Node = preview_scene.get_node_or_null("Board")
+		t.that(board_colors_node != null and board_colors_node.has_method("faction_color_at"),
+			"board exposes live faction colours")
+		for palette_name in GameConfig.get_palette_names():
+			GameConfig.set_palette_by_name(str(palette_name))
+			if preview_scene.has_method("apply_faction_ids"):
+				preview_scene.call("apply_faction_ids")
+			var palette_ok: bool = board_colors_node != null and board_colors_node.has_method("faction_color_at")
+			if palette_ok:
+				for i in range(4):
+					var want: Color = GameConfig.faction_color(int(expected_order[i]))
+					var got: Color = board_colors_node.call("faction_color_at", i)
+					if absf(got.r - want.r) > 0.001 or absf(got.g - want.g) > 0.001 or absf(got.b - want.b) > 0.001:
+						palette_ok = false
+			t.that(palette_ok, "preview board colour follows palette %s" % palette_name)
+		GameConfig.reset_runtime_defaults()
+		if preview_scene.has_method("apply_faction_ids"):
+			preview_scene.call("apply_faction_ids")
+		t.eq(GameConfig.get_palette_name(), "\u7ecf\u5178", "palette restored to classic after preview checks")
+
 	t.that(_rect_inside(preview_container.get_global_rect(), root_panel.get_global_rect()), "preview container stays inside root panel")
 	t.that(_rect_inside(stage_chrome.get_global_rect(), root_panel.get_global_rect()), "stage chrome stays inside root panel")
 	t.that(preview_container.position.x >= 0.0 and preview_container.position.y >= 0.0, "preview sits at the stage inner origin")

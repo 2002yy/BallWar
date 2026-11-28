@@ -28,7 +28,9 @@ const BALL_SPOTS := [
 
 @export var left_mode: bool = true
 @export var chamber_size: Vector2 = Vector2(84.0, 190.0)
-@export var faction_color: Color = Color(0.85, 0.18, 0.18)
+# 阵营 ID 由 PreviewScene 从 LayoutCoordinator.corner_factions() 注入；
+# 颜色在绘制时实时取 GameConfig.faction_color()，不缓存、不硬编码。
+@export var faction_id: int = 0
 @export var ball_count: int = 4
 
 
@@ -102,6 +104,7 @@ func _closed(points: PackedVector2Array) -> PackedVector2Array:
 
 
 func _draw_balls(glass: Rect2) -> void:
+	var faction_color: Color = GameConfig.faction_color(faction_id)
 	var count: int = clampi(ball_count, 0, BALL_SPOTS.size())
 	var r: float = minf(glass.size.x * 0.105, glass.size.y * 0.052)
 	var r_glass: float = glass.size.x * 0.5

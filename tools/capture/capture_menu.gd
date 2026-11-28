@@ -16,15 +16,22 @@ extends SceneTree
 #   离屏还分两种画布：
 #     默认（模拟真机）—— 用 size_2d_override 把逻辑画布压回 canvas_items 拉伸
 #       之后的尺寸（4K 上是 1280×720），和玩家在 4K 显示器上看到的一模一样。
-#     CAPTURE_2D_CANVAS=native —— 不压，逻辑画布就是 WxH。这是压力测试：
-#       布局要在 3840×2160 的逻辑画布下不塌，但它不是玩家会看到的画面。
+#     CAPTURE_2D_CANVAS=native —— 不压，逻辑画布就是 WxH。
+#       【开发压力测试，非产品路径】只用来确认引擎在超大逻辑画布下不崩溃、
+#       不溢出；不保证 UI 按比例放大、也不保证填满画布，更不代表玩家会看到的
+#       画面。截图里导航缩在左上角属于该路径的已知表现，不是待修的布局缺陷。
+#       产品支持的是「4K 显示输出」，不是「3840×2160 逻辑坐标重新布局」：
+#       正式方案是 project.godot 的 canvas_items + expand，4K 上跑的是
+#       1280×720 逻辑画布放大 3 倍；1120×720 / 1920×1080 / 2560×1440 /
+#       3840×2160 均按此路径正常显示缩放。Android 触屏另行专项验收。
 #
 # Environment:
 #   CAPTURE_OUT        输出目录（默认 user://menu_captures）
 #   CAPTURE_TAG        文件名前缀（默认 window）
 #   CAPTURE_PAGES      逗号分隔的页面，默认 main,mode,config,continue
 #   CAPTURE_OFFSCREEN  "WxH"，设了就走进离屏模式
-#   CAPTURE_2D_CANVAS  "native" 关闭逻辑画布压缩（默认按 canvas_items 拉伸）
+#   CAPTURE_2D_CANVAS  "native" 关闭逻辑画布压缩（开发压力测试，非产品路径）
+#   CAPTURE_SELECT_SLOT  拍 continue 页前点选该存档槽（展示已选槽位详情）
 #   CAPTURE_DEBUG      "1" 打印状态栏几何，排布局问题时用
 #
 # Exit codes: 0 ok, 2 目录不可写, 3 拿不到图像
@@ -111,12 +118,33 @@ func _run() -> void:
 		# 换页后容器要重排一次，Bracket/Label 的尺寸依赖排序结果。
 		for i in 4:
 			await process_frame
+		if key == "continue":
+			var select_slot: String = _env("CAPTURE_SELECT_SLOT", "")
+			if select_slot != "":
+				_apply_slot_selection(int(select_slot))
+				for i in 3:
+					await process_frame
 		if _env("CAPTURE_DEBUG", "") == "1":
 			_dump_status_label()
 		await _shot(viewport, key)
 
 	print("[MenuCapture] done, %d shots" % _shot_index)
 	quit(0)
+
+
+func _apply_slot_selection(slot_index: int) -> void:
+	# 走真实按钮信号，而不是直接改 owner 状态：这样槽位详情、继续按钮、
+	# 底部状态栏都按玩家点选的路径刷新，截图验的是交互而不是伪造的数据。
+	var grid: Node = _menu.get_node_or_null("%SlotGrid")
+	if grid == null:
+		print("[MenuCapture] WARN: no SlotGrid, skip slot selection")
+		return
+	var button: Button = grid.get_node_or_null("SlotButton_%d" % slot_index) as Button
+	if button == null:
+		print("[MenuCapture] WARN: no SlotButton_%d, skip slot selection" % slot_index)
+		return
+	button.pressed.emit()
+	print("[MenuCapture] selected save slot %d" % slot_index)
 
 
 func _shot(viewport: Viewport, page_key: String) -> void:

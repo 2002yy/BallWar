@@ -8,10 +8,9 @@ class_name PreviewBoard
 #
 # 全部走 draw_*，没有 Shader、没有贴图。
 
-const FACTION_RED := Color(0.85, 0.18, 0.18)
-const FACTION_YELLOW := Color(0.95, 0.85, 0.16)
-const FACTION_GREEN := Color(0.20, 0.88, 0.26)
-const FACTION_BLUE := Color(0.22, 0.54, 0.96)
+# 四象限颜色不再硬编码：按 LayoutCoordinator 的四角阵营 ID 在绘制时实时调
+# GameConfig.faction_color()，与正式战斗共用同一份调色板（共 5 套配色）。
+@export var corner_faction_ids: Array = []
 
 @export var board_size: float = 340.0
 @export var grid_cells: int = 40
@@ -34,6 +33,15 @@ func _draw() -> void:
 	draw_rect(board, Color("#0a1015"), false, 3.0)
 
 
+func _corner_ids() -> Array:
+	if corner_faction_ids.size() == 4:
+		return corner_faction_ids
+	return LayoutCoordinator.corner_faction_order()
+
+func faction_color_at(corner_index: int) -> Color:
+	var ids := _corner_ids()
+	return GameConfig.faction_color(int(ids[clampi(corner_index, 0, 3)]))
+
 func _draw_well(board: Rect2) -> void:
 	# 沉孔：外深内更深的双层，加上缘暗线做单向光的内阴影。
 	var well := Rect2(
@@ -52,11 +60,12 @@ func _draw_well(board: Rect2) -> void:
 
 
 func _draw_quadrants(board: Rect2) -> void:
+	# 顺序与 LayoutCoordinator.CORNER_KEYS 一致：左上、右上、左下、右下。
 	var half: float = board.size.x * 0.5
-	draw_rect(Rect2(board.position, Vector2(half, half)), FACTION_RED, true)
-	draw_rect(Rect2(board.position + Vector2(half, 0.0), Vector2(half, half)), FACTION_YELLOW, true)
-	draw_rect(Rect2(board.position + Vector2(0.0, half), Vector2(half, half)), FACTION_GREEN, true)
-	draw_rect(Rect2(board.position + Vector2(half, half), Vector2(half, half)), FACTION_BLUE, true)
+	draw_rect(Rect2(board.position, Vector2(half, half)), faction_color_at(0), true)
+	draw_rect(Rect2(board.position + Vector2(half, 0.0), Vector2(half, half)), faction_color_at(1), true)
+	draw_rect(Rect2(board.position + Vector2(0.0, half), Vector2(half, half)), faction_color_at(2), true)
+	draw_rect(Rect2(board.position + Vector2(half, half), Vector2(half, half)), faction_color_at(3), true)
 
 
 func _draw_grid(board: Rect2) -> void:
@@ -86,10 +95,10 @@ func _draw_frontier(board: Rect2) -> void:
 	draw_line(Vector2(board.position.x, mid_h), Vector2(board.position.x + board.size.x, mid_h), Color(0, 0, 0, 0.82), 2.0)
 
 	var edges: Array = [
-		[Rect2(board.position, Vector2(half, half)), FACTION_RED],
-		[Rect2(board.position + Vector2(half, 0.0), Vector2(half, half)), FACTION_YELLOW],
-		[Rect2(board.position + Vector2(0.0, half), Vector2(half, half)), FACTION_GREEN],
-		[Rect2(board.position + Vector2(half, half), Vector2(half, half)), FACTION_BLUE],
+		[Rect2(board.position, Vector2(half, half)), faction_color_at(0)],
+		[Rect2(board.position + Vector2(half, 0.0), Vector2(half, half)), faction_color_at(1)],
+		[Rect2(board.position + Vector2(0.0, half), Vector2(half, half)), faction_color_at(2)],
+		[Rect2(board.position + Vector2(half, half), Vector2(half, half)), faction_color_at(3)],
 	]
 	for entry in edges:
 		var r: Rect2 = entry[0]

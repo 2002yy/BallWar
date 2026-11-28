@@ -12,7 +12,9 @@ const SHELL := Color("#182430")
 const SHELL_HI := Color("#3e5b76")
 const SHELL_LO := Color("#0b131b")
 
-@export var turret_color: Color = Color(1, 1, 1, 1)
+# 阵营 ID 由 PreviewScene 从 LayoutCoordinator.corner_factions() 注入；
+# 颜色在绘制时实时取 GameConfig.faction_color()，不缓存、不硬编码。
+@export var faction_id: int = 0
 @export var barrel_angle_deg: float = 45.0
 @export var radius: float = 26.0
 @export var show_bolts: bool = true
@@ -22,6 +24,7 @@ func _draw() -> void:
 	if radius <= 2.0:
 		return
 
+	var turret_color: Color = GameConfig.faction_color(faction_id)
 	var dir: Vector2 = Vector2.RIGHT.rotated(deg_to_rad(barrel_angle_deg))
 	var ortho: Vector2 = Vector2(-dir.y, dir.x)
 
@@ -53,6 +56,7 @@ func _draw() -> void:
 func _draw_barrel(dir: Vector2, ortho: Vector2) -> void:
 	# 锥形炮管：根部宽、口部略窄，末端补一个炮口环。
 	# 长度必须明显超过外壳半径，否则被 r=26 的钢壳吃掉，只剩一个小点。
+	var turret_color: Color = GameConfig.faction_color(faction_id)
 	var root: float = radius * 0.30
 	var tip: float = radius * 1.85
 	var w0: float = radius * 0.34

@@ -32,12 +32,14 @@ const EDGE := Color("#2a3e51")
 const EDGE_HI := Color("#4a6a89")
 const GOLD := Color("#e8b63c")
 const CYAN := Color("#4fd6e8")
-const FACTION_COLORS := [
-	Color(0.85, 0.18, 0.18),
-	Color(0.95, 0.85, 0.16),
-	Color(0.20, 0.88, 0.26),
-	Color(0.22, 0.54, 0.96),
-]
+# 四阵营状态灯不再硬编码：按共享四角阵营 ID 实时取 GameConfig.faction_color()。
+@export var corner_faction_ids: Array = []
+
+func _faction_color_at(index: int) -> Color:
+	var ids: Array = corner_faction_ids
+	if ids.size() != 4:
+		ids = LayoutCoordinator.corner_faction_order()
+	return GameConfig.faction_color(int(ids[clampi(index, 0, 3)]))
 
 @export var machine_size: Vector2 = Vector2(672.0, 540.0)
 @export var corner_cut: float = 26.0
@@ -214,8 +216,8 @@ func _draw_deck(deck: Rect2, is_top: bool) -> void:
 		# 下仪表带：四阵营状态灯 + 一排档位刻线。
 		for i in range(4):
 			var p := Vector2(-150.0 + float(i) * 100.0, cy)
-			draw_circle(p, 9.0, Color(FACTION_COLORS[i], 0.14))
-			draw_circle(p, 5.0, FACTION_COLORS[i])
+			draw_circle(p, 9.0, Color(_faction_color_at(i), 0.14))
+			draw_circle(p, 5.0, _faction_color_at(i))
 			draw_circle(p + Vector2(-1.4, -1.6), 1.8, Color(1, 1, 1, 0.65))
 		for i in range(10):
 			var x: float = 96.0 + float(i) * 14.0

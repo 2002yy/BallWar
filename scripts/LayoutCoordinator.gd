@@ -16,6 +16,26 @@ const EVENT_LOG_WIDTH: float = 290.0
 const EVENT_LOG_MAX_HEIGHT: float = 230.0
 const EVENT_LOG_LINE_HEIGHT: float = 20.0
 
+# 四角 → 阵营 ID 的唯一权威映射。正式战斗的炮台/控制仓坐标与主菜单预览的
+# 四象限/炮台/控制仓都从这里取，避免两处各写一份导致角落错位。
+# 顺序固定为：左上、右上、左下、右下。
+const CORNER_KEYS := ["top_left", "top_right", "bottom_left", "bottom_right"]
+
+static func corner_factions() -> Dictionary:
+	return {
+		"top_left": GameConfig.Faction.BLUE,
+		"top_right": GameConfig.Faction.RED,
+		"bottom_left": GameConfig.Faction.GREEN,
+		"bottom_right": GameConfig.Faction.YELLOW,
+	}
+
+static func corner_faction_order() -> Array:
+	var factions := corner_factions()
+	var order: Array = []
+	for key in CORNER_KEYS:
+		order.append(int(factions[key]))
+	return order
+
 static func get_cell_size(grid_size: int) -> float:
 	match grid_size:
 		10:
@@ -102,11 +122,12 @@ static func calculate_layout(grid_size: int, viewport_size: Vector2, is_mobile: 
 static func _calculate_turret_positions(bf_rect: Rect2) -> Dictionary:
 	var size := bf_rect.size.x
 	var m := TURRET_MARGIN
+	var c := corner_factions()
 	return {
-		GameConfig.Faction.BLUE: bf_rect.position + Vector2(m, m),
-		GameConfig.Faction.RED: bf_rect.position + Vector2(size - m, m),
-		GameConfig.Faction.GREEN: bf_rect.position + Vector2(m, size - m),
-		GameConfig.Faction.YELLOW: bf_rect.position + Vector2(size - m, size - m),
+		c["top_left"]: bf_rect.position + Vector2(m, m),
+		c["top_right"]: bf_rect.position + Vector2(size - m, m),
+		c["bottom_left"]: bf_rect.position + Vector2(m, size - m),
+		c["bottom_right"]: bf_rect.position + Vector2(size - m, size - m),
 	}
 
 static func _calculate_chamber_positions(bf_rect: Rect2, turret_positions: Dictionary, chamber_size: Vector2, chamber_gap: float) -> Dictionary:
