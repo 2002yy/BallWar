@@ -303,6 +303,7 @@ func _sim_state() -> Dictionary:
 	var health_total: int = 0
 	var destroyed_count: int = 0
 	var turret_sig: Array = []
+	var turret_rules: Array = []
 	var turret_ids: Array = _main.runtime.turrets.keys()
 	turret_ids.sort()
 
@@ -326,7 +327,11 @@ func _sim_state() -> Dictionary:
 			int(turret.burst_index)
 		])
 
+		turret_rules.append([fid, turret.sweep_phase, turret.rotation, turret.burst_total,
+			turret.burst_origin_angle, turret.burst_timer, turret.burst_locked])
+
 	var chamber_sig: Array = []
+	var chamber_rules: Array = []
 	var chamber_ids: Array = _main.runtime.chambers.keys()
 	chamber_ids.sort()
 	for fid in chamber_ids:
@@ -343,6 +348,7 @@ func _sim_state() -> Dictionary:
 			chamber.balls.size(),
 			float(chamber.jammed_time_left)
 		])
+		chamber_rules.append([fid, chamber.jammed_time_left, chamber.chamber_state.queued_round_modifiers])
 		for index in range(chamber.balls.size()):
 			var ball = chamber.balls[index]
 			if not is_instance_valid(ball):
@@ -353,10 +359,13 @@ func _sim_state() -> Dictionary:
 				ball.position, ball.velocity, ball.radius, chamber.get_ball_stay_time(ball), stuck
 			]).replace("\n", "")])
 
+	var bullet_rules: Array[int] = []
 	if _main.runtime.bullet_pool != null and is_instance_valid(_main.runtime.bullet_pool):
 		for bullet in _main.runtime.bullet_pool.get_active_bullets():
 			if bullet == null or not is_instance_valid(bullet):
 				continue
+			bullet_rules.append(hash([bullet.faction_id, bullet.global_position, bullet.direction,
+				bullet.age, bullet.speed, bullet.last_cell, bullet.turret_hit_check_timer]))
 			bullets.append("%d:%.2f:%.2f" % [
 				int(bullet.faction_id),
 				float(bullet.global_position.x),
@@ -365,6 +374,7 @@ func _sim_state() -> Dictionary:
 	bullets.sort()
 
 	var event_sig: String = "none"
+	var event_rules: Array = []
 	var controller = _main.runtime.event_controller
 	if controller != null and is_instance_valid(controller):
 		event_sig = "%d:%.3f:%d:%s:%d:%d" % [
@@ -376,11 +386,16 @@ func _sim_state() -> Dictionary:
 			1 if bool(controller.is_presenting_event) else 0
 		]
 
-	var turret_h: int = hash(turret_sig)
-	var chamber_h: int = hash(chamber_sig)
-	var bullet_h: int = hash(bullets)
-	var event_h: int = hash(event_sig)
-	var payload: Array = [owners_hash, turret_h, chamber_h, bullet_h, event_h]
+		event_rules = [controller.next_event_time_left, controller._presentation_time_left, controller._pending_payload]
+
+	var turret_h: int = hash([turret_sig, turret_rules])
+	var chamber_h: int = hash([chamber_sig, chamber_rules])
+	var bullet_h: int = hash(bullet_rules)
+	var event_h: int = hash([event_sig, event_rules])
+	var payload: Array = [
+		owners_hash, turret_h, chamber_h, bullet_h, event_h,
+		_main.game_elapsed_time, _main.win_check_timer, _main.is_game_over
+	]
 	return {
 		"sim_hash": hash(payload),
 		"owners_h": owners_hash,
