@@ -33,7 +33,7 @@ func set_config(config: Dictionary) -> void:
 
 func set_match_config(config) -> void:
     match_config = config
-    reserve_economy = ReserveEconomy.new(config.seed_value) if config.reserve_economy_enabled else null
+    reserve_economy = ReserveEconomy.new(config.seed_value, config.reserve_price_preset) if config.reserve_economy_enabled else null
 
 func set_layout(layout: Dictionary) -> void:
     current_layout = layout.duplicate(true)

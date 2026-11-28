@@ -248,12 +248,12 @@ func _ready() -> void:
 func _reserve_lab_requested() -> bool:
 	return ReserveLab.is_requested(OS.is_debug_build(), OS.get_cmdline_user_args())
 
-func _start_reserve_lab_match() -> void:
+func _start_reserve_lab_match(price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD) -> void:
 	if match_seed < 0:
 		match_seed = 7341
 	seed(match_seed)
 	selected_palette_name = "经典"
-	_start_game(selected_grid_size, true, false, true)
+	_start_game(selected_grid_size, true, false, true, price_preset)
 	var lab := ReserveLab.new()
 	lab.name = "ReserveLab"
 	lab.controller = self
@@ -383,7 +383,8 @@ func _create_start_menu() -> void:
 		pending_menu_status_message = ""
 
 func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool = true,
-		reserve_economy_enabled: bool = false) -> void:
+		reserve_economy_enabled: bool = false,
+		reserve_price_preset: ReserveEconomy.PricePreset = ReserveEconomy.PricePreset.STANDARD) -> void:
 	grid_size = LayoutProfiles.sanitize_grid_size(grid_size)
 	selected_grid_size = grid_size
 	game_elapsed_time = 0.0
@@ -414,6 +415,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	# 对局配置只在开局时快照一次：窗口缩放、UI 重建都不应该重新解释地图与武器规则。
 	var match_config := MatchConfig.capture_current(grid_size, match_seed)
 	match_config.reserve_economy_enabled = reserve_economy_enabled
+	match_config.reserve_price_preset = reserve_price_preset
 	runtime.set_match_config(match_config)
 
 	game_layer = Node2D.new()

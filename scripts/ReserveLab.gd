@@ -36,9 +36,20 @@ func _ready() -> void:
 	rows.add_theme_constant_override("separation", 2)
 	margin.add_child(rows)
 
+	var economy: ReserveEconomy = controller.runtime.reserve_economy
+	var header := HBoxContainer.new()
+	rows.add_child(header)
 	var title := Label.new()
-	title.text = "储备实验 · F8"
-	rows.add_child(title)
+	title.text = "储备 · F8"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var prices := CheckButton.new()
+	prices.name = "Prices"
+	prices.text = "半价"
+	var half_price_active := economy.price_preset == ReserveEconomy.PricePreset.HALF_PRICE
+	prices.button_pressed = half_price_active
+	prices.tooltip_text = "重开后应用价格方案"
+	header.add_child(prices)
 	_balances = Label.new()
 	rows.add_child(_balances)
 	_faction = OptionButton.new()
@@ -51,14 +62,18 @@ func _ready() -> void:
 
 	var purchases := HBoxContainer.new()
 	rows.add_child(purchases)
-	_buy_ball = _button(purchases, "BuyBall", "加球 %d" % ReserveEconomy.ADD_BALL_COST, _purchase_ball)
-	_buy_blast = _button(purchases, "BuyBlast", "试爆 %d" % ReserveEconomy.LUCKY_BLAST_COST, _purchase_blast)
+	_buy_ball = _button(purchases, "BuyBall", "加球 %d" % economy.add_ball_cost, _purchase_ball)
+	_buy_blast = _button(purchases, "BuyBlast", "试爆 %d" % economy.lucky_blast_cost, _purchase_blast)
 	_buy_blast.tooltip_text = "购买幸运爆炸"
 	var tools := HBoxContainer.new()
 	rows.add_child(tools)
 	_drop_fixture = _button(tools, "DropFixture", "构造落门", _prepare_fixture)
 	_drop_fixture.tooltip_text = "构造 800 待发火力，让一颗球落入储备门"
-	_button(tools, "Restart", "重开", func(): controller.call_deferred("_start_reserve_lab_match"))
+	var restart := _button(tools, "Restart", "重开", func():
+		var preset := ReserveEconomy.PricePreset.HALF_PRICE if prices.button_pressed else ReserveEconomy.PricePreset.STANDARD
+		controller.call_deferred("_start_reserve_lab_match", preset))
+	prices.toggled.connect(func(half_price: bool):
+		restart.text = "应用并重开" if half_price != half_price_active else "重开")
 	_notice = Label.new()
 	_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_notice.text = "储备上限 %d" % ReserveEconomy.CAPACITY
@@ -97,8 +112,8 @@ func _refresh() -> void:
 	var unavailable: bool = controller.is_game_over or get_tree().paused or chamber == null or chamber.is_damaged
 	var blocked: bool = unavailable or chamber.is_locked or chamber.is_jammed()
 	var balance := economy.balance(_faction.get_selected_id())
-	_buy_ball.disabled = blocked or balance < ReserveEconomy.ADD_BALL_COST or chamber.get_ball_count() >= GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER
-	_buy_blast.disabled = unavailable or balance < ReserveEconomy.LUCKY_BLAST_COST
+	_buy_ball.disabled = blocked or balance < economy.add_ball_cost or chamber.get_ball_count() >= GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER
+	_buy_blast.disabled = unavailable or balance < economy.lucky_blast_cost
 	_drop_fixture.disabled = blocked or chamber.balls.is_empty() or balance >= ReserveEconomy.CAPACITY
 
 func _purchase_ball() -> void:

@@ -79,6 +79,10 @@ func _run() -> void:
 	main._toggle_pause()
 
 	var restart: Button = lab.find_child("Restart", true, false)
+	var prices: CheckButton = lab.find_child("Prices", true, false)
+	prices.button_pressed = true
+	t.eq(economy.add_ball_cost, 100, "selecting a price leaves the running match unchanged")
+	t.eq(economy.balance(BLUE), 100, "selecting a price leaves existing balances intact")
 	restart.pressed.emit()
 	await process_frame
 	await process_frame
@@ -87,6 +91,24 @@ func _run() -> void:
 	t.eq(main.runtime.chambers[BLUE].get_ball_count(), 1, "restart recreates control balls")
 	t.eq(main.runtime.battlefield.count_cells_by_team()[BLUE], owned_before, "restart restores the initial territory")
 	t.eq(_profile_hashes(), original_files, "restart preserves the selected slot and both settings files")
+	economy = main.runtime.reserve_economy
+	lab = main.game_layer.get_node("ReserveLab")
+	prices = lab.find_child("Prices", true, false)
+	t.that(prices.button_pressed, "restart shows the applied preset")
+	control_ball = lab.find_child("BuyBall", true, false)
+	blast = lab.find_child("BuyBlast", true, false)
+	t.eq(control_ball.text, "加球 50", "displayed ball price matches the new preset")
+	t.eq(blast.text, "试爆 100", "displayed blast price matches the new preset")
+	economy.convert_pending(200, BLUE)
+	lab._refresh()
+	t.that(not control_ball.disabled and blast.disabled, "50 reserve unlocks only the ball")
+	control_ball.pressed.emit()
+	t.eq(economy.balance(BLUE), 0, "ball costs exactly 50 reserve")
+	economy.convert_pending(400, BLUE)
+	lab._refresh()
+	t.that(not blast.disabled, "100 reserve unlocks the blast")
+	blast.pressed.emit()
+	t.eq(economy.balance(BLUE), 0, "blast costs exactly 100 reserve")
 	main.queue_free()
 	await process_frame
 	t.report("ReserveLabTestRunner")
