@@ -106,7 +106,7 @@ static func get_perf_debug_text(bullet_container, battlefield, selected_grid_siz
 		trail_degrade_reason,
 	]
 
-static func update_meta(timer_label, stage_label, leader_label, current_score_counts: Dictionary, game_elapsed_time: float) -> void:
+static func update_meta(timer_label, stage_label, leader_label, current_score_counts: Dictionary, game_elapsed_time: float, claimable_cells: int = 0) -> void:
 	if timer_label != null and is_instance_valid(timer_label):
 		timer_label.text = format_time_text(game_elapsed_time)
 	if stage_label != null and is_instance_valid(stage_label):
@@ -124,6 +124,7 @@ static func update_meta(timer_label, stage_label, leader_label, current_score_co
 			if int(current_score_counts.get(faction_id, 0)) == best_count:
 				leaders.append(faction_id)
 
+		total = maxi(total, claimable_cells)
 		var percent: int = 0
 		if total > 0:
 			percent = int(round(float(best_count) * 100.0 / float(total)))
@@ -136,7 +137,7 @@ static func update_meta(timer_label, stage_label, leader_label, current_score_co
 			leader_label.text = "并列：%d%%" % percent
 			leader_label.add_theme_color_override("font_color", Color(0.92, 0.88, 0.72))
 
-static func update_top_bar(counts: Dictionary, top_bar_segments: Dictionary, top_bar_labels: Dictionary, top_bar_name_labels: Dictionary, top_bar_total_width: float, is_mobile_layout: bool) -> void:
+static func update_top_bar(counts: Dictionary, top_bar_segments: Dictionary, top_bar_labels: Dictionary, top_bar_name_labels: Dictionary, top_bar_total_width: float, is_mobile_layout: bool, claimable_cells: int = 0) -> void:
 	if top_bar_segments.size() == 0:
 		return
 
@@ -146,10 +147,11 @@ static func update_top_bar(counts: Dictionary, top_bar_segments: Dictionary, top
 	if total <= 0:
 		total = 1
 
+	var percentage_total := maxi(total, claimable_cells)
 	var running_x: float = 3.0
 	for faction_id in [GameConfig.Faction.BLUE, GameConfig.Faction.RED, GameConfig.Faction.GREEN, GameConfig.Faction.YELLOW]:
 		var ratio: float = float(counts.get(faction_id, 0)) / float(total)
-		var p: int = int(round(ratio * 100.0))
+		var p: int = roundi(float(counts.get(faction_id, 0)) * 100.0 / percentage_total)
 		var segment: Panel = top_bar_segments[faction_id] as Panel
 		var seg_w: float = top_bar_total_width * ratio
 		if faction_id == GameConfig.Faction.YELLOW:

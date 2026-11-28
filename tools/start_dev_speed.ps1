@@ -6,13 +6,20 @@ param(
     [switch]$CheckControls,
     [switch]$CheckBattleTools,
     [switch]$FortressLab,
-    [switch]$FortressFixture
+    [switch]$FortressFixture,
+    [switch]$BreachLab,
+    [switch]$BreachFixture
 )
 $ErrorActionPreference = 'Stop'
 if ($CheckControls -and $CheckBattleTools) {
     throw 'Select one verification mode at a time.'
 }
-if (($CheckControls -or $CheckBattleTools) -and ($FortressLab -or $FortressFixture)) {
+$fortressMode = $FortressLab -or $FortressFixture
+$breachMode = $BreachLab -or $BreachFixture
+if ($fortressMode -and $breachMode) {
+    throw 'Select one experimental map at a time.'
+}
+if (($CheckControls -or $CheckBattleTools) -and ($fortressMode -or $breachMode)) {
     throw 'The standard control checks start from the ordinary menu.'
 }
 $engine = (Get-Item -LiteralPath $Godot).FullName
@@ -32,10 +39,13 @@ if ($CheckBattleTools) {
     $flags = @('--headless', '--audio-driver', 'Dummy', '--script', 'res://scripts/tests/DevBattleToolsTestRunner.gd')
 }
 $gameArgs = @('--ballwar-dev-speed')
-if ($FortressLab -or $FortressFixture) {
+if ($fortressMode) {
     $gameArgs += '--fortress-lab'
 }
-if ($FortressFixture) {
+if ($breachMode) {
+    $gameArgs += '--breach-lab'
+}
+if ($FortressFixture -or $BreachFixture) {
     $gameArgs += '--construction-fixture'
 }
 & $engine --path $project @flags -- @gameArgs

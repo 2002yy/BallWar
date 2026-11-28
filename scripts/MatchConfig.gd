@@ -7,7 +7,8 @@ class_name MatchConfig
 
 const CLASSIC_MAP_ID: String = "classic_plains"
 const CENTRAL_FORTRESS_ID: String = "central_fortress"
-const KNOWN_MAP_IDS: Array[String] = [CLASSIC_MAP_ID, CENTRAL_FORTRESS_ID]
+const BREACH_FORTRESS_ID: String = "breach_fortress"
+const KNOWN_MAP_IDS: Array[String] = [CLASSIC_MAP_ID, CENTRAL_FORTRESS_ID, BREACH_FORTRESS_ID]
 
 var map_id: String = CLASSIC_MAP_ID
 var weapon_ruleset_id: String = WeaponRuleset.CLASSIC_ID

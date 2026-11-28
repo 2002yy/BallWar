@@ -3,6 +3,7 @@ class_name Battlefield
 
 signal scores_changed(counts)
 
+const NEUTRAL_OWNER: int = -1
 const BattlefieldDecorLayerScript = preload("res://scripts/BattlefieldDecorLayer.gd")
 
 var grid_size: int = GameConfig.GRID_SIZE
@@ -118,7 +119,10 @@ func rebuild_owner_counts() -> void:
 	owner_counts = {0: 0, 1: 0, 2: 0, 3: 0}
 	for x in range(grid_size):
 		for y in range(grid_size):
-			var cell_owner: int = clampi(int(owners[x][y]), 0, 3)
+			var cell_owner: int = int(owners[x][y])
+			if fortress != null and fortress.breakable and cell_owner == NEUTRAL_OWNER:
+				continue
+			cell_owner = clampi(cell_owner, 0, 3)
 			owners[x][y] = cell_owner
 			if fortress == null or not fortress.wall_cells.has(Vector2i(x, y)):
 				owner_counts[cell_owner] += 1
@@ -131,11 +135,24 @@ func world_to_cell(world_position: Vector2) -> Vector2i:
 func is_inside(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.x < grid_size and cell.y < grid_size
 
-func configure_fortress() -> void:
-	fortress = FortressTerrain.new(grid_size, cell_size)
+func configure_fortress(walls_breakable: bool = false) -> void:
+	fortress = FortressTerrain.new(grid_size, cell_size, walls_breakable)
 	rebuild_owner_counts()
 	queue_redraw()
 	flush_score_emit()
+
+func hit_breakable_wall(start: Vector2, movement: Vector2, damage: int) -> bool:
+	var wall := fortress.first_wall_hit(start, movement)
+	if not wall.has_area():
+		return false
+	var opened := fortress.damage_wall(wall, damage)
+	for cell in opened:
+		owners[cell.x][cell.y] = NEUTRAL_OWNER
+		_paint_cached_cell(cell, NEUTRAL_OWNER)
+	if not opened.is_empty():
+		_request_score_emit()
+	_request_visual_update()
+	return true
 
 func claimable_cell_count() -> int:
 	return grid_size * grid_size - (fortress.wall_cells.size() if fortress != null else 0)
@@ -157,7 +174,8 @@ func _claim_inside_cell(cell: Vector2i, faction_id: int) -> bool:
 	if old == faction_id:
 		return false
 	owners[cell.x][cell.y] = faction_id
-	owner_counts[old] -= 1
+	if old != NEUTRAL_OWNER:
+		owner_counts[old] -= 1
 	owner_counts[faction_id] += 1
 	_paint_cached_cell(cell, faction_id)
 	_request_visual_update()
@@ -203,6 +221,8 @@ func _ensure_decor_layer() -> void:
 	add_child(decor_layer)
 
 func _owner_draw_color(owner_id: int) -> Color:
+	if owner_id == NEUTRAL_OWNER:
+		return Color(0.23, 0.28, 0.33)
 	var c: Color = GameConfig.faction_color(owner_id).darkened(0.08)
 	c.a = 0.94
 	return c
@@ -262,5 +282,13 @@ func _draw() -> void:
 	if fortress != null:
 		for wall in fortress.wall_rects:
 			draw_rect(wall, Color(0.13, 0.18, 0.24))
-			draw_rect(wall, Color(0.68, 0.77, 0.83), false, 2.0)
-			draw_line(wall.position + Vector2(4.0, 4.0), wall.end - Vector2(4.0, 4.0), Color(0.39, 0.49, 0.57), 2.0)
+			if fortress.breakable:
+				var amber := Color(1.0, 0.67, 0.27)
+				draw_rect(wall, amber, false, 2.0)
+				for point in range(FortressTerrain.WALL_HEALTH):
+					var x := (point + 1.0) * wall.size.x / (FortressTerrain.WALL_HEALTH + 1.0)
+					var color := amber if point < int(fortress.wall_health[wall]) else amber.darkened(0.72)
+					draw_circle(wall.position + Vector2(x, wall.size.y * 0.5), 1.6, color)
+			else:
+				draw_rect(wall, Color(0.68, 0.77, 0.83), false, 2.0)
+				draw_line(wall.position + Vector2(4.0, 4.0), wall.end - Vector2(4.0, 4.0), Color(0.39, 0.49, 0.57), 2.0)
