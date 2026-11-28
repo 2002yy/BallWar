@@ -6,6 +6,10 @@ const BulletRendererScript = preload("res://scripts/render/BulletRenderer.gd")
 
 const MAX_RESTORE_TRAIL_POINTS: int = 3
 
+var type_id: int = WeaponRuleset.BulletType.STANDARD
+var capture_budget: int = 1
+var collision_mass: float = 1.0
+var turret_damage: int = GameConfig.BULLET_DAMAGE
 var physical_radius: float = GameConfig.BULLET_RADIUS
 var prev_position: Vector2
 var controlled_by_pool: bool = false
@@ -32,7 +36,7 @@ var last_trail_position: Vector2 = Vector2.INF
 func get_trail_segment_count() -> int:
 	return maxi(0, trail_points.size() - 1)
 
-func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, new_battlefield, new_target_turrets = {}, random_source: RandomNumberGenerator = null) -> void:
+func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, new_battlefield, new_target_turrets = {}, random_source: RandomNumberGenerator = null, projectile_type: int = WeaponRuleset.BulletType.STANDARD) -> void:
 	var previous_segments: int = get_trail_segment_count()
 	faction_id = new_faction_id
 	global_position = new_position
@@ -43,8 +47,13 @@ func setup(new_faction_id: int, new_position: Vector2, new_direction: Vector2, n
 	if battlefield != null:
 		_cached_map_size = float(battlefield.grid_size) * float(battlefield.cell_size)
 	target_turrets = new_target_turrets
-	speed = GameConfig.BULLET_SPEED
-	physical_radius = GameConfig.BULLET_RADIUS
+	var velocity_round := projectile_type == WeaponRuleset.BulletType.VELOCITY
+	type_id = WeaponRuleset.BulletType.VELOCITY if velocity_round else WeaponRuleset.BulletType.STANDARD
+	speed = 324.0 if velocity_round else GameConfig.BULLET_SPEED
+	physical_radius = 3.0 if velocity_round else GameConfig.BULLET_RADIUS
+	collision_mass = 0.6 if velocity_round else 1.0
+	capture_budget = 2 if velocity_round else 1
+	turret_damage = 2 if velocity_round else GameConfig.BULLET_DAMAGE
 	last_cell = Vector2i(-999, -999)
 	age = 0.0
 	if random_source == null:
@@ -208,6 +217,8 @@ func advance_tick() -> bool:
 
 	if bounced:
 		direction = _stabilize_bounce_direction(direction).normalized()
+		if type_id == WeaponRuleset.BulletType.VELOCITY:
+			queue_redraw()
 
 	global_position = battlefield.to_global(local_position)
 	return true
@@ -233,7 +244,9 @@ func resolve_tick() -> void:
 	last_cell = cell
 	var result = battlefield.apply_bullet(cell, faction_id)
 	if result == "HIT_ENEMY_CELL":
-		_despawn()
+		capture_budget -= 1
+		if capture_budget <= 0:
+			_despawn()
 
 func _stabilize_bounce_direction(raw_direction: Vector2) -> Vector2:
 	# v1.9.28：防止正上/正下/正左/正右方向在边界之间无限来回弹。
@@ -332,19 +345,21 @@ func _try_hit_enemy_turret() -> bool:
 			continue
 		var hit_radius_sq: float = GameConfig.TURRET_HIT_RADIUS * GameConfig.TURRET_HIT_RADIUS
 		if global_position.distance_squared_to(turret.global_position) <= hit_radius_sq:
-			if turret.receive_projectile_hit(faction_id, GameConfig.BULLET_DAMAGE):
+			if turret.receive_projectile_hit(faction_id, turret_damage):
 				return true
 	return false
 
 func _visual_radius() -> float:
 	if battlefield != null:
-		return minf(GameConfig.BULLET_RADIUS, float(battlefield.cell_size) * 0.42)
-	return GameConfig.BULLET_RADIUS
+		return minf(physical_radius, float(battlefield.cell_size) * 0.42)
+	return physical_radius
 
 func _draw() -> void:
 	BulletRendererScript.draw(self, {
 		"color": GameConfig.faction_color(faction_id),
 		"radius": _visual_radius(),
+		"velocity_round": type_id == WeaponRuleset.BulletType.VELOCITY,
+		"heading": direction,
 		"simple": simple_draw,
 		"reduce": reduce_visual_effects,
 	})

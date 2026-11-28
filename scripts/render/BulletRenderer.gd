@@ -14,6 +14,12 @@ static func draw(c: CanvasItem, s: Dictionary) -> void:
 	var color: Color = s.get("color", Color.WHITE)
 	var radius: float = float(s.get("radius", 5.0))
 
+	if bool(s.get("velocity_round", false)):
+		var heading: Vector2 = s.get("heading", Vector2.RIGHT)
+		c.draw_line(-heading * radius * 2.4, heading * radius, Color(0.10, 0.12, 0.16), radius * 1.65, true)
+		c.draw_line(-heading * radius * 1.8, heading * radius * 0.8, color.lightened(0.55), radius, true)
+		return
+
 	if bool(s.get("simple", false)):
 		c.draw_circle(Vector2.ZERO, radius, color)
 		return

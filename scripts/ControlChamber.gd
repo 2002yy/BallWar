@@ -291,7 +291,11 @@ func cancel_current_burst_with_refund(ratio: float) -> void:
 
 	var remaining: int = 0
 	if linked_turret != null and is_instance_valid(linked_turret) and linked_turret.has_method("cancel_burst"):
-		remaining = int(linked_turret.cancel_burst())
+		if linked_turret is Turret:
+			remaining = linked_turret.remaining_firepower()
+			linked_turret.cancel_burst()
+		else:
+			remaining = int(linked_turret.cancel_burst())
 
 	if not chamber_state.is_locked and remaining <= 0:
 		return

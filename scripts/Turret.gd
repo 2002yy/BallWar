@@ -38,6 +38,7 @@ var destroy_anim_time: float = -1.0
 var muzzle_flash: float = 0.0
 
 var burst_remaining: int = 0
+var _burst_types: Array[int] = []
 var burst_total: int = 0
 var burst_interval: float = GameConfig.BURST_FIRE_INTERVAL
 var burst_timer: float = 0.0
@@ -89,6 +90,7 @@ func _physics_process(_delta: float) -> void:
 				burst_timer += _next_burst_interval()
 			else:
 				burst_total = 0
+				_burst_types.clear()
 				_emit_burst_progress(true)
 				_set_burst_locked(false)
 
@@ -125,6 +127,21 @@ func _inward_center_angle() -> float:
 			return 0.0
 
 func fire_burst(count: int) -> void:
+	_start_burst(clampi(count, 1, GameConfig.get_max_pending_count()), [])
+
+func fire_volley(volley: Dictionary) -> void:
+	var types: Array[int] = []
+	var limit := GameConfig.get_max_pending_count()
+	var ordered_types := volley.keys()
+	ordered_types.sort()
+	for type_id in ordered_types:
+		var count := clampi(int(volley[type_id]), 0, limit - types.size())
+		for shot in range(count):
+			types.append(type_id)
+	if not types.is_empty():
+		_start_burst(types.size(), types)
+
+func _start_burst(count: int, types: Array[int]) -> void:
 	if is_destroyed:
 		return
 	if battlefield == null or bullet_container == null:
@@ -132,7 +149,8 @@ func fire_burst(count: int) -> void:
 	if burst_remaining > 0:
 		return
 
-	burst_remaining = clampi(count, 1, GameConfig.get_max_pending_count())
+	_burst_types = types
+	burst_remaining = count
 	burst_total = burst_remaining
 	burst_timer = 0.0
 	burst_index = 0
@@ -142,8 +160,17 @@ func fire_burst(count: int) -> void:
 	burst_progress.emit(faction_id, burst_remaining)
 	_set_burst_locked(true)
 
+func remaining_firepower() -> int:
+	if _burst_types.is_empty():
+		return burst_remaining
+	var fire := 0
+	for index in range(burst_index, _burst_types.size()):
+		fire += int(WeaponRuleset.DEFAULT_COSTS.get(_burst_types[index], 1))
+	return fire
+
 func cancel_burst() -> int:
 	var remaining: int = burst_remaining
+	_burst_types.clear()
 	burst_remaining = 0
 	burst_total = 0
 	burst_index = 0
@@ -155,6 +182,7 @@ func cancel_burst() -> int:
 	return remaining
 
 func restore_from_state(state: Dictionary) -> void:
+	_burst_types.clear()
 	health = clampi(int(state.get("turret_health", GameConfig.TURRET_MAX_HEALTH)), 0, max_health)
 	is_destroyed = bool(state.get("turret_destroyed", false))
 	damage_flash = 0.0
@@ -257,11 +285,16 @@ func _spawn_bullet() -> void:
 	# 移除 lateral_wave 出生点横向摆动，避免炮口方向与弹道看起来不一致。
 	var spawn_position: Vector2 = global_position + shot_direction * MUZZLE_DISTANCE
 
-	if _bullet_container_can_spawn:
+	var type_id := WeaponRuleset.BulletType.STANDARD
+	if burst_index < _burst_types.size():
+		type_id = _burst_types[burst_index]
+	if bullet_container is BulletPool:
+		bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets, type_id)
+	elif _bullet_container_can_spawn:
 		bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets)
 	else:
 		var bullet = Bullet.new()
-		bullet.setup(faction_id, spawn_position, shot_direction, battlefield, all_turrets, projectile_random)
+		bullet.setup(faction_id, spawn_position, shot_direction, battlefield, all_turrets, projectile_random, type_id)
 		bullet_container.add_child(bullet)
 
 func _current_burst_shot_angle() -> float:
@@ -313,6 +346,7 @@ func _destroy() -> void:
 		return
 	is_destroyed = true
 	destroy_anim_time = 0.0
+	_burst_types.clear()
 	burst_remaining = 0
 	burst_total = 0
 	burst_last_reported_remaining = 0

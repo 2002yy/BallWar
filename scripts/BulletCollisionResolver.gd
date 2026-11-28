@@ -42,8 +42,10 @@ func resolve(bullets: Array, pool: BulletPool) -> void:
 						continue
 					var b: Bullet = bullets[j]
 					if a.faction_id != b.faction_id and _collides(a, b):
-						hits[i] = a
-						hits[j] = b
+						if a.collision_mass <= b.collision_mass:
+							hits[i] = a
+						if b.collision_mass <= a.collision_mass:
+							hits[j] = b
 
 	for bullet in hits.values():
 		pool.recycle_bullet(bullet)
