@@ -158,6 +158,20 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
 	if not (str(clean.get("quality_name", GameConfig.QUALITY_MEDIUM)) in GameConfig.get_quality_names()):
 		clean["quality_name"] = GameConfig.QUALITY_MEDIUM
 
+	var weapon = clean.get("weapon_config", null)
+	if weapon is Dictionary:
+		var pierce: int = int(weapon.get("pierce", 1))
+		if pierce != -1:
+			pierce = clampi(pierce, 1, 10)
+		clean["weapon_config"] = {
+			"pierce": pierce,
+			"mix_pierce": clampi(int(weapon.get("mix_pierce", 0)), 0, 100),
+			"blast": clampi(int(weapon.get("blast", 0)), 0, 3),
+			"mix_blast": clampi(int(weapon.get("mix_blast", 0)), 0, 100),
+		}
+	elif weapon != null:
+		clean.erase("weapon_config")
+
 	if not (str(clean.get("game_mode_name", GameConfig.GAME_MODE_BASIC)) in GameConfig.get_game_mode_names()):
 		clean["game_mode_name"] = GameConfig.GAME_MODE_BASIC
 	clean["time_limit_minutes"] = clampi(int(clean.get("time_limit_minutes", GameConfig.DEFAULT_TIMED_MODE_MINUTES)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)

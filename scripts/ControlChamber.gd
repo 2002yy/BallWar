@@ -63,6 +63,8 @@ var chamber_size: Vector2 = Vector2(
 
 var balls: Array = []
 var release_ball = null
+# P2.3：本阵营的特殊弹火力账户（跨 burst 累计）。经典模式下始终为空。
+var fire_ledger = FireLedger.new()
 var linked_turret = null
 var gravity: float = 420.0
 var pegs: Array = []
@@ -88,6 +90,19 @@ const NORMAL_REDRAW_INTERVAL: float = 0.25
 const LOCKED_REDRAW_INTERVAL: float = 0.080
 const DAMAGED_REDRAW_INTERVAL: float = 0.080
 
+# P2.4 实验用生产统计（只读，不参与规则）。
+var production_stats: Dictionary = {
+	"releases": 0,
+	"fire_released": 0,
+	"max_release": 0,
+	"gate_multiplier_hits": 0,
+	"relaunches": 0,
+	"lock_count": 0,
+	"locked_seconds": 0.0,
+}
+var _stay_seconds_override: float = CONTROL_BALL_MAX_STAY_TIME
+var _gate_multiplier_override: int = 0
+
 func setup(new_faction_id: int, new_position: Vector2) -> void:
 	faction_id = new_faction_id
 	global_position = new_position
@@ -96,14 +111,47 @@ func set_linked_turret(turret) -> void:
 	linked_turret = turret
 
 func _ready() -> void:
+	_stay_seconds_override = maxf(1.0, _env_float("BALLWAR_STAY_SECONDS", CONTROL_BALL_MAX_STAY_TIME))
+	_gate_multiplier_override = maxi(0, _env_int("BALLWAR_GATE_MULTIPLIER", 0))
+	var initial_balls: int = clampi(_env_int("BALLWAR_INITIAL_BALLS", 1), 1, GameConfig.MAX_CONTROL_BALLS_PER_CHAMBER)
+	var pending_start: int = clampi(_env_int("BALLWAR_PENDING_START", 1), 1, GameConfig.get_max_pending_count())
 	_create_pegs()
 	_create_labels()
-	_add_initial_control_ball_silent()
+	for i in range(initial_balls):
+		_add_initial_control_ball_silent()
+	if pending_start > 1:
+		pending_count = pending_start
+		chamber_state.pending_count = pending_start
 	_update_label()
 	_force_visual_redraw()
 
+func get_production_stats() -> Dictionary:
+	var stats: Dictionary = production_stats.duplicate()
+	stats["pending"] = pending_count
+	stats["balls"] = get_ball_count()
+	stats["locked"] = is_locked
+	stats["ledger"] = fire_ledger.debug_line()
+	stats["ledger_balanced"] = fire_ledger.is_balanced()
+	stats["ledger_remaining_units"] = fire_ledger.remaining_units()
+	stats["ledger_error"] = fire_ledger.last_error
+	return stats
+
+func _env_int(key: String, fallback: int) -> int:
+	var raw: String = OS.get_environment(key).strip_edges()
+	if raw == "" or not raw.is_valid_int():
+		return fallback
+	return int(raw)
+
+func _env_float(key: String, fallback: float) -> float:
+	var raw: String = OS.get_environment(key).strip_edges()
+	if raw == "" or not raw.is_valid_float():
+		return fallback
+	return float(raw)
+
 func _process(delta: float) -> void:
 	status_anim_t += delta
+	if is_locked:
+		production_stats["locked_seconds"] = float(production_stats["locked_seconds"]) + delta
 
 	if chamber_state.tick(delta):
 		jammed_time_left = chamber_state.jammed_time_left
@@ -344,6 +392,7 @@ func _create_labels() -> void:
 func _relaunch_control_ball(ball) -> void:
 	if ball == null:
 		return
+	production_stats["relaunches"] = int(production_stats["relaunches"]) + 1
 	ball.radius = CONTROL_BALL_RADIUS
 	var start_x: float = randf_range(18.0, chamber_size.x - 18.0)
 	ball.setup(faction_id, Vector2(start_x, 18.0), Vector2(randf_range(-54.0, 54.0), randf_range(24.0, 82.0)))
@@ -409,6 +458,7 @@ func restore_from_state(state: Dictionary) -> void:
 
 	chamber_state.reset(1)
 	chamber_state.pending_count = int(restored_state.get("chamber_pending_count", 1))
+	fire_ledger.restore(restored_state.get("fire_ledger", {}))
 	chamber_state.locked_remaining = int(restored_state.get("chamber_locked_remaining", 0))
 	chamber_state.jammed_time_left = float(restored_state.get("chamber_jammed_time_left", 0.0))
 	chamber_state.queued_round_modifiers.clear()
@@ -472,7 +522,7 @@ func _physics_process(delta: float) -> void:
 		"stuck_time_limit": STUCK_TIME_LIMIT,
 		"wall_stuck_margin": WALL_STUCK_MARGIN,
 		"wall_stuck_y_eps": WALL_STUCK_Y_EPS,
-		"control_ball_max_stay_time": CONTROL_BALL_MAX_STAY_TIME,
+		"control_ball_max_stay_time": _stay_seconds_override,
 	}
 
 	for ball in balls:
@@ -508,7 +558,10 @@ func _physics_process(delta: float) -> void:
 
 func _on_left_gate(ball) -> void:
 	var gate_multiplier: int = GameConfig.get_gate_multiplier()
+	if _gate_multiplier_override > 0:
+		gate_multiplier = maxi(gate_multiplier, _gate_multiplier_override)
 	pending_count = clampi(pending_count * gate_multiplier, 1, GameConfig.get_max_pending_count())
+	production_stats["gate_multiplier_hits"] = int(production_stats["gate_multiplier_hits"]) + 1
 	_update_label()
 	gate_multiplier_applied.emit(faction_id, gate_multiplier, pending_count)
 	_relaunch_control_ball(ball)
@@ -517,6 +570,9 @@ func _on_right_gate(ball) -> void:
 	if is_locked or jammed_time_left > 0.0:
 		return
 
+	production_stats["releases"] = int(production_stats["releases"]) + 1
+	production_stats["fire_released"] = int(production_stats["fire_released"]) + pending_count
+	production_stats["max_release"] = maxi(int(production_stats["max_release"]), pending_count)
 	release_ball = ball
 	locked_remaining = pending_count
 	is_locked = true
@@ -527,6 +583,7 @@ func _on_right_gate(ball) -> void:
 func start_locked(count: int) -> void:
 	locked_remaining = maxi(0, count)
 	is_locked = true
+	production_stats["lock_count"] = int(production_stats["lock_count"]) + 1
 	_update_label()
 	_force_visual_redraw()
 

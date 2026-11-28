@@ -34,6 +34,7 @@ var burst_remaining: int = 0
 var burst_total: int = 0
 var burst_types: Array[int] = []
 var burst_type_cursor: int = 0
+var _burst_interval_scale: float = 1.0
 var burst_interval: float = GameConfig.BURST_FIRE_INTERVAL
 var burst_timer: float = 0.0
 var burst_locked: bool = false
@@ -61,7 +62,14 @@ func _ready() -> void:
 	sweep_phase = randf_range(0.0, TAU)
 	rotation = center_angle
 	z_index = 15
+	_burst_interval_scale = maxf(0.1, _env_float("BALLWAR_BURST_INTERVAL_MULT", 1.0))
 	queue_redraw()
+
+func _env_float(key: String, fallback: float) -> float:
+	var raw: String = OS.get_environment(key).strip_edges()
+	if raw == "" or not raw.is_valid_float():
+		return fallback
+	return float(raw)
 
 func _process(delta: float) -> void:
 	if not is_destroyed:
@@ -228,7 +236,7 @@ func _next_burst_interval() -> float:
 	# Preserve the original high-FPS cadence. Only queue pressure changes it.
 	var pulse_pattern: Array = [0.028, 0.032, 0.030, 0.038, 0.031, 0.036, 0.033, 0.040]
 	var idx: int = burst_index % pulse_pattern.size()
-	return float(pulse_pattern[idx]) * _burst_interval_multiplier()
+	return float(pulse_pattern[idx]) * _burst_interval_multiplier() * _burst_interval_scale
 
 func _burst_interval_multiplier() -> float:
 	var mul: float = 1.0

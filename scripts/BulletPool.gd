@@ -49,6 +49,7 @@ var total_spawned: int = 0
 var max_capture_depth: int = 0
 var total_explosion_cells: int = 0
 var spawned_by_type: Dictionary = {}
+var spawned_by_faction: Dictionary = {}
 var piercing_captures: int = 1
 var explosion_radius: int = 0
 var next_spawn_serial: int = 1
@@ -140,6 +141,7 @@ func get_collision_stats() -> Dictionary:
 	stats["max_capture_depth"] = max_capture_depth
 	stats["total_explosion_cells"] = total_explosion_cells
 	stats["spawned_by_type"] = spawned_by_type.duplicate()
+	stats["spawned_by_faction"] = spawned_by_faction.duplicate()
 	stats["piercing_captures"] = piercing_captures
 	stats["explosion_radius"] = explosion_radius
 	stats["bucket_size"] = collision_resolver.bucket_size
@@ -315,6 +317,7 @@ func reset_stats() -> void:
 	max_capture_depth = 0
 	total_explosion_cells = 0
 	spawned_by_type.clear()
+	spawned_by_faction.clear()
 
 func get_tracked_queue_total() -> int:
 	return tracked_queue_total
@@ -537,6 +540,7 @@ func _finalize_spawned_bullet(bullet):
 	next_spawn_serial += 1
 	total_spawned += 1
 	spawned_by_type[bullet.type_id] = int(spawned_by_type.get(bullet.type_id, 0)) + 1
+	spawned_by_faction[bullet.faction_id] = int(spawned_by_faction.get(bullet.faction_id, 0)) + 1
 	active_bullet_indices[bullet_id] = active_bullets.size()
 	active_bullets.append(bullet)
 	active_spawn_order.append(bullet_id)

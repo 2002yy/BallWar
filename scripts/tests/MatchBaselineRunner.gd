@@ -40,6 +40,7 @@ var _experiment_fire: bool = false
 var _experiment_fire_interval: float = 1.0
 var _experiment_fire_count: int = 40
 var _active_samples: Array[float] = []
+var _trace_write_failed: bool = false
 
 var _trace_file: FileAccess = null
 var _trace_lines: Array[String] = []
@@ -185,8 +186,10 @@ func _run() -> void:
 	var trace_error: Error = _trace_file.get_error()
 	_trace_file.close()
 	_close_detail()
-	if not footer_written or trace_error != OK:
-		printerr("[Probe] Cannot finish trace.")
+	if not footer_written or trace_error != OK or _trace_write_failed:
+		printerr("[Probe] Cannot finish trace (footer=%s error=%s failed=%s)." % [
+			str(footer_written), error_string(trace_error), str(_trace_write_failed)
+		])
 		quit(4)
 		return
 	_print_summary()
@@ -578,7 +581,10 @@ func _flush_trace() -> void:
 	if _trace_file == null or _trace_lines.is_empty():
 		return
 	for line in _trace_lines:
-		_trace_file.store_line(line)
+		if not _trace_file.store_line(line):
+			printerr("[Probe] trace write failed at tick %d: %s" % [_tick, error_string(_trace_file.get_error())])
+			_trace_write_failed = true
+			break
 	_trace_lines.clear()
 	_trace_file.flush()
 
@@ -610,6 +616,7 @@ func _print_summary() -> void:
 	])
 	_print_final_cells()
 	_print_collision_summary()
+	_print_production_summary()
 	_print_load_summary()
 	# Perf is reported separately and never feeds the simulation digest.
 	print("[Probe] ---- clocks (perf, not state) ----")
@@ -666,6 +673,39 @@ func _print_collision_summary() -> void:
 		str(stats.get("spawned_by_type", {})),
 	])
 	print("  peak_active      = %d" % int(pool.get_peak_active_count()))
+
+func _print_production_summary() -> void:
+	if _main == null or _main.runtime == null:
+		return
+	print("[Probe] ---- production (perf, not state) ----")
+	var chambers: Dictionary = _main.runtime.chambers
+	var faction_ids: Array = chambers.keys()
+	faction_ids.sort()
+	for faction_id in faction_ids:
+		var chamber = chambers[faction_id]
+		if chamber == null or not is_instance_valid(chamber):
+			continue
+		var stats: Dictionary = chamber.get_production_stats()
+		print("  f%d balls=%d releases=%d fire=%d max=%d gates=%d relaunch=%d locks=%d locked=%.1fs" % [
+			int(faction_id),
+			int(stats.get("balls", 0)),
+			int(stats.get("releases", 0)),
+			int(stats.get("fire_released", 0)),
+			int(stats.get("max_release", 0)),
+			int(stats.get("gate_multiplier_hits", 0)),
+			int(stats.get("relaunches", 0)),
+			int(stats.get("lock_count", 0)),
+			float(stats.get("locked_seconds", 0.0)),
+		])
+		print("     ledger[%s] balanced=%s error=%s" % [
+			str(stats.get("ledger", "")),
+			str(stats.get("ledger_balanced", false)),
+			str(stats.get("ledger_error", "")),
+		])
+	var pool = _main.runtime.bullet_pool
+	if pool != null and is_instance_valid(pool):
+		var pool_stats: Dictionary = pool.get_collision_stats()
+		print("  shots_by_faction = %s" % str(pool_stats.get("spawned_by_faction", {})))
 
 func _sample_metrics() -> void:
 	if _main == null or _main.runtime == null:

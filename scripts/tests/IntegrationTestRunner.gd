@@ -24,6 +24,8 @@ func _run() -> void:
 	await _flush()
 	_test_special_bullet_profiles()
 	await _flush()
+	_test_fire_ledger()
+	await _flush()
 
 	_assert.report("[IntegrationTest]")
 
@@ -702,8 +704,84 @@ func _test_bullet_attributes_and_reset() -> void:
 	Fixtures.cleanup_node(battlefield)
 
 # ======================================================================
-# P6 — piercing / explosive profiles
+# P7 — cross-burst fire ledger
 # ======================================================================
+
+func _test_fire_ledger() -> void:
+	print("  [P7] fire ledger accumulation")
+
+	var piercing_only := WeaponRuleset.with_unlocked([WeaponRuleset.BulletType.PIERCING])
+	var ledger := FireLedger.new()
+	var piercing_shots := 0
+	var standard_shots := 0
+	for i in range(5):
+		var volley: Dictionary = ledger.allocate(2, {WeaponRuleset.BulletType.PIERCING: 50}, piercing_only)
+		piercing_shots += int(volley.get(WeaponRuleset.BulletType.PIERCING, 0))
+		standard_shots += int(volley.get(WeaponRuleset.BulletType.STANDARD, 0))
+	_assert.eq(piercing_shots, 1, "ledger: 5 x 2 fire at 50% buys exactly 1 piercing")
+	_assert.eq(standard_shots, 5, "ledger: the same 10 fire still buys 5 standard")
+	_assert.eq(ledger.remaining_units(), 0, "ledger: no residual units after the example")
+	_assert.that(ledger.is_balanced(), "ledger: produced = spent + remaining")
+
+	var full := FireLedger.new()
+	var empty_volley: Dictionary = full.allocate(2, {WeaponRuleset.BulletType.PIERCING: 100}, piercing_only)
+	_assert.that(empty_volley.is_empty(), "ledger: 100% special with too little fire yields no bullets")
+	_assert.eq(full.remaining_units(), 200, "ledger: the fire stays in the special account")
+	var later: Dictionary = full.allocate(4, {WeaponRuleset.BulletType.PIERCING: 100}, piercing_only)
+	_assert.eq(int(later.get(WeaponRuleset.BulletType.PIERCING, 0)), 1, "ledger: accumulated balance pays out next time")
+	_assert.eq(full.remaining_units(), 100, "ledger: only the cost is deducted")
+	_assert.that(full.is_balanced(), "ledger: balance still conserved")
+
+	var classic := FireLedger.new()
+	var plain: Dictionary = classic.allocate(5, {}, WeaponRuleset.classic())
+	_assert.eq(int(plain.get(WeaponRuleset.BulletType.STANDARD, 0)), 5, "ledger: 0% mix is pure standard")
+	_assert.eq(classic.remaining_units(), 0, "ledger: 0% mix leaves no balance")
+
+	var dual := WeaponRuleset.with_unlocked([WeaponRuleset.BulletType.PIERCING, WeaponRuleset.BulletType.EXPLOSIVE])
+	var mixed := FireLedger.new()
+	var split: Dictionary = mixed.allocate(100, {
+		WeaponRuleset.BulletType.PIERCING: 40,
+		WeaponRuleset.BulletType.EXPLOSIVE: 30,
+	}, dual)
+	_assert.eq(int(split.get(WeaponRuleset.BulletType.PIERCING, 0)), 8, "ledger: 40 fire buys 8 piercing")
+	_assert.eq(int(split.get(WeaponRuleset.BulletType.EXPLOSIVE, 0)), 3, "ledger: 30 fire buys 3 explosive")
+	_assert.eq(int(split.get(WeaponRuleset.BulletType.STANDARD, 0)), 30, "ledger: the remaining 30 fire stays standard")
+	_assert.that(mixed.is_balanced(), "ledger: multi-type split is conserved")
+
+	var invalid := FireLedger.new()
+	var rejected: Dictionary = invalid.allocate(10, {
+		WeaponRuleset.BulletType.PIERCING: 60,
+		WeaponRuleset.BulletType.EXPLOSIVE: 52,
+	}, dual)
+	_assert.eq(invalid.last_error, "shares_sum:112", "ledger: shares over 100% are rejected explicitly")
+	_assert.eq(int(rejected.get(WeaponRuleset.BulletType.STANDARD, 0)), 10, "ledger: rejected split falls back to all standard")
+	_assert.that(invalid.is_balanced(), "ledger: rejection does not create or destroy fire")
+
+	var snapshot: Dictionary = full.snapshot()
+	var restored := FireLedger.new()
+	restored.restore(snapshot)
+	_assert.eq(restored.remaining_units(), full.remaining_units(), "ledger: snapshot keeps the balance")
+	var resumed: Dictionary = restored.allocate(4, {WeaponRuleset.BulletType.PIERCING: 100}, piercing_only)
+	_assert.eq(int(resumed.get(WeaponRuleset.BulletType.PIERCING, 0)), 1, "ledger: restored balance keeps paying out")
+	_assert.that(restored.is_balanced(), "ledger: restored ledger is still conserved")
+
+	var locked := FireLedger.new()
+	var locked_volley: Dictionary = locked.allocate(5, {WeaponRuleset.BulletType.PIERCING: 50}, WeaponRuleset.classic())
+	_assert.eq(locked.last_error, "unlocked:2", "ledger: a locked type is rejected, not silently ignored")
+	_assert.eq(int(locked_volley.get(WeaponRuleset.BulletType.STANDARD, 0)), 5, "ledger: locked type keeps all fire standard")
+
+	# 存档契约：weapon_config 的边界值要被清洗，而不是原样回放。
+	var raw: Dictionary = Fixtures.build_minimal_save_payload("2.1.0")
+	raw["weapon_config"] = {"pierce": -3, "mix_pierce": 150, "blast": 9, "mix_blast": -1}
+	var clean: Dictionary = SaveGameCodec.validate_save_data(raw)
+	var weapon: Dictionary = clean.get("weapon_config", {})
+	_assert.eq(int(weapon.get("pierce", 0)), 1, "save: invalid pierce clamps to 1")
+	_assert.eq(int(weapon.get("mix_pierce", 0)), 100, "save: mix clamps to 100")
+	_assert.eq(int(weapon.get("blast", -1)), 3, "save: blast clamps to 3")
+	_assert.eq(int(weapon.get("mix_blast", -1)), 0, "save: negative mix clamps to 0")
+	raw["weapon_config"] = {"pierce": -1, "mix_pierce": 50, "blast": 2, "mix_blast": 50}
+	var clean_infinite: Dictionary = SaveGameCodec.validate_save_data(raw)
+	_assert.eq(int(clean_infinite.get("weapon_config", {}).get("pierce", 0)), -1, "save: infinite pierce survives as -1")
 
 func _test_special_bullet_profiles() -> void:
 	print("  [P6] piercing / explosive profiles")

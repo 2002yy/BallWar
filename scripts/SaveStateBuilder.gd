@@ -32,7 +32,7 @@ static func build_faction_states(chambers: Dictionary, turrets: Dictionary) -> A
 		factions.append(faction_state)
 	return factions
 
-static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battlefield, bullet_container, event_roulette_controller, game_elapsed_time: float, is_game_over: bool, selected_save_slot: int, winner_label) -> Dictionary:
+static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battlefield, bullet_container, event_roulette_controller, game_elapsed_time: float, is_game_over: bool, selected_save_slot: int, winner_label, match_config = null) -> Dictionary:
 	var core_payload: Dictionary = {
 		"save_version": SaveGameCodec.get_current_save_version(),
 		"save_slot": selected_save_slot,
@@ -50,4 +50,11 @@ static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battle
 		"winner_text": winner_label.text if winner_label != null else "",
 		"event_state": event_roulette_controller.export_save_state() if event_roulette_controller != null else {},
 	}
+	if match_config != null:
+		core_payload["weapon_config"] = {
+			"pierce": int(match_config.piercing_captures),
+			"mix_pierce": int(match_config.piercing_mix_percent),
+			"blast": int(match_config.explosion_radius),
+			"mix_blast": int(match_config.explosion_mix_percent),
+		}
 	return SaveGameCodec.attach_payload_hash(core_payload)

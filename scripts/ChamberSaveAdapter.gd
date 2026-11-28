@@ -28,6 +28,7 @@ static func collect_state(chamber) -> Dictionary:
 	state["chamber_jammed_time_left"] = chamber.get_jammed_time_left()
 	state["queued_round_modifiers"] = chamber.get_queued_round_modifiers()
 	state["control_balls"] = SaveGameCodec.collect_control_ball_states(chamber)
+	state["fire_ledger"] = chamber.fire_ledger.snapshot() if chamber.fire_ledger != null else {}
 	return state
 
 static func restore_state(state: Dictionary, context: Dictionary) -> Dictionary:
@@ -54,6 +55,7 @@ static func restore_state(state: Dictionary, context: Dictionary) -> Dictionary:
 				continue
 			control_balls.append(_sanitize_control_ball_state(ball_state as Dictionary, chamber_size, default_ball_radius))
 	restored["control_balls"] = control_balls
+	restored["fire_ledger"] = state.get("fire_ledger", {}) if state.get("fire_ledger") is Dictionary else {}
 
 	restored["chamber_ball_count"] = clampi(int(state.get("chamber_ball_count", 0)), 0, max_control_balls)
 	var restored_ball_count: int = control_balls.size() if not control_balls.is_empty() else int(restored["chamber_ball_count"])
