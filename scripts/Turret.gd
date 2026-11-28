@@ -13,6 +13,7 @@ signal burst_progress(faction_id, remaining)
 signal neutral_claim_requested(turret: Turret, faction_id: int)
 
 const NEUTRAL_FACTION: int = -1
+const MUZZLE_DISTANCE: float = GameConfig.TURRET_RADIUS + 17.0
 
 var faction_id: int = GameConfig.Faction.BLUE
 var turret_id: int = 0
@@ -250,8 +251,7 @@ func _spawn_bullet() -> void:
 	var shot_direction: Vector2 = Vector2.RIGHT.rotated(shot_angle).normalized()
 	# v1.9.27：子弹方向与当前可见炮管方向完全一致。
 	# 移除 lateral_wave 出生点横向摆动，避免炮口方向与弹道看起来不一致。
-	var muzzle_distance: float = GameConfig.TURRET_RADIUS + 17.0
-	var spawn_position: Vector2 = global_position + shot_direction * muzzle_distance
+	var spawn_position: Vector2 = global_position + shot_direction * MUZZLE_DISTANCE
 
 	if _bullet_container_can_spawn:
 		bullet_container.spawn_bullet(faction_id, spawn_position, shot_direction, battlefield, all_turrets)

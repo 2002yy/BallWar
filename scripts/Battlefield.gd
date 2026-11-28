@@ -24,6 +24,7 @@ var redraw_calls_per_second: int = 0
 var cell_changes_this_second: int = 0
 var cell_changes_per_second: int = 0
 var decor_layer: BattlefieldDecorLayer
+var fortress: FortressTerrain
 
 const LOW_CHANGE_REDRAW_INTERVAL: float = 0.016
 const MID_CHANGE_REDRAW_INTERVAL: float = 0.033
@@ -108,7 +109,8 @@ func reset_quadrants() -> void:
 			elif x >= half_grid and y >= half_grid:
 				f = GameConfig.Faction.YELLOW
 			col.append(f)
-			owner_counts[f] += 1
+			if fortress == null or not fortress.wall_cells.has(Vector2i(x, y)):
+				owner_counts[f] += 1
 		owners.append(col)
 	_rebuild_cell_texture()
 
@@ -118,7 +120,8 @@ func rebuild_owner_counts() -> void:
 		for y in range(grid_size):
 			var cell_owner: int = clampi(int(owners[x][y]), 0, 3)
 			owners[x][y] = cell_owner
-			owner_counts[cell_owner] += 1
+			if fortress == null or not fortress.wall_cells.has(Vector2i(x, y)):
+				owner_counts[cell_owner] += 1
 	_rebuild_cell_texture()
 
 func world_to_cell(world_position: Vector2) -> Vector2i:
@@ -128,12 +131,25 @@ func world_to_cell(world_position: Vector2) -> Vector2i:
 func is_inside(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.x < grid_size and cell.y < grid_size
 
+func configure_fortress() -> void:
+	fortress = FortressTerrain.new(grid_size, cell_size)
+	rebuild_owner_counts()
+	queue_redraw()
+	flush_score_emit()
+
+func claimable_cell_count() -> int:
+	return grid_size * grid_size - (fortress.wall_cells.size() if fortress != null else 0)
+
 func apply_bullet(cell: Vector2i, faction_id: int) -> String:
 	if not is_inside(cell):
 		return "OUTSIDE"
+	if fortress != null and fortress.wall_cells.has(cell):
+		return "WALL"
 	return "HIT_ENEMY_CELL" if _claim_inside_cell(cell, faction_id) else "SAME_CELL"
 
 func claim_cell(cell: Vector2i, faction_id: int) -> bool:
+	if fortress != null and fortress.wall_cells.has(cell):
+		return false
 	return owner_counts.has(faction_id) and is_inside(cell) and _claim_inside_cell(cell, faction_id)
 
 func _claim_inside_cell(cell: Vector2i, faction_id: int) -> bool:
@@ -243,3 +259,8 @@ func _draw() -> void:
 			for y in range(grid_size):
 				var c: Color = _owner_draw_color(owners[x][y])
 				draw_rect(Rect2(x * cell_size, y * cell_size, cell_size, cell_size), c, true)
+	if fortress != null:
+		for wall in fortress.wall_rects:
+			draw_rect(wall, Color(0.13, 0.18, 0.24))
+			draw_rect(wall, Color(0.68, 0.77, 0.83), false, 2.0)
+			draw_line(wall.position + Vector2(4.0, 4.0), wall.end - Vector2(4.0, 4.0), Color(0.39, 0.49, 0.57), 2.0)
