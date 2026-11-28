@@ -232,7 +232,7 @@ func _ready() -> void:
 		dev_speed = DevSpeedPanelScript.new()
 		add_child(dev_speed)
 		dev_speed.setup(self)
-		dev_speed.clock.step_completed.connect(_flush_single_step_view)
+		dev_speed.clock.step_completed.connect(_flush_battle_view)
 	if match_seed >= 0:
 		seed(match_seed)
 	else:
@@ -285,6 +285,8 @@ func _on_viewport_resized() -> void:
 	_create_control_buttons()
 
 func _physics_process(_delta: float) -> void:
+	if dev_speed != null:
+		dev_speed.before_simulation_step()
 	if GameStateCoordinator.should_process_restore_queue(get_tree(), is_game_over, bullet_restore_queue.pending_count()):
 		_process_pending_bullet_restore()
 
@@ -678,7 +680,7 @@ func _finish_as_draw(sub_text: String) -> void:
 
 func _stop_all_actions_for_game_over() -> void:
 	if dev_speed != null:
-		dev_speed.reset_match()
+		dev_speed.finish_match()
 	GameStateCoordinator.stop_actions_for_game_over(
 		runtime.turrets,
 		runtime.chambers,
@@ -722,7 +724,7 @@ func _sync_chamber_game_elapsed_time() -> void:
 			chamber.set_game_elapsed_time(game_elapsed_time)
 			chamber.queue_redraw()
 
-func _flush_single_step_view() -> void:
+func _flush_battle_view() -> void:
 	if is_instance_valid(runtime.battlefield):
 		runtime.battlefield.flush_visual_update()
 		runtime.battlefield.flush_score_emit()
@@ -790,6 +792,8 @@ func _refresh_event_log() -> void:
 		event_log_label.text = log_text
 
 func _on_event_round_finished(_payload: Dictionary) -> void:
+	if dev_speed != null:
+		dev_speed.record_event()
 	_refresh_event_log()
 
 func _on_event_banner_requested(title_text: String, sub_text: String, accent: Color, auto_hide: bool) -> void:

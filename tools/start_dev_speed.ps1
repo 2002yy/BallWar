@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Godot,
     [string]$OutputRoot = (Join-Path $env:LOCALAPPDATA 'BallWar Dev Sessions'),
-    [switch]$CheckControls
+    [switch]$CheckControls,
+    [switch]$CheckBattleTools
 )
 $ErrorActionPreference = 'Stop'
 $engine = (Get-Item -LiteralPath $Godot).FullName
@@ -15,9 +16,15 @@ $profile = (New-Item -ItemType Directory -Path (Join-Path $OutputRoot $token)).F
 $env:APPDATA = $profile
 $env:BALLWAR_DEV_TOKEN = $token
 Write-Host "DEV-SPEED profile: $profile"
+if ($CheckControls -and $CheckBattleTools) {
+    throw 'Select one verification mode at a time.'
+}
 $flags = @()
 if ($CheckControls) {
     $flags = @('--headless', '--audio-driver', 'Dummy', '--script', 'res://scripts/tests/DevSpeedControlsTestRunner.gd')
+}
+if ($CheckBattleTools) {
+    $flags = @('--headless', '--audio-driver', 'Dummy', '--script', 'res://scripts/tests/DevBattleToolsTestRunner.gd')
 }
 & $engine --path $project @flags -- --ballwar-dev-speed
 exit $LASTEXITCODE
