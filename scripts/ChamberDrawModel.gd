@@ -126,6 +126,7 @@ static func build_snapshot(input: Dictionary) -> Dictionary:
 		"left_rect": left_rect,
 		"right_rect": right_rect,
 		"reserve_rect": reserve_rect,
+		"resource_gate_label": input.get("resource_gate_label", "储"),
 		"shell_color": shell_color,
 		"border_color": border_color,
 		"inner_color": inner_color,
