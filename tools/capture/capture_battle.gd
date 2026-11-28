@@ -155,6 +155,9 @@ func _run() -> void:
 	_trace = _env_string("CAPTURE_TRACE", "0") == "1"
 	_fill_chambers = _env_string("CAPTURE_FILL_CHAMBERS", "1") == "1"
 	_audio_off = _env_string("CAPTURE_AUDIO", "on").strip_edges().to_lower() == "off"
+	_force_fire = _env_string("CAPTURE_FORCE_FIRE", "0") == "1"
+	_force_fire_interval = maxf(0.1, _env_float("CAPTURE_FORCE_FIRE_INTERVAL", 1.0))
+	_force_fire_count = maxi(1, _env_int("CAPTURE_FORCE_FIRE_COUNT", 40))
 
 	if DirAccess.make_dir_recursive_absolute(_out_dir) != OK:
 		print("[Capture] ERROR: cannot create %s" % _out_dir)
@@ -256,6 +259,23 @@ var _resize_at: float = -1.0
 var _resize_to: Vector2i = Vector2i.ZERO
 var _resize_done: bool = false
 
+# 互撞原型的高压场景：绕过控制仓，定时让四个炮台同时齐射。
+var _force_fire: bool = false
+var _force_fire_interval: float = 1.0
+var _force_fire_count: int = 40
+var _next_force_fire_at: float = 0.0
+
+
+func _maybe_force_fire(elapsed: float) -> void:
+	if not _force_fire or elapsed < _next_force_fire_at:
+		return
+	_next_force_fire_at = elapsed + _force_fire_interval
+	if _main == null or _main.runtime == null:
+		return
+	for turret in _main.runtime.turrets.values():
+		if turret != null and is_instance_valid(turret) and not turret.is_destroyed:
+			turret.fire_burst(_force_fire_count)
+
 
 # Live-resize test: changing the window while a match runs must re-apply the
 # layout without restarting the match.
@@ -281,6 +301,7 @@ func _wait_battle_time(target: float) -> bool:
 		if bool(_main.is_game_over):
 			return false
 		_maybe_resize(float(_main.game_elapsed_time))
+		_maybe_force_fire(float(_main.game_elapsed_time))
 		if float(_main.game_elapsed_time) >= target:
 			return true
 		if float(_main.game_elapsed_time) >= _max_seconds:

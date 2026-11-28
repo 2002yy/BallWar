@@ -35,6 +35,12 @@ var _label: String = "run"
 #           has no subscriber at all (the strongest "audio does not exist" arm)
 var _audio_arm: String = "on"
 
+# 实验模式：绕过控制仓，定时让四个炮台同时齐射，用于制造高密度弹幕对照。
+# 默认关闭，不影响经典基线。
+var _experiment_fire: bool = false
+var _experiment_fire_interval: float = 1.0
+var _experiment_fire_count: int = 40
+
 var _trace_file: FileAccess = null
 var _trace_lines: Array[String] = []
 var _trace_path: String = ""
@@ -98,6 +104,9 @@ func _run() -> void:
 		printerr("[Probe] BALLWAR_AUDIO must be on|off|none, got '%s'." % _audio_arm)
 		quit(2)
 		return
+	_experiment_fire = _env_flag("BALLWAR_EXPERIMENT_FIRE", false)
+	_experiment_fire_interval = _env_float("BALLWAR_EXPERIMENT_FIRE_INTERVAL", 1.0)
+	_experiment_fire_count = _env_int("BALLWAR_EXPERIMENT_FIRE_COUNT", 40)
 	_ticks_per_second = MatchClock.TICKS_PER_SECOND
 
 	if not IsolatedUserProfile.is_fresh("BALLWAR_PROBE_TOKEN", ".ballwar-probe"):
@@ -258,12 +267,23 @@ func _capture_loop(max_ticks: int) -> void:
 	while _tick < max_ticks:
 		await physics_frame
 		_tick += 1
+		_maybe_experiment_fire()
 		_record_tick()
 		if _main.is_game_over:
 			_end_reason = "game_over"
 			break
 	if _end_reason == "unknown":
 		_end_reason = "time_cap"
+
+func _maybe_experiment_fire() -> void:
+	if not _experiment_fire or _main == null or _main.runtime == null:
+		return
+	var interval_ticks: int = maxi(1, int(round(_experiment_fire_interval * float(_ticks_per_second))))
+	if _tick % interval_ticks != 0:
+		return
+	for turret in _main.runtime.turrets.values():
+		if turret != null and is_instance_valid(turret) and not turret.is_destroyed:
+			turret.fire_burst(_experiment_fire_count)
 
 
 func _record_tick() -> void:
@@ -606,6 +626,11 @@ func _print_summary() -> void:
 	print("  first_event_start= %s" % _tick_text(_first_event_start_tick))
 	print("  first_event_apply= %s" % _tick_text(_first_event_apply_tick))
 	print("  lead_changes     = %d" % _lead_changes)
+	print("  experiment_fire  = %s (count=%d interval=%.2fs)" % [
+		str(_experiment_fire), _experiment_fire_count, _experiment_fire_interval
+	])
+	_print_final_cells()
+	_print_collision_summary()
 	# Perf is reported separately and never feeds the simulation digest.
 	print("[Probe] ---- clocks (perf, not state) ----")
 	print("  process_calls    = %d" % _probe.process_calls)
@@ -620,6 +645,45 @@ func _print_summary() -> void:
 	print("[Probe] ---- end ----")
 
 
+func _print_collision_summary() -> void:
+	var pool = null
+	if _main != null and _main.runtime != null:
+		pool = _main.runtime.bullet_pool
+	if pool == null or not is_instance_valid(pool) or not pool.has_method("get_collision_stats"):
+		return
+	print("[Probe] ---- collision (perf, not state) ----")
+	var stats: Dictionary = pool.get_collision_stats()
+	print("  enabled          = %s" % str(stats.get("enabled", false)))
+	print("  bucket_size      = %.1f (cells=%d)" % [
+		float(stats.get("bucket_size", 0.0)), int(stats.get("bucket_cells", 0))
+	])
+	print("  last_tick        = bullets=%d buckets=%d max_bucket=%d" % [
+		int(stats.get("bullet_count", 0)),
+		int(stats.get("buckets", 0)),
+		int(stats.get("max_bucket", 0)),
+	])
+	print("  last_tick        = bucket_pairs=%d faction_skips=%d distance_checks=%d" % [
+		int(stats.get("bucket_pairs", 0)),
+		int(stats.get("faction_skips", 0)),
+		int(stats.get("distance_checks", 0)),
+	])
+	print("  hit_bullets      = %d (both sides removed)" % int(stats.get("total_hits", 0)))
+	print("  spawned_total    = %d" % int(stats.get("total_spawned", 0)))
+	print("  peak_active      = %d" % int(pool.get_peak_active_count()))
+
+func _print_final_cells() -> void:
+	if _main == null or _main.runtime == null or _main.runtime.battlefield == null:
+		return
+	var counts: Dictionary = _main.runtime.battlefield.count_cells_by_team()
+	print("[Probe] ---- final cells ----")
+	print("  blue=%d red=%d green=%d yellow=%d" % [
+		int(counts.get(GameConfig.Faction.BLUE, 0)),
+		int(counts.get(GameConfig.Faction.RED, 0)),
+		int(counts.get(GameConfig.Faction.GREEN, 0)),
+		int(counts.get(GameConfig.Faction.YELLOW, 0)),
+	])
+
+
 func _tick_text(tick: int) -> String:
 	if tick < 0:
 		return "none"
@@ -629,6 +693,13 @@ func _tick_text(tick: int) -> String:
 func _env_string(key: String, fallback: String) -> String:
 	var raw: String = OS.get_environment(key)
 	return fallback if raw == "" else raw
+
+
+func _env_flag(key: String, fallback: bool) -> bool:
+	var raw: String = OS.get_environment(key).strip_edges().to_lower()
+	if raw == "":
+		return fallback
+	return raw == "1" or raw == "true" or raw == "yes" or raw == "on"
 
 
 func _env_int(key: String, fallback: int) -> int:

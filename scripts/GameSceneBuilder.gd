@@ -31,6 +31,7 @@ static func create_battlefield(owner, game_layer: Node, grid_size: int, current_
     var bullet_container = BulletPool.new()
     bullet_container.name = "BulletPool"
     game_layer.add_child(bullet_container)
+    bullet_container.set_battlefield(battlefield)
     bullet_container.set_trail_layer(bullet_trail_layer)
 
     return {
