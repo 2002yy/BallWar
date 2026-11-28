@@ -400,7 +400,8 @@ static func write_game_progress_result(
 	game_elapsed_time: float,
 	is_game_over: bool,
 	winner_label,
-	match_config = null
+	match_config = null,
+	match_random = null
 ) -> Dictionary:
 	if battlefield == null:
 		return {
@@ -419,7 +420,8 @@ static func write_game_progress_result(
 		is_game_over,
 		selected_save_slot,
 		winner_label,
-		match_config
+		match_config,
+		match_random
 	)
 	return _write_json_atomically(save_path, data)
 

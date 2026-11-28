@@ -34,3 +34,34 @@ func simulation_states() -> Array:
 		if key.x != Stream.PALETTE:
 			entries.append([key, _streams[key].state])
 	return entries
+
+
+func serialize_states() -> Array:
+	# JSON 没有 64 位整数；状态用十进制字符串保存，避免低位被浮点截断。
+	var entries: Array = []
+	var keys := _streams.keys()
+	keys.sort()
+	for key in keys:
+		if key.x != Stream.PALETTE:
+			entries.append([key.x, key.y, str(_streams[key].state)])
+	return entries
+
+
+func restore_states(entries) -> bool:
+	if not (entries is Array):
+		return false
+	# 先完整校验，再替换：坏存档不能把当前对局的随机流清空。
+	var parsed: Array = []
+	for entry in entries:
+		if not (entry is Array) or entry.size() < 3:
+			return false
+		var channel: int = int(entry[0])
+		var faction: int = int(entry[1])
+		if channel < Stream.CHAMBER or channel >= Stream.PALETTE:
+			return false
+		parsed.append([channel, faction, int(str(entry[2]))])
+	_streams.clear()
+	for item in parsed:
+		var stream := get_stream(item[0], item[1])
+		stream.state = item[2]
+	return true

@@ -32,7 +32,7 @@ static func build_faction_states(chambers: Dictionary, turrets: Dictionary) -> A
 		factions.append(faction_state)
 	return factions
 
-static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battlefield, bullet_container, event_roulette_controller, game_elapsed_time: float, is_game_over: bool, selected_save_slot: int, winner_label, match_config = null) -> Dictionary:
+static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battlefield, bullet_container, event_roulette_controller, game_elapsed_time: float, is_game_over: bool, selected_save_slot: int, winner_label, match_config = null, match_random = null) -> Dictionary:
 	var core_payload: Dictionary = {
 		"save_version": SaveGameCodec.get_current_save_version(),
 		"save_slot": selected_save_slot,
@@ -57,4 +57,9 @@ static func build_save_payload(chambers: Dictionary, turrets: Dictionary, battle
 			"blast": int(match_config.explosion_radius),
 			"mix_blast": int(match_config.explosion_mix_percent),
 		}
+	# 续局必须回到同一条模拟随机序列，否则“保存→继续”与不中断运行会分叉。
+	core_payload["spawn_rotation"] = GameConfig.get_spawn_rotation()
+	if match_random != null:
+		core_payload["match_seed"] = int(match_random.root_seed)
+		core_payload["match_random_states"] = match_random.serialize_states()
 	return SaveGameCodec.attach_payload_hash(core_payload)

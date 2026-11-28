@@ -23,6 +23,8 @@ func _run() -> void:
 	await _flush()
 	await _test_continue_restores_subsystems()
 	await _flush()
+	await _test_continue_restores_rng()
+	await _flush()
 
 	_assert.report("[EndToEndContinueMain]")
 
@@ -199,6 +201,9 @@ func _test_save_structure() -> void:
 	_assert.that(raw_data.has("factions"), "struct: factions present")
 	_assert.that(raw_data.has("event_state"), "struct: event_state present")
 	_assert.that(raw_data.has("bullets"), "struct: bullets present")
+	_assert.that(raw_data.has("match_seed"), "struct: match_seed present")
+	_assert.that(raw_data.has("match_random_states"), "struct: match_random_states present")
+	_assert.that(raw_data.has("spawn_rotation"), "struct: spawn_rotation present")
 
 	var owners: Array = raw_data.get("owners", [])
 	_assert.eq(owners.size(), 10, "struct: 10 cols")
@@ -289,5 +294,41 @@ func _test_continue_restores_subsystems() -> void:
 		_assert.eq(main.runtime.event_controller.last_event_effect, ev_effect_before,
 			"subsys: last_event_effect")
 		_assert.that(main.runtime.event_controller.event_roulette_enabled, "subsys: event enabled")
+
+	Fixtures.cleanup_node(main)
+
+
+# ======================================================================
+# P4 — save/continue restores the simulation RNG sequence
+# ======================================================================
+
+func _test_continue_restores_rng() -> void:
+	print("  [E2E] continue restores simulation RNG")
+
+	var main: Node2D = _make_main(20)
+	main.match_seed = 777
+	await _add_and_start(main, GameConfig.GAME_MODE_BASIC, 4, 20)
+	for i in range(6):
+		await physics_frame
+
+	var before: Array = main.runtime.match_random.serialize_states()
+	var seed_before: int = main.runtime.match_random.root_seed
+	_assert.that(before.size() > 0, "rng: streams exist before save")
+	_assert.that(main._save_game_progress().get("ok", false), "rng: save succeeded")
+
+	main._save_and_exit_to_menu()
+	await _flush()
+	await _flush()
+
+	main.selected_save_slot = 4
+	main.selected_game_mode_name = GameConfig.GAME_MODE_BASIC
+	GameConfig.set_game_mode_by_name(GameConfig.GAME_MODE_BASIC)
+	main._continue_saved_game()
+	# No frame between continue and the check: scene creation must not leak draws
+	# into the resumed sequence.
+	_assert.eq(main.runtime.match_random.root_seed, seed_before, "rng: root seed restored")
+	_assert.that(main.runtime.match_random.serialize_states() == before,
+		"rng: every simulation stream resumes at the save point")
+	await _flush()
 
 	Fixtures.cleanup_node(main)

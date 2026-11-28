@@ -155,6 +155,9 @@ var is_game_over: bool = false
 # Negative keeps the historical behavior (time-based randomization).
 # A non-negative value starts each new match with the same random streams.
 var match_seed: int = -1
+# 续局：先按原种子建局，场景与存档状态应用完后再恢复模拟随机流。
+var _continue_match_seed: int = -1
+var _continue_random_states: Array = []
 
 var menu_title_label
 var menu_start_button
@@ -402,7 +405,14 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	GameConfig.set_game_mode_by_name(selected_game_mode_name)
 	GameConfig.set_time_limit_minutes(selected_time_limit_minutes)
 
-	var match_random := MatchRandom.new(match_seed)
+	if _continue_match_seed < 0:
+		# 新开一局回到启动时的旋转设置；续局沿用存档里的旋转（在建局前已应用）。
+		var rotation_raw: String = OS.get_environment("BALLWAR_SPAWN_ROTATION").strip_edges()
+		GameConfig.set_spawn_rotation(int(rotation_raw) if rotation_raw.is_valid_int() else 0)
+	var effective_seed: int = match_seed
+	if _continue_match_seed >= 0:
+		effective_seed = _continue_match_seed
+	var match_random := MatchRandom.new(effective_seed)
 	if selected_palette_name == "默认随机":
 		GameConfig.set_random_palette(match_random.get_stream(MatchRandom.Stream.PALETTE))
 	else:
@@ -414,7 +424,7 @@ func _start_game(grid_size: int, suppress_banner: bool = false, clear_save: bool
 	get_tree().paused = false
 	_sync_runtime_context(grid_size)
 	# 对局配置只在开局时快照一次：窗口缩放、UI 重建都不应该重新解释地图与武器规则。
-	runtime.set_match_config(MatchConfig.capture_current(grid_size, match_seed))
+	runtime.set_match_config(MatchConfig.capture_current(grid_size, effective_seed))
 
 	game_layer = Node2D.new()
 	game_layer.name = "GameLayer"
@@ -1007,7 +1017,8 @@ func _save_game_progress() -> Dictionary:
 		game_elapsed_time,
 		is_game_over,
 		_hud_ref("winner_label"),
-		runtime.match_config
+		runtime.match_config,
+		runtime.match_random
 	)
 	if not bool(result.get("ok", false)):
 		pending_menu_status_message = str(result.get("error_message", "保存失败"))
@@ -1103,12 +1114,24 @@ func _continue_from_prepared_payload(prepared: Dictionary) -> void:
 func _apply_continue_start_plan(execution_plan: Dictionary, restore_plan: RestorePlan) -> void:
 	var execution_start_values: Dictionary = execution_plan.get("start_values", {})
 	var execution_banner: Dictionary = execution_plan.get("banner", {})
+	var execution_data: Dictionary = execution_plan.get("data", {})
 	SaveFlowController.apply_continue_start_plan(execution_plan, self)
+	# 出生点旋转会影响炮台/控制仓位置与弹道边界，必须在建局前恢复。
+	GameConfig.set_spawn_rotation(int(execution_data.get("spawn_rotation", 0)))
+	_continue_match_seed = int(execution_data.get("match_seed", -1))
+	var saved_states = execution_data.get("match_random_states", [])
+	_continue_random_states = saved_states if saved_states is Array else []
 	_start_game(int(execution_start_values.get("grid_size", 40)), true, false)
-	_apply_saved_weapon_config(execution_plan.get("data", {}))
+	_apply_saved_weapon_config(execution_data)
 	game_elapsed_time = float(execution_start_values.get("game_elapsed_time", 0.0))
 	_sync_chamber_game_elapsed_time()
 	_apply_saved_state(restore_plan)
+	# 场景创建与存档状态恢复都会消费随机数；在这里覆盖，续局后的第一次抽取才与存档时一致。
+	if runtime.match_random != null and not _continue_random_states.is_empty():
+		if not runtime.match_random.restore_states(_continue_random_states):
+			push_warning("存档中的随机数状态无效，已按当前种子继续")
+	_continue_match_seed = -1
+	_continue_random_states = []
 	_show_center_banner(
 		str(execution_banner.get("title", "领土战争")),
 		str(execution_banner.get("subtitle", "继续作战")),

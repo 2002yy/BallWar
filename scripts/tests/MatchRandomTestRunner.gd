@@ -15,6 +15,7 @@ func _run() -> void:
 	var b := MatchRandom.new(12345)
 	var other := MatchRandom.new(12346)
 
+
 	var expected_event: int = b.get_stream(Stream.EVENT).randi()
 	var expected_chamber: int = b.get_stream(Stream.CHAMBER, 0).randi()
 	var expected_projectile: int = b.get_stream(Stream.PROJECTILE, 0).randi()
@@ -24,6 +25,19 @@ func _run() -> void:
 		a.get_stream(Stream.PROJECTILE, 1).randi()
 		a.get_stream(Stream.PALETTE).randi()
 		a.get_stream(Stream.TURRET, 0).randi()
+
+
+	var serialized := a.serialize_states()
+	var restored := MatchRandom.new(999)
+	if not _check(restored.restore_states(serialized), "serialized simulation state restores"):
+		return
+	if not _check(restored.serialize_states() == serialized, "restored state round-trips exactly"):
+		return
+	if not _check(restored.get_stream(Stream.CHAMBER, 1).randi() == a.get_stream(Stream.CHAMBER, 1).randi(),
+		"restored stream continues the same sequence"):
+		return
+	if not _check(not restored.restore_states([[Stream.PALETTE, 0, "1"]]), "palette stream is not restorable as simulation"):
+		return
 
 	var isolated := MatchRandom.new(12345)
 	isolated.get_stream(Stream.EVENT).randi()

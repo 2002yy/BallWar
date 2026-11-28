@@ -172,6 +172,14 @@ static func validate_save_data(data: Dictionary) -> Dictionary:
 	elif weapon != null:
 		clean.erase("weapon_config")
 
+	clean["spawn_rotation"] = posmod(int(clean.get("spawn_rotation", 0)), 4)
+	clean["match_seed"] = int(clean.get("match_seed", -1))
+	var random_states = clean.get("match_random_states", [])
+	if not (random_states is Array):
+		clean["match_random_states"] = []
+	elif random_states.size() > 32:
+		clean["match_random_states"] = random_states.slice(0, 32)
+
 	if not (str(clean.get("game_mode_name", GameConfig.GAME_MODE_BASIC)) in GameConfig.get_game_mode_names()):
 		clean["game_mode_name"] = GameConfig.GAME_MODE_BASIC
 	clean["time_limit_minutes"] = clampi(int(clean.get("time_limit_minutes", GameConfig.DEFAULT_TIMED_MODE_MINUTES)), GameConfig.TIMED_MODE_MIN_MINUTES, GameConfig.TIMED_MODE_MAX_MINUTES)
